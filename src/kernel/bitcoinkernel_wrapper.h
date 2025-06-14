@@ -408,15 +408,15 @@ public:
         return kernel_chainstate_manager_options_set_wipe_dbs(m_options.get(), wipe_block_tree, wipe_chainstate);
     }
 
-    void SetBlockTreeDbInMemory(bool block_tree_db_in_memory) const noexcept
-    {
-        kernel_chainstate_manager_options_set_block_tree_db_in_memory(m_options.get(), block_tree_db_in_memory);
-    }
-
-    void SetChainstateDbInMemory(bool chainstate_db_in_memory) const noexcept
+   void SetChainstateDbInMemory(bool chainstate_db_in_memory) const noexcept
     {
         kernel_chainstate_manager_options_set_chainstate_db_in_memory(m_options.get(), chainstate_db_in_memory);
     }
+
+   void SetBlockFilesOnly(bool blockfiles_only) const noexcept
+   {
+       kernel_chainstate_manager_options_set_blockfiles_only(m_options.get(), blockfiles_only);
+   }
 
     /** Check whether this ChainstateManagerOptions object is valid. */
     explicit operator bool() const noexcept { return bool{m_options}; }

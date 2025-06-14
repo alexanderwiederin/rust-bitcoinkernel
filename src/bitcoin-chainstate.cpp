@@ -175,7 +175,6 @@ int main(int argc, char* argv[])
     ContextOptions options{};
     ChainParams params{kernel_ChainType::kernel_CHAIN_TYPE_MAINNET};
     options.SetChainParams(params);
-
     TestKernelNotifications notifications{};
     options.SetNotifications(notifications);
     TestValidationInterface validation_interface{};

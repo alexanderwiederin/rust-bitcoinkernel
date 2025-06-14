@@ -800,17 +800,6 @@ BITCOINKERNEL_API bool kernel_chainstate_manager_options_set_wipe_dbs(
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief Sets block tree db in memory in the options.
- *
- * @param[in] chainstate_manager_options   Non-null, created by @ref kernel_chainstate_manager_options_create.
- * @param[in] block_tree_db_in_memory      Set block tree db in memory.
- */
-BITCOINKERNEL_API void kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-    kernel_ChainstateManagerOptions* chainstate_manager_options,
-    bool block_tree_db_in_memory
-) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
  * @brief Sets chainstate db in memory in the options.
  *
  * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
@@ -819,6 +808,17 @@ BITCOINKERNEL_API void kernel_chainstate_manager_options_set_block_tree_db_in_me
 BITCOINKERNEL_API void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
     kernel_ChainstateManagerOptions* chainstate_manager_options,
     bool chainstate_db_in_memory
+) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Sets blockfiles only mode in the options.
+ *
+ * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
+ * @param[in] blockfiles_only         Set blockfiles only mode. When true, the ChainstateManager gets initialized with blockfiles only.
+ */
+BITCOINKERNEL_API void kernel_chainstate_manager_options_set_blockfiles_only(
+        kernel_ChainstateManagerOptions* chainstate_manager_options,
+        bool blockfiles_only
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
