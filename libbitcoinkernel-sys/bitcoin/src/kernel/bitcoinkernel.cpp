@@ -780,14 +780,19 @@ void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
     opts->m_chainstate_load_options.coins_db_in_memory = chainstate_db_in_memory;
 }
 
-void kernel_chainstate_manager_options_set_blockfiles_only(
+void kernel_chainstate_manager_options_set_ephemeral_mode(
         kernel_ChainstateManagerOptions* chainman_opts_,
-        bool blockfiles_only)
+        bool ephemeral_operation,
+        bool reconstruct_utxo
+        )
 {
     auto opts{cast_chainstate_manager_options(chainman_opts_)};
     LOCK(opts->m_mutex);
-    opts->m_chainman_options.blockfiles_only = blockfiles_only;
-    opts->m_chainstate_load_options.coins_db_in_memory = true;
+    // this setting prevents the initialization of levelDB for the CoinsDB
+    opts->m_chainstate_load_options.coins_db_in_memory = ephemeral_operation;
+    // This setting determines whether the UTXO set will be reconstructed using the blockfiles
+    // or if it gets skipped entirely.
+    opts->m_chainman_options.reconstruct_utxo = reconstruct_utxo;
 }
 
 kernel_ChainstateManager* kernel_chainstate_manager_create(
