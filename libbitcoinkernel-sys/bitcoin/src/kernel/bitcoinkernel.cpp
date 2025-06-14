@@ -780,7 +780,7 @@ void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
     opts->m_chainstate_load_options.coins_db_in_memory = chainstate_db_in_memory;
 }
 
-void kernel_chainstate_maanger_options_set_blockfiles_only(
+void kernel_chainstate_manager_options_set_blockfiles_only(
         kernel_ChainstateManagerOptions* chainman_opts_,
         bool blockfiles_only)
 {
