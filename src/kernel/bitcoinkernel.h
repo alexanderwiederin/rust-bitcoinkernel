@@ -811,14 +811,20 @@ BITCOINKERNEL_API void kernel_chainstate_manager_options_set_chainstate_db_in_me
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief Sets blockfiles only mode in the options.
- *
- * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
- * @param[in] blockfiles_only         Set blockfiles only mode. When true, the ChainstateManager gets initialized with blockfiles only.
- */
-BITCOINKERNEL_API void kernel_chainstate_manager_options_set_blockfiles_only(
-        kernel_ChainstateManagerOptions* chainstate_manager_options,
-        bool blockfiles_only
+* @brief Sets ephemeral mode options for the chainstate manager. Ephemeral mode
+* enables safe parallel execution alongside Bitcoin Core by operating entirely
+* in memory without writing to data files.
+*
+* @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
+* @param[in] ephemeral_operation        Set ephemeral operation mode. When True, uses in-memory CoinsDB
+*                                       instead of disk storage, allowing safe parallel execution.
+* @param[in] reconstruct_utxo          Set whether to reconstruct the UTXO set from block files.
+*                                       When True, rebuilds UTXO set; when False, skips reconstruction.
+*/
+BITCOINKERNEL_API void kernel_chainstate_manager_options_set_ephemeral_mode(
+   kernel_ChainstateManagerOptions* chainstate_manager_options,
+   bool ephemeral_operation,
+   bool reconstruct_utxo
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
