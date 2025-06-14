@@ -914,16 +914,16 @@ impl ChainstateManagerOptions {
         self
     }
 
-    pub fn set_ephemeral_operation(
+    pub fn set_chainstate_blockfiles_read_only(
         self,
-        ephemeral_operation: bool,
-        reconstruct_utxo: bool,
+        blockfiles_read_only: bool,
+        validate_blocks: bool,
     ) -> Self {
         unsafe {
-            kernel_chainstate_manager_options_set_ephemeral_mode(
+            kernel_chainstate_manager_options_set_blockfiles_readonly(
                 self.inner,
-                ephemeral_operation,
-                reconstruct_utxo,
+                blockfiles_read_only,
+                validate_blocks,
             );
         }
         self
