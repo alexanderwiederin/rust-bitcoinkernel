@@ -290,8 +290,8 @@ struct ChainstateManagerOptions {
           m_blockman_options{node::BlockManager::Options{
               .chainparams = *context->m_chainparams,
               .blocks_dir = blocks_dir,
-              .notifications = *context->m_notifications,
               .block_tree_dir = data_dir / "blocks" / "index",
+              .notifications = *context->m_notifications,
               }},
           m_chainstate_load_options{node::ChainstateLoadOptions{}}
     {
