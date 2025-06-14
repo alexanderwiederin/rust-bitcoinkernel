@@ -794,6 +794,7 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
     const kernel_Context* context_,
     const kernel_ChainstateManagerOptions* chainman_opts_)
 {
+    fprintf(stderr, "Hello");
     auto chainman_opts{cast_const_chainstate_manager_options(chainman_opts_)};
     auto context{cast_const_context(context_)};
 
@@ -817,12 +818,14 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
             kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
             return nullptr;
         }
+        fprintf(stderr, "Hello 2");
         std::tie(status, chainstate_err) = node::VerifyLoadedChainstate(*chainman, chainstate_load_opts);
         if (status != node::ChainstateLoadStatus::SUCCESS) {
             LogError("Failed to verify loaded chain state from your datadir: %s", chainstate_err.original);
             kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
             return nullptr;
         }
+        fprintf(stderr, "Hello 3");
 
         for (Chainstate* chainstate : WITH_LOCK(chainman->GetMutex(), return chainman->GetAll())) {
             BlockValidationState state;
