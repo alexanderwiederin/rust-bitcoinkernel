@@ -780,19 +780,28 @@ void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
     opts->m_chainstate_load_options.coins_db_in_memory = chainstate_db_in_memory;
 }
 
-void kernel_chainstate_manager_options_set_ephemeral_mode(
+bool kernel_chainstate_manager_options_set_blockfiles_readonly(
         kernel_ChainstateManagerOptions* chainman_opts_,
-        bool ephemeral_operation,
-        bool reconstruct_utxo
+        bool blockfiles_readonly,
+        bool validate_blocks
         )
 {
+    if (!blockfiles_readonly && !validate_blocks) {
+        LogError("Invalid chainstate configuration: when blockfiles_readonly=false, "
+                "should_validate_blocks must be true. Full chainstate mode requires block validation.\n");
+        return false;
+    }
     auto opts{cast_chainstate_manager_options(chainman_opts_)};
     LOCK(opts->m_mutex);
-    // this setting prevents the initialization of levelDB for the CoinsDB
-    opts->m_chainstate_load_options.coins_db_in_memory = ephemeral_operation;
-    // This setting determines whether the UTXO set will be reconstructed using the blockfiles
-    // or if it gets skipped entirely.
-    opts->m_chainman_options.reconstruct_utxo = reconstruct_utxo;
+    // Enable in-memory UTXO storage for blockfiles-readonly mode.
+    // When true: UTXO set is kept in memory, no persistent chainstate database files created or retrieved.
+    // When false: UTXO set is stored in persistent LevelDB files on disk.n of levelDB for the CoinsDB
+    opts->m_chainstate_load_options.coins_db_in_memory = blockfiles_readonly;
+    // Control chainstate operational mode.
+    // When true: Full validation mode - validates blocks and reconstructs UTXO set.
+    // When false: Observer mode - tracks chain tip without validation or UTXO updates.
+    opts->m_chainman_options.validate_blocks = validate_blocks;
+    return true;
 }
 
 kernel_ChainstateManager* kernel_chainstate_manager_create(
