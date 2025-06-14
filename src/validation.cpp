@@ -3451,7 +3451,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 {
     AssertLockNotHeld(m_chainstate_mutex);
 
-    if (!m_chainman.ShouldReconstructUTXO()) {
+    if (!m_chainman.ShouldValidateBlocks()) {
         LOCK(cs_main);
 
         CBlockIndex* pindexMostWork = FindMostWorkChain();

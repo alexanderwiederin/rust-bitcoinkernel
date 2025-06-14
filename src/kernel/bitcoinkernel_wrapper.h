@@ -413,9 +413,9 @@ public:
         kernel_chainstate_manager_options_set_chainstate_db_in_memory(m_options.get(), chainstate_db_in_memory);
     }
 
-   void SetEphemeralOperation(bool ephemeral_operation, bool reconstruct_utxo) const noexcept
+   bool SetBlockfilesReadOnly(bool blockfiles_read_only, bool validate_blocks) const noexcept
    {
-       kernel_chainstate_manager_options_set_ephemeral_mode(m_options.get(), ephemeral_operation, reconstruct_utxo);
+       return kernel_chainstate_manager_options_set_blockfiles_readonly(m_options.get(), blockfiles_read_only, validate_blocks);
    }
 
     /** Check whether this ChainstateManagerOptions object is valid. */

@@ -811,20 +811,28 @@ BITCOINKERNEL_API void kernel_chainstate_manager_options_set_chainstate_db_in_me
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
-* @brief Sets ephemeral mode options for the chainstate manager. Ephemeral mode
-* enables safe parallel execution alongside Bitcoin Core by operating entirely
-* in memory without writing to data files.
+* @brief Sets blockfiles read-only mode options for the chainstate manager.
+* Read-only mode enables safe parallel execution alongside Bitcoin Core by
+* operating with in-memory UTXO storage without persistent chainstate writes.
 *
-* @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
-* @param[in] ephemeral_operation        Set ephemeral operation mode. When True, uses in-memory CoinsDB
-*                                       instead of disk storage, allowing safe parallel execution.
-* @param[in] reconstruct_utxo          Set whether to reconstruct the UTXO set from block files.
-*                                       When True, rebuilds UTXO set; when False, skips reconstruction.
+* @param[in] chainman_opts_        Non-null, created by @ref kernel_chainstate_manager_options_create.
+* @param[in] blockfiles_readonly   Set blockfiles read-only operation mode. When true, uses in-memory
+*                                  CoinsDB instead of persistent LevelDB storage, enabling safe
+*                                  parallel execution without conflicting database access.
+* @param[in] validate_blocks       Set whether to perform full block validation and UTXO reconstruction.
+*                                  When true, validates blocks and rebuilds UTXO set from blockfiles;
+*                                  when false, operates in observer mode tracking only chain tips.
+*                                  Must be true when blockfiles_readonly is false.
+*
+* @return true if configuration is valid and applied successfully, false on invalid parameter combination.
+*
+* @note Invalid configurations:
+*       - blockfiles_readonly=false AND should_validate_blocks=false (full mode requires validation)
 */
-BITCOINKERNEL_API void kernel_chainstate_manager_options_set_ephemeral_mode(
-   kernel_ChainstateManagerOptions* chainstate_manager_options,
-   bool ephemeral_operation,
-   bool reconstruct_utxo
+BITCOINKERNEL_API bool kernel_chainstate_manager_options_set_blockfiles_readonly(
+   kernel_ChainstateManagerOptions* chainman_opts_,
+   bool blockfiles_readonly,
+   bool validate_blocks
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
