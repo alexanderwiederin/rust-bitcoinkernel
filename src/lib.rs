@@ -914,7 +914,11 @@ impl ChainstateManagerOptions {
         self
     }
 
-    pub fn set_blockfiles_only(self, ephemeral_operation: bool, reconstruct_utxo: bool) -> Self {
+    pub fn set_ephemeral_operation(
+        self,
+        ephemeral_operation: bool,
+        reconstruct_utxo: bool,
+    ) -> Self {
         unsafe {
             kernel_chainstate_manager_options_set_ephemeral_mode(
                 self.inner,
