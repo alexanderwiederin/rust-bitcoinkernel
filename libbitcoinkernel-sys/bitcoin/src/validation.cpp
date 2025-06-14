@@ -2858,7 +2858,7 @@ bool Chainstate::FlushStateToDisk(
             if (!setFilesToPrune.empty()) {
                 fFlushForPrune = true;
                 if (!m_blockman.m_have_pruned) {
-                    m_blockman.m_block_tree_db->WriteFlag("prunedblockfiles", true);
+                    m_blockman.m_block_tree_db->WritePruned(true);
                     m_blockman.m_have_pruned = true;
                 }
             }
@@ -3450,6 +3450,21 @@ static void LimitValidationInterfaceQueue(ValidationSignals& signals) LOCKS_EXCL
 bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<const CBlock> pblock)
 {
     AssertLockNotHeld(m_chainstate_mutex);
+
+    if (!m_chainman.ShouldValidateBlocks()) {
+        LOCK(cs_main);
+
+        CBlockIndex* pindexMostWork = FindMostWorkChain();
+        if (!pindexMostWork) return false;
+
+        m_chain.SetTip(*pindexMostWork);
+
+        if (kernel::IsInterrupted(m_chainman.GetNotifications().blockTip(SynchronizationState::POST_INIT, *pindexMostWork, m_chainman.GuessVerificationProgress(pindexMostWork)))) {
+            return false;
+        }
+
+        return true;
+    }
 
     // Note that while we're often called here from ProcessNewBlock, this is
     // far from a guarantee. Things in the P2P/RPC will often end up calling

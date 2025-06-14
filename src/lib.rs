@@ -903,23 +903,27 @@ impl ChainstateManagerOptions {
         self
     }
 
-    /// Run the block tree db in-memory only. No database files will be written to disk.
-    pub fn set_block_tree_db_in_memory(self, block_tree_db_in_memory: bool) -> Self {
-        unsafe {
-            kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-                self.inner,
-                block_tree_db_in_memory,
-            );
-        }
-        self
-    }
-
     /// Run the chainstate db in-memory only. No database files will be written to disk.
     pub fn set_chainstate_db_in_memory(self, chainstate_db_in_memory: bool) -> Self {
         unsafe {
             kernel_chainstate_manager_options_set_chainstate_db_in_memory(
                 self.inner,
                 chainstate_db_in_memory,
+            );
+        }
+        self
+    }
+
+    pub fn set_chainstate_blockfiles_read_only(
+        self,
+        blockfiles_read_only: bool,
+        validate_blocks: bool,
+    ) -> Self {
+        unsafe {
+            kernel_chainstate_manager_options_set_blockfiles_readonly(
+                self.inner,
+                blockfiles_read_only,
+                validate_blocks,
             );
         }
         self

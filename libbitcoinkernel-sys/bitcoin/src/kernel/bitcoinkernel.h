@@ -800,17 +800,6 @@ BITCOINKERNEL_API bool kernel_chainstate_manager_options_set_wipe_dbs(
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief Sets block tree db in memory in the options.
- *
- * @param[in] chainstate_manager_options   Non-null, created by @ref kernel_chainstate_manager_options_create.
- * @param[in] block_tree_db_in_memory      Set block tree db in memory.
- */
-BITCOINKERNEL_API void kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-    kernel_ChainstateManagerOptions* chainstate_manager_options,
-    bool block_tree_db_in_memory
-) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
  * @brief Sets chainstate db in memory in the options.
  *
  * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
@@ -819,6 +808,31 @@ BITCOINKERNEL_API void kernel_chainstate_manager_options_set_block_tree_db_in_me
 BITCOINKERNEL_API void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
     kernel_ChainstateManagerOptions* chainstate_manager_options,
     bool chainstate_db_in_memory
+) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+* @brief Sets blockfiles read-only mode options for the chainstate manager.
+* Read-only mode enables safe parallel execution alongside Bitcoin Core by
+* operating with in-memory UTXO storage without persistent chainstate writes.
+*
+* @param[in] chainman_opts_        Non-null, created by @ref kernel_chainstate_manager_options_create.
+* @param[in] blockfiles_readonly   Set blockfiles read-only operation mode. When true, uses in-memory
+*                                  CoinsDB instead of persistent LevelDB storage, enabling safe
+*                                  parallel execution without conflicting database access.
+* @param[in] validate_blocks       Set whether to perform full block validation and UTXO reconstruction.
+*                                  When true, validates blocks and rebuilds UTXO set from blockfiles;
+*                                  when false, operates in observer mode tracking only chain tips.
+*                                  Must be true when blockfiles_readonly is false.
+*
+* @return true if configuration is valid and applied successfully, false on invalid parameter combination.
+*
+* @note Invalid configurations:
+*       - blockfiles_readonly=false AND should_validate_blocks=false (full mode requires validation)
+*/
+BITCOINKERNEL_API bool kernel_chainstate_manager_options_set_blockfiles_readonly(
+   kernel_ChainstateManagerOptions* chainman_opts_,
+   bool blockfiles_readonly,
+   bool validate_blocks
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
