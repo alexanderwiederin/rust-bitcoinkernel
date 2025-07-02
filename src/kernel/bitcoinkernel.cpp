@@ -290,11 +290,9 @@ struct ChainstateManagerOptions {
           m_blockman_options{node::BlockManager::Options{
               .chainparams = *context->m_chainparams,
               .blocks_dir = blocks_dir,
+              .block_tree_dir = data_dir / "blocks" / "index",
               .notifications = *context->m_notifications,
-              .block_tree_db_params = DBParams{
-                  .path = data_dir / "blocks" / "index",
-                  .cache_bytes = kernel::CacheSizes{DEFAULT_KERNEL_CACHE}.block_tree_db,
-              }}},
+              }},
           m_chainstate_load_options{node::ChainstateLoadOptions{}}
     {
     }
@@ -768,18 +766,9 @@ bool kernel_chainstate_manager_options_set_wipe_dbs(kernel_ChainstateManagerOpti
     }
     auto opts{cast_chainstate_manager_options(chainman_opts_)};
     LOCK(opts->m_mutex);
-    opts->m_blockman_options.block_tree_db_params.wipe_data = wipe_block_tree_db;
+    opts->m_blockman_options.wipe_block_tree_data = wipe_block_tree_db;
     opts->m_chainstate_load_options.wipe_chainstate_db = wipe_chainstate_db;
     return true;
-}
-
-void kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-    kernel_ChainstateManagerOptions* chainstate_load_opts_,
-    bool block_tree_db_in_memory)
-{
-    auto opts{cast_chainstate_manager_options(chainstate_load_opts_)};
-    LOCK(opts->m_mutex);
-    opts->m_blockman_options.block_tree_db_params.memory_only = block_tree_db_in_memory;
 }
 
 void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
