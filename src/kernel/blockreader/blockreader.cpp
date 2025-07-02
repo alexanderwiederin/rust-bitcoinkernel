@@ -72,7 +72,7 @@ extern "C" {
         }
     }
 
-    kernel_blockreader_IBDStatus kernel_blockreader_get_ibd_statu(const kernel_blockreader_Reader* reader) {
+    kernel_blockreader_IBDStatus kernel_blockreader_get_ibd_status(const kernel_blockreader_Reader* reader) {
         auto br = cast_const_blockreader(reader);
         return cast_ibd_status(br->GetIBDStatus());
     }
