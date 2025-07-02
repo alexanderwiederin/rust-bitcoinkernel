@@ -168,10 +168,10 @@ install(TARGETS bitcoinkernel
     COMPONENT libbitcoinkernel
 )
 
-install(FILES bitcoinkernel.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT libbitcoinkernel)
+install(FILES bitcoinkernel.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/kernel COMPONENT libbitcoinkernel)
 
 if(BUILD_BLOCKREADER)
   install(FILES blockreader/blockreader.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/kernel/blockreader
     COMPONENT libbitcoinkernel)
 endif()
