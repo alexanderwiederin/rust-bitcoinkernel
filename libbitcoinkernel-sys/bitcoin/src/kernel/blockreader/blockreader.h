@@ -5,7 +5,6 @@
 #ifndef BITCOIN_KERNEL_BLOCKREADER_BLOCKREADER_H
 #define BITCOIN_KERNEL_BLOCKREADER_BLOCKREADER_H
 
-#include "kernel/bitcoinkernel_wrapper.h"
 #include <kernel/bitcoinkernel.h>
 
 #ifdef __cplusplus
@@ -21,11 +20,10 @@ typedef enum {
 } kernel_blockreader_IBDStatus;
 
 BITCOINKERNEL_API kernel_blockreader_Reader* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_create(
-        const kernel_Context* context,
         const kernel_ChainParameters* chain_params,
         const char* data_dir,
         size_t data_dir_len
-) BITCOINKERNEL_ARG_NONNULL(1, 2, 3);
+) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
 BITCOINKERNEL_API void kernel_blockreader_refresh(
         kernel_blockreader_Reader* reader

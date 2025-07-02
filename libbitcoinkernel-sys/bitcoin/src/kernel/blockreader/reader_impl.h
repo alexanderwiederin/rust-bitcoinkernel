@@ -6,6 +6,7 @@
 #define BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 
 #include <kernel/chainparams.h>
+#include <kernel/context.h>
 #include <util/signalinterrupt.h>
 #include <kernel/notifications_interface.h>
 #include <chain.h>

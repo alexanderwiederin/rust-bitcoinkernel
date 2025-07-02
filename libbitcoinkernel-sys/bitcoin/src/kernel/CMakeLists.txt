@@ -22,6 +22,7 @@ add_library(bitcoinkernel
   disconnected_transactions.cpp
   mempool_removal_reason.cpp
   $<$<BOOL:${BUILD_BLOCKREADER}>:blockreader/reader_impl.cpp>
+  $<$<BOOL:${BUILD_BLOCKREADER}>:blockreader/blockreader.cpp>
   ../arith_uint256.cpp
   ../chain.cpp
   ../coins.cpp
