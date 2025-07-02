@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "chain.h"
 #include "kernel/bitcoinkernel.h"
+#include "kernel/context.h"
 #include "logging.h"
 #include <cstdint>
 #include <kernel/blockreader/blockreader.h>
@@ -39,7 +39,6 @@ namespace {
 
 extern "C" {
     kernel_blockreader_Reader* kernel_blockreader_create(
-            const kernel_Context* context,
             const kernel_ChainParameters* chain_params,
             const char* data_dir,
             size_t data_dir_len) {
