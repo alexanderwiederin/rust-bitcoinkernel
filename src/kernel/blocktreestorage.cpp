@@ -170,7 +170,7 @@ BlockTreeStore::BlockTreeStore(const fs::path& path, const CChainParams& params,
 
     if (!read_only) {
         LOCK(m_mutex);
-        (void)ApplyLog(); // Ignore an incomplete log file here, the integrity of the data is still intact.
+        (void)ApplyLog();
     } else if (fs::exists(m_log_file_path)) {
         LOCK(m_mutex);
         (void)ValidateLog();
@@ -491,7 +491,6 @@ bool BlockTreeStore::ValidateLog() const
     uint32_t number_of_types;
     log_file >> number_of_types;
 
-    // Validate the log file without applying changes
     for (uint32_t i = 0; i < number_of_types; i++) {
         uint32_t value_type;
         log_file >> value_type;

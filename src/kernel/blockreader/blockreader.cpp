@@ -92,6 +92,21 @@ extern "C" {
         return reinterpret_cast<kernel_Block*>(block);
     }
 
+    kernel_BlockHash* kernel_blockreader_block_get_hash(kernel_Block* block) {
+        auto cblock = reinterpret_cast<CBlock*>(block);
+        auto hash = cblock->GetHash();
+
+        auto block_hash = new kernel_BlockHash{};
+        std::memcpy(block_hash->hash, hash.begin(), sizeof(hash));
+        return block_hash;
+    }
+
+    void kernel_blockreader_block_destroy(kernel_Block* block) {
+        if (block) {
+            delete reinterpret_cast<CBlock*>(block);
+        }
+    }
+
     kernel_BlockIndex* kernel_blockreader_get_block_index_by_height(
             const kernel_blockreader_Reader* reader,
             int32_t height) {
