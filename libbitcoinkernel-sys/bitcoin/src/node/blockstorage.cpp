@@ -1233,7 +1233,6 @@ BlockManager::BlockManager(const util::SignalInterrupt& interrupt, Options opts)
         if (m_opts.wipe_block_tree_data) {
             m_block_tree_db->WriteReindexing(true);
             m_blockfiles_indexed = false;
-            // If we're reindexing in prune mode, wipe away unusable block files and all undo data files
             if (m_prune_mode) {
                 CleanupBlockRevFiles();
             }

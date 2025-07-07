@@ -62,10 +62,11 @@ BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blo
         int32_t height
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_block_index_is_on_main_chain(
-        const kernel_blockreader_Reader* reader,
-        const kernel_BlockIndex* index
-) BITCOINKERNEL_ARG_NONNULL(1, 2);
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_block_get_hash(
+        kernel_Block* block
+) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API void kernel_blockreader_block_destroy(kernel_Block* block);
 
 #ifdef __cplusplus
 }
