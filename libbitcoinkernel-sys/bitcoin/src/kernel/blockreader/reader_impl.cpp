@@ -1,36 +1,35 @@
 
+#include "uint256.h"
+#include "util/signalinterrupt.h"
+#include <chain.h>
 #include <cstddef>
 #include <exception>
-#include <optional>
-#include <reader_impl.h>
-#include <chain.h>
 #include <kernel/chainparams.h>
 #include <logging.h>
-#include <node/blockstorage.h>
-#include "util/signalinterrupt.h"
 #include <memory>
+#include <node/blockstorage.h>
+#include <optional>
+#include <reader_impl.h>
 
 namespace blockreader {
 
 BlockReader::BlockReader(const CChainParams& chain_params, const fs::path& data_dir)
-    : m_notifications(std::make_unique<KernelNotifications>())
-    , m_interrupt(std::make_unique<util::SignalInterrupt>())
-    , m_chainparams(std::make_unique<CChainParams>(chain_params))
-    , m_data_dir(data_dir)
+    : m_notifications(std::make_unique<KernelNotifications>()), m_interrupt(std::make_unique<util::SignalInterrupt>()), m_chainparams(std::make_unique<CChainParams>(chain_params)), m_data_dir(data_dir)
 {
 }
 
-bool BlockReader::Initialize() {
+bool BlockReader::Initialize()
+{
     LogPrintf("Initalizing BlockReader...\n");
     LogPrintf("Data directory: %s\n", m_data_dir.utf8string());
     LogPrintf("Blocks directory: %s\n", (m_data_dir / "blocks").utf8string());
 
-    const node::BlockManager::Options blockman_opts {
+    const node::BlockManager::Options blockman_opts{
         .chainparams = *m_chainparams,
-            .blocks_dir = m_data_dir / "blocks",
-            .block_tree_dir = m_data_dir / "blocks" / "index",
-            .notifications = *m_notifications,
-            .read_only = true,
+        .blocks_dir = m_data_dir / "blocks",
+        .block_tree_dir = m_data_dir / "blocks" / "index",
+        .notifications = *m_notifications,
+        .read_only = true,
     };
 
     try {
@@ -49,12 +48,13 @@ bool BlockReader::Initialize() {
 
     LogPrintf("Block index loaded successfully\n");
     LogPrintf("Header height: %d, Validated height: %d\n",
-            m_header_height, m_validated_chain.Height());
+              m_header_height, m_validated_chain.Height());
 
     return true;
 }
 
-bool BlockReader::LoadBlockIndex() {
+bool BlockReader::LoadBlockIndex()
+{
     std::vector<CBlockIndex*> validated_blocks;
     int max_header_height = 0;
 
@@ -78,14 +78,15 @@ bool BlockReader::LoadBlockIndex() {
 
     if (!validated_blocks.empty()) {
         std::sort(validated_blocks.begin(), validated_blocks.end(),
-                node::CBlockIndexWorkComparator());
+                  node::CBlockIndexWorkComparator());
         m_validated_chain.SetTip(*validated_blocks.back());
     }
 
     return true;
 }
 
-void BlockReader::Refresh() {
+void BlockReader::Refresh()
+{
     LogPrintf("Refreshing block index...\n");
 
     int previous_validated_height = m_validated_chain.Height();
@@ -96,11 +97,12 @@ void BlockReader::Refresh() {
     }
 
     LogPrintf("Refresh complete: Header height: %d, Validated hieght: %d (+%d)\n",
-            m_header_height, m_validated_chain.Height(),
-            m_validated_chain.Height() - previous_validated_height);
+              m_header_height, m_validated_chain.Height(),
+              m_validated_chain.Height() - previous_validated_height);
 }
 
-IBDStatus BlockReader::GetIBDStatus() const {
+IBDStatus BlockReader::GetIBDStatus() const
+{
     if (m_header_height == 0) return IBDStatus::NO_DATA;
     if (m_validated_chain.Height() == 0) return IBDStatus::IN_IBD;
 
@@ -108,14 +110,16 @@ IBDStatus BlockReader::GetIBDStatus() const {
     return (blocks_behind > 144) ? IBDStatus::IN_IBD : IBDStatus::SYNCED;
 }
 
-CBlockIndex* BlockReader::GetBestValidatedBlock() const {
+CBlockIndex* BlockReader::GetBestValidatedBlock() const
+{
     return m_validated_chain.Tip();
 }
 
-std::optional<CBlock> BlockReader::GetBlockByHeight(int height) const {
+std::optional<CBlock> BlockReader::GetBlockByHeight(int height) const
+{
     if (height < 0 || height > m_validated_chain.Height()) {
         LogDebug(BCLog::BLOCKSTORAGE, "Block hieght %d is out of range [0, %d]\n",
-                height, m_validated_chain.Height());
+                 height, m_validated_chain.Height());
         return std::nullopt;
     }
 
@@ -128,7 +132,8 @@ std::optional<CBlock> BlockReader::GetBlockByHeight(int height) const {
     return GetBlock(pindex->GetBlockHash());
 }
 
-std::optional<CBlock> BlockReader::GetBlock(const uint256& hash) const {
+std::optional<CBlock> BlockReader::GetBlock(const uint256& hash) const
+{
     CBlockIndex* pindex = nullptr;
     {
         LOCK(cs_main);
@@ -149,16 +154,23 @@ std::optional<CBlock> BlockReader::GetBlock(const uint256& hash) const {
     return block;
 }
 
-CBlockIndex* BlockReader::GetBlockIndex(const uint256& hash) const {
+CBlockIndex* BlockReader::GetBlockIndex(const uint256& hash) const
+{
     LOCK(cs_main);
     return m_blockman->LookupBlockIndex(hash);
 }
 
-CBlockIndex* BlockReader::GetBlockIndexByHeight(const int height) const {
+CBlockIndex* BlockReader::GetBlockIndexByHeight(const int height) const
+{
     if (height < 0 || height > m_validated_chain.Height()) {
         return nullptr;
     }
     return m_validated_chain[height];
+}
+
+uint256 BlockReader::GetGenesisHash() const
+{
+    return m_validated_chain.Genesis()->GetBlockHash();
 }
 
 } // namespace blockreader
