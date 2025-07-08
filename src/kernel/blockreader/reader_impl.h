@@ -5,16 +5,16 @@
 #ifndef BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 #define BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 
+#include <chain.h>
 #include <kernel/chainparams.h>
 #include <kernel/context.h>
-#include <util/signalinterrupt.h>
 #include <kernel/notifications_interface.h>
-#include <chain.h>
+#include <memory>
+#include <node/blockstorage.h>
+#include <optional>
 #include <uint256.h>
 #include <util/fs.h>
-#include <node/blockstorage.h>
-#include <memory>
-#include <optional>
+#include <util/signalinterrupt.h>
 
 namespace blockreader {
 
@@ -24,59 +24,63 @@ enum class IBDStatus {
     SYNCED
 };
 
-class BlockReader {
-    private:
-        std::unique_ptr<node::BlockManager> m_blockman;
-        std::unique_ptr<kernel::Notifications> m_notifications;
-        std::unique_ptr<util::SignalInterrupt> m_interrupt;
-        std::unique_ptr<const CChainParams> m_chainparams;
+class BlockReader
+{
+private:
+    std::unique_ptr<node::BlockManager> m_blockman;
+    std::unique_ptr<kernel::Notifications> m_notifications;
+    std::unique_ptr<util::SignalInterrupt> m_interrupt;
+    std::unique_ptr<const CChainParams> m_chainparams;
 
-        fs::path m_data_dir;
-        CChain m_validated_chain;
-        int m_header_height{0};
+    fs::path m_data_dir;
+    CChain m_validated_chain;
+    int m_header_height{0};
 
-        class KernelNotifications : public kernel::Notifications {
-            public:
-                kernel::InterruptResult blockTip(SynchronizationState state, CBlockIndex& index, double verification_progress) override {
-                    return {};
-                }
-                void headerTip(SynchronizationState state, int64_t height, int64_t timestamp, bool presync) override {}
-                void progress(const bilingual_str& title, int progress_percent, bool resume_possible) override {}
-                void warningSet(kernel::Warning id, const bilingual_str& message) override {}
-                void warningUnset(kernel::Warning id) override {}
-                void flushError(const bilingual_str& message) override {}
-                void fatalError(const bilingual_str& message) override {}
-        };
+    class KernelNotifications : public kernel::Notifications
+    {
+    public:
+        kernel::InterruptResult blockTip(SynchronizationState state, CBlockIndex& index, double verification_progress) override
+        {
+            return {};
+        }
+        void headerTip(SynchronizationState state, int64_t height, int64_t timestamp, bool presync) override {}
+        void progress(const bilingual_str& title, int progress_percent, bool resume_possible) override {}
+        void warningSet(kernel::Warning id, const bilingual_str& message) override {}
+        void warningUnset(kernel::Warning id) override {}
+        void flushError(const bilingual_str& message) override {}
+        void fatalError(const bilingual_str& message) override {}
+    };
 
-        public:
-        explicit BlockReader(const CChainParams& chain_params, const fs::path& data_dir);
+public:
+    explicit BlockReader(const CChainParams& chain_params, const fs::path& data_dir);
 
-        ~BlockReader() = default;
+    ~BlockReader() = default;
 
-        BlockReader(const BlockReader&) = delete;
-        BlockReader& operator=(const BlockReader&) = delete;
+    BlockReader(const BlockReader&) = delete;
+    BlockReader& operator=(const BlockReader&) = delete;
 
-        bool Initialize();
+    bool Initialize();
 
-        void Refresh();
+    void Refresh();
 
-        IBDStatus GetIBDStatus() const;
+    IBDStatus GetIBDStatus() const;
 
-        CBlockIndex* GetBestValidatedBlock() const;
+    CBlockIndex* GetBestValidatedBlock() const;
 
-        int GetValidatedHeight() const { return m_validated_chain.Height(); }
+    int GetValidatedHeight() const { return m_validated_chain.Height(); }
 
-        std::optional<CBlock> GetBlockByHeight(int height) const;
+    std::optional<CBlock> GetBlockByHeight(int height) const;
 
-        std::optional<CBlock> GetBlock(const uint256& hash) const;
+    std::optional<CBlock> GetBlock(const uint256& hash) const;
 
-        CBlockIndex* GetBlockIndex(const uint256& hash) const;
+    CBlockIndex* GetBlockIndex(const uint256& hash) const;
 
-        CBlockIndex* GetBlockIndexByHeight(int height) const;
+    CBlockIndex* GetBlockIndexByHeight(int height) const;
 
-        private:
+    uint256 GetGenesisHash() const;
 
-        bool LoadBlockIndex();
+private:
+    bool LoadBlockIndex();
 };
 
 } // namespace blockreader
