@@ -30,6 +30,7 @@ fn main() {
         .arg("-DBUILD_UTIL_CHAINSTATE=OFF")
         .arg("-DBUILD_CLI=OFF")
         .arg("-DBUILD_SHARED_LIBS=OFF")
+        .arg("-DBUILD_BLOCKREADER=ON")
         .arg("-DCMAKE_INSTALL_LIBDIR=lib")
         .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display()))
         .status()
@@ -70,13 +71,20 @@ fn main() {
 
     // Header path for bindgen
     let include_path = install_dir.join("include");
-    let header = include_path.join("bitcoinkernel.h");
+    let header = include_path.join("kernel").join("bitcoinkernel.h");
+    let blockreader_header = include_path
+        .join("kernel")
+        .join("blockreader")
+        .join("blockreader.h");
 
     #[allow(deprecated)]
     let bindings = bindgen::Builder::default()
         .header(header.to_str().unwrap())
+        .header(blockreader_header.to_str().unwrap())
         .rust_target(bindgen::RustTarget::Stable_1_71)
         .rust_edition(RustEdition::Edition2021)
+        .clang_arg(format!("-I{}", include_path.display()))
+        .clang_arg(format!("-I{}", include_path.join("kernel").display()))
         .generate()
         .expect("Unable to generate bindings");
 

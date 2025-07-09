@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use std::ffi::{CString, NulError};
-use std::fmt;
+use std::fmt::{self};
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_void};
 use std::sync::Arc;
@@ -759,6 +759,17 @@ pub struct BlockHash {
     pub hash: [u8; 32],
 }
 
+impl std::fmt::Display for BlockHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let hex_string = self
+            .hash
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+        write!(f, "{}", hex_string)
+    }
+}
+
 impl BlockIndex {
     /// Move to the previous entry in the block tree. E.g. from height n to
     /// height n-1.
@@ -898,17 +909,6 @@ impl ChainstateManagerOptions {
                 self.inner,
                 wipe_block_tree,
                 wipe_chainstate,
-            );
-        }
-        self
-    }
-
-    /// Run the block tree db in-memory only. No database files will be written to disk.
-    pub fn set_block_tree_db_in_memory(self, block_tree_db_in_memory: bool) -> Self {
-        unsafe {
-            kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-                self.inner,
-                block_tree_db_in_memory,
             );
         }
         self
@@ -1173,3 +1173,9 @@ impl<T: Log + 'static> Logger<T> {
         self.log.log(message);
     }
 }
+
+#[cfg(feature = "blockreader")]
+pub mod blockreader;
+
+#[cfg(feature = "blockreader")]
+pub use blockreader::{BlockReader, BlockReaderError, BlockReaderIndex, IBDStatus};
