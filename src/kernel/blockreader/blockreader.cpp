@@ -357,21 +357,21 @@ bool kernel_block_index_has_valid_transactions(const kernel_BlockIndex *block_in
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->nStatus & BLOCK_VALID_TRANSACTIONS;
+    return bi->IsValid(BLOCK_VALID_TRANSACTIONS);
 }
 
 bool kernel_block_index_has_valid_chain(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->nStatus & BLOCK_VALID_CHAIN;
+    return bi->IsValid(BLOCK_VALID_CHAIN);
 }
 
 bool kernel_block_index_has_valid_scripts(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->nStatus & BLOCK_VALID_SCRIPTS;
+    return bi->IsValid(BLOCK_VALID_SCRIPTS);
 }
 
 bool kernel_block_index_is_failed(const kernel_BlockIndex *block_index) {
