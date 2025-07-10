@@ -343,49 +343,49 @@ bool kernel_block_index_has_block_data(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_HAVE_DATA);
+    return bi->nStatus & BLOCK_HAVE_DATA;
 }
 
 bool kernel_block_index_has_undo_data(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_HAVE_UNDO);
+    return bi->nStatus & BLOCK_HAVE_UNDO;
 }
 
 bool kernel_block_index_has_valid_transactions(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_VALID_TRANSACTIONS);
+    return bi->nStatus & BLOCK_VALID_TRANSACTIONS;
 }
 
 bool kernel_block_index_has_valid_chain(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_VALID_CHAIN);
+    return bi->nStatus & BLOCK_VALID_CHAIN;
 }
 
 bool kernel_block_index_has_valid_scripts(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_VALID_SCRIPTS);
+    return bi->nStatus & BLOCK_VALID_SCRIPTS;
 }
 
 bool kernel_block_index_is_failed(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_FAILED_VALID);
+    return bi->nStatus & BLOCK_FAILED_VALID;
 }
 
 bool kernel_block_index_has_witness(const kernel_BlockIndex *block_index) {
     LOCK(cs_main);
     auto* bi = cast_const_block_index(block_index);
 
-    return bi->IsValid(BLOCK_OPT_WITNESS);
+    return bi->nStatus & BLOCK_OPT_WITNESS;
 }
 
 } // extern "C"
