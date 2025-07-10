@@ -1211,9 +1211,9 @@ std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateAndMigrateBlockTree(
 std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateReadOnlyBlockTree()
 {
     if (fs::exists(m_opts.block_tree_dir / "headers.dat") &&
-            fs::exists(m_opts.block_tree_dir / "blockfiles.dat")) {
+        fs::exists(m_opts.block_tree_dir / "blockfiles.dat")) {
         return std::make_unique<kernel::BlockTreeStore>(
-                m_opts.block_tree_dir, m_opts.chainparams, false, true);
+            m_opts.block_tree_dir, m_opts.chainparams, false, true);
     }
 
     throw std::runtime_error("Cannot open in read-only mode: required fiels not found");
