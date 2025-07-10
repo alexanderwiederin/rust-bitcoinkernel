@@ -98,6 +98,20 @@ BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_g
 
 BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_median_time_past(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_block_data(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_undo_data(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_valid_transactions(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_valid_chain(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_valid_scripts(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_is_failed(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_witness(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
 #ifdef __cplusplus
 }
 #endif
