@@ -247,7 +247,7 @@ uint32_t kernel_block_index_get_timestamp(const kernel_BlockIndex* block_index)
     return cblock_index->GetBlockHeader().nTime;
 }
 
-uint32_t kernel_block_index_get_transation_count(const kernel_BlockIndex* block_index)
+uint32_t kernel_block_index_get_transaction_count(const kernel_BlockIndex* block_index)
 {
     const auto* cblock_index = cast_const_block_index(block_index);
     return cblock_index->nTx;
