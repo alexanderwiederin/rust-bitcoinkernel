@@ -122,9 +122,9 @@ BlockTreeStore::BlockTreeStore(const fs::path& path, const CChainParams& params,
         auto lock_result = util::LockDirectory(path, ".blocktreelock", true);
         if (lock_result != util::LockResult::Success) {
             LogPrintf("BlockTreeStore: Directory %s is locked by another instance (result: %s). "
-                    "Proceeding in read-only mode - data may be temporarily inconsistent during writes.\n",
-                    fs::PathToString(path),
-                    lock_result == util::LockResult::ErrorLock ? "ErrorLock" : "ErrorWrite");
+                      "Proceeding in read-only mode - data may be temporarily inconsistent during writes.\n",
+                      fs::PathToString(path),
+                      lock_result == util::LockResult::ErrorLock ? "ErrorLock" : "ErrorWrite");
         }
         m_directory_locked = false;
     } else {
@@ -138,15 +138,15 @@ BlockTreeStore::BlockTreeStore(const fs::path& path, const CChainParams& params,
         if (lock_result != util::LockResult::Success) {
             std::string error_msg;
             switch (lock_result) {
-                case util::LockResult::ErrorLock:
-                    error_msg = "Another instance is using it";
-                    break;
-                case util::LockResult::ErrorWrite:
-                    error_msg = "Cannot create lock file (check permissions)";
-                    break;
-                default:
-                    error_msg = "Unknown error";
-                    break;
+            case util::LockResult::ErrorLock:
+                error_msg = "Another instance is using it";
+                break;
+            case util::LockResult::ErrorWrite:
+                error_msg = "Cannot create lock file (check permissions)";
+                break;
+            default:
+                error_msg = "Unknown error";
+                break;
             }
             throw BlockTreeStoreError(strprintf("Cannot obtain lock: %s", error_msg));
         }

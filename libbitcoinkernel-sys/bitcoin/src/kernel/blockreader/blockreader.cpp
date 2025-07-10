@@ -146,7 +146,7 @@ kernel_BlockHash* kernel_blockreader_get_genesis_hash(const kernel_blockreader_R
 
     auto hash = new kernel_BlockHash{};
 
-    std::memcpy(hash->hash, genesis_hash.begin(), 32);
+    std::memcpy(hash->hash, genesis_hash.begin(), sizeof(genesis_hash));
 
     return hash;
 }
@@ -282,5 +282,52 @@ kernel_Block* kernel_blockreader_get_block_by_hash(
         LogError("Failed to get block by hash: %s", e.what());
         return nullptr;
     }
+}
+
+kernel_BlockHash* kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index) {
+    auto* bi = cast_const_block_index(block_index);
+
+    CBlockIndex* prev_index = bi->pprev;
+    if (!prev_index) return nullptr;
+
+    auto prev_block_hash = prev_index->GetBlockHash();
+
+    auto block_hash = new kernel_BlockHash{};
+    std::memcpy(block_hash->hash, prev_block_hash.begin(), sizeof(prev_block_hash));
+    return block_hash;
+}
+
+uint32_t kernel_block_index_get_version(const kernel_BlockIndex* block_index) {
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->nVersion;
+}
+
+kernel_BlockHash* kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index) {
+    auto* bi = cast_const_block_index(block_index);
+
+    auto merkle_root = bi->hashMerkleRoot;
+    auto block_hash = new kernel_BlockHash{};
+
+    std::memcpy(block_hash->hash, merkle_root.begin(), sizeof(merkle_root));
+    return block_hash;
+}
+
+uint32_t kernel_block_index_get_bits(const kernel_BlockIndex* block_index) {
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->nBits;
+}
+
+uint32_t kernel_block_index_get_nonce(const kernel_BlockIndex* block_index) {
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->nNonce;
+}
+
+uint32_t kernel_block_index_get_median_time_past(const kernel_BlockIndex* block_index) {
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->GetMedianTimePast();
 }
 } // extern "C"

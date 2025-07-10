@@ -5,6 +5,7 @@
 #ifndef BITCOIN_KERNEL_BLOCKREADER_BLOCKREADER_H
 #define BITCOIN_KERNEL_BLOCKREADER_BLOCKREADER_H
 
+#include <cstdint>
 #include <kernel/bitcoinkernel.h>
 
 #ifdef __cplusplus
@@ -81,9 +82,21 @@ BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_bloc
 
 BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_timestamp(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_Block_index_get_transaction_count(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_transaction_count(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
 BITCOINKERNEL_API void kernel_blockreader_block_destroy(kernel_Block* block) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_version(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_bits(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_nonce(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_median_time_past(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
 #ifdef __cplusplus
 }

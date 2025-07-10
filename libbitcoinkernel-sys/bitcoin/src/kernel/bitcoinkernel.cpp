@@ -292,7 +292,7 @@ struct ChainstateManagerOptions {
               .blocks_dir = blocks_dir,
               .block_tree_dir = data_dir / "blocks" / "index",
               .notifications = *context->m_notifications,
-              }},
+          }},
           m_chainstate_load_options{node::ChainstateLoadOptions{}}
     {
     }
