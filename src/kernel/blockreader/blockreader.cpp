@@ -2,7 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "chain.h"
 #include "kernel/bitcoinkernel.h"
+#include "kernel/cs_main.h"
 #include "logging.h"
 #include "streams.h"
 #include <cstddef>
@@ -284,7 +286,8 @@ kernel_Block* kernel_blockreader_get_block_by_hash(
     }
 }
 
-kernel_BlockHash* kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index) {
+kernel_BlockHash* kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index)
+{
     auto* bi = cast_const_block_index(block_index);
 
     CBlockIndex* prev_index = bi->pprev;
@@ -297,13 +300,15 @@ kernel_BlockHash* kernel_block_index_get_previous_block_hash(const kernel_BlockI
     return block_hash;
 }
 
-uint32_t kernel_block_index_get_version(const kernel_BlockIndex* block_index) {
+uint32_t kernel_block_index_get_version(const kernel_BlockIndex* block_index)
+{
     auto* bi = cast_const_block_index(block_index);
 
     return bi->nVersion;
 }
 
-kernel_BlockHash* kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index) {
+kernel_BlockHash* kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index)
+{
     auto* bi = cast_const_block_index(block_index);
 
     auto merkle_root = bi->hashMerkleRoot;
@@ -313,21 +318,74 @@ kernel_BlockHash* kernel_block_index_get_merkle_root(const kernel_BlockIndex* bl
     return block_hash;
 }
 
-uint32_t kernel_block_index_get_bits(const kernel_BlockIndex* block_index) {
+uint32_t kernel_block_index_get_bits(const kernel_BlockIndex* block_index)
+{
     auto* bi = cast_const_block_index(block_index);
 
     return bi->nBits;
 }
 
-uint32_t kernel_block_index_get_nonce(const kernel_BlockIndex* block_index) {
+uint32_t kernel_block_index_get_nonce(const kernel_BlockIndex* block_index)
+{
     auto* bi = cast_const_block_index(block_index);
 
     return bi->nNonce;
 }
 
-uint32_t kernel_block_index_get_median_time_past(const kernel_BlockIndex* block_index) {
+uint32_t kernel_block_index_get_median_time_past(const kernel_BlockIndex* block_index)
+{
     auto* bi = cast_const_block_index(block_index);
 
     return bi->GetMedianTimePast();
 }
+
+bool kernel_block_index_has_block_data(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_HAVE_DATA);
+}
+
+bool kernel_block_index_has_undo_data(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_HAVE_UNDO);
+}
+
+bool kernel_block_index_has_valid_transactions(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_VALID_TRANSACTIONS);
+}
+
+bool kernel_block_index_has_valid_chain(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_VALID_CHAIN);
+}
+
+bool kernel_block_index_has_valid_scripts(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_VALID_SCRIPTS);
+}
+
+bool kernel_block_index_is_failed(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_FAILED_VALID);
+}
+
+bool kernel_block_index_has_witness(const kernel_BlockIndex *block_index) {
+    LOCK(cs_main);
+    auto* bi = cast_const_block_index(block_index);
+
+    return bi->IsValid(BLOCK_OPT_WITNESS);
+}
+
 } // extern "C"
