@@ -6,6 +6,7 @@
 #include "kernel/bitcoinkernel.h"
 #include "kernel/cs_main.h"
 #include "logging.h"
+#include "primitives/transaction.h"
 #include "streams.h"
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,7 @@
 #include <exception>
 #include <kernel/blockreader/blockreader.h>
 #include <kernel/blockreader/reader_impl.h>
+#include <memory>
 
 using namespace blockreader;
 
@@ -40,6 +42,12 @@ const CBlockIndex* cast_const_block_index(const kernel_BlockIndex* block_index)
 {
     assert(block_index);
     return reinterpret_cast<const CBlockIndex*>(block_index);
+}
+
+const CBlock* cast_const_block(const kernel_Block* block)
+{
+    assert(block);
+    return reinterpret_cast<const CBlock*>(block);
 }
 
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
@@ -370,6 +378,25 @@ kernel_Block* kernel_blockreader_get_block_by_index(const kernel_blockreader_Rea
     }
 
     return reinterpret_cast<kernel_Block*>(block);
+}
+
+uint32_t kernel_block_get_transaction_count(const kernel_Block* block)
+{
+    auto* b = cast_const_block(block);
+
+    return b->vtx.size();
+}
+
+kernel_Transaction* kernel_block_get_transaction(const kernel_Block* block, size_t index)
+{
+    auto* b = cast_const_block(block);
+
+    if (index >= b->vtx.size()) {
+        return nullptr;
+    }
+
+    auto* shared_tx = new std::shared_ptr<const CTransaction>(b->vtx[index]);
+    return reinterpret_cast<kernel_Transaction*>(shared_tx);
 }
 
 
