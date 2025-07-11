@@ -377,7 +377,8 @@ kernel_Block* kernel_blockreader_get_block_by_index(const kernel_blockreader_Rea
         return nullptr;
     }
 
-    return reinterpret_cast<kernel_Block*>(block_opt.value());
+    auto* block_shared_ptr = new std::shared_ptr<CBlock>(block_opt.value());
+    return reinterpret_cast<kernel_Block*>(block_shared_ptr);
 }
 
 uint32_t kernel_block_get_transaction_count(const kernel_Block* block)
