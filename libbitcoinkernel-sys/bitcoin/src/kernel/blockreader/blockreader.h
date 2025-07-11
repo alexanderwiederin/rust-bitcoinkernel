@@ -103,11 +103,11 @@ BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_is_fa
 
 BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_witness(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API kernel_Block* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API kernel_BlockPointer* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_get_transaction_count(kernel_Block* block) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_get_transaction_count(kernel_BlockPointer* block_pointer) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API kernel_Transaction* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_get_transaction(kernel_Block* block, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API kernel_Transaction* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_get_transaction(kernel_BlockPointer* block_pointer, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
 
 #ifdef __cplusplus
 }
