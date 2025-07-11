@@ -50,6 +50,12 @@ const CBlock* cast_const_block(const kernel_Block* block)
     return reinterpret_cast<const CBlock*>(block);
 }
 
+std::shared_ptr<CBlock>* cast_cblocksharedpointer(kernel_Block* block)
+{
+    assert(block);
+    return reinterpret_cast<std::shared_ptr<CBlock>*>(block);
+}
+
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
 {
     switch (status) {
@@ -381,22 +387,23 @@ kernel_Block* kernel_blockreader_get_block_by_index(const kernel_blockreader_Rea
     return reinterpret_cast<kernel_Block*>(block_shared_ptr);
 }
 
-uint32_t kernel_block_get_transaction_count(const kernel_Block* block)
+uint32_t kernel_block_get_transaction_count(kernel_Block* block_)
 {
-    auto* b = cast_const_block(block);
+    auto block{cast_cblocksharedpointer(block_)};
 
-    return b->vtx.size();
+
+    return (*block)->vtx.size();
 }
 
-kernel_Transaction* kernel_block_get_transaction(const kernel_Block* block, size_t index)
+kernel_Transaction* kernel_block_get_transaction(kernel_Block* block_, size_t index)
 {
-    auto* b = cast_const_block(block);
+    auto block{cast_cblocksharedpointer(block_)};
 
-    if (index >= b->vtx.size()) {
+    if (index >= (*block)->vtx.size()) {
         return nullptr;
     }
 
-    auto* shared_tx = new std::shared_ptr<const CTransaction>(b->vtx[index]);
+    auto* shared_tx = new std::shared_ptr<const CTransaction>((*block)->vtx[index]);
     return reinterpret_cast<kernel_Transaction*>(shared_tx);
 }
 
