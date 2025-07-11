@@ -1,6 +1,4 @@
 
-#include "uint256.h"
-#include "util/signalinterrupt.h"
 #include <chain.h>
 #include <cstddef>
 #include <exception>
@@ -10,6 +8,8 @@
 #include <node/blockstorage.h>
 #include <optional>
 #include <reader_impl.h>
+#include <uint256.h>
+#include <util/signalinterrupt.h>
 
 namespace blockreader {
 
@@ -110,12 +110,12 @@ IBDStatus BlockReader::GetIBDStatus() const
     return (blocks_behind > 144) ? IBDStatus::IN_IBD : IBDStatus::SYNCED;
 }
 
-CBlockIndex* BlockReader::GetBestValidatedBlock() const
+CBlockIndex* BlockReader::GetBestBlock() const
 {
     return m_validated_chain.Tip();
 }
 
-std::optional<CBlock> BlockReader::GetBlockByHeight(int height) const
+std::optional<CBlock*> BlockReader::GetBlockByHeight(int height) const
 {
     if (height < 0 || height > m_validated_chain.Height()) {
         LogDebug(BCLog::BLOCKSTORAGE, "Block hieght %d is out of range [0, %d]\n",
@@ -123,38 +123,27 @@ std::optional<CBlock> BlockReader::GetBlockByHeight(int height) const
         return std::nullopt;
     }
 
-    CBlockIndex* pindex = m_validated_chain[height];
+    const CBlockIndex* pindex = m_validated_chain[height];
     if (!pindex) {
         LogDebug(BCLog::BLOCKSTORAGE, "Block at height %d is null\n", height);
         return std::nullopt;
     }
 
-    return GetBlock(pindex->GetBlockHash());
+    return GetBlockByIndex(pindex);
 }
 
-std::optional<CBlock> BlockReader::GetBlock(const uint256& hash) const
+std::optional<CBlock*> BlockReader::GetBlockByIndex(const CBlockIndex* block_index) const
 {
-    CBlockIndex* pindex = nullptr;
-    {
-        LOCK(cs_main);
-        pindex = m_blockman->LookupBlockIndex(hash);
-    }
-
-    if (!pindex) {
-        LogDebug(BCLog::BLOCKSTORAGE, "Block not found in index: %s\n", hash.ToString());
+    auto block = new CBlock{};
+    if (!m_blockman->ReadBlock(*block, *block_index)) {
+        LogPrintf("Failed to read block from disk: %s\n", block_index->GetBlockHash().ToString());
+        delete block;
         return std::nullopt;
     }
-
-    CBlock block;
-    if (!m_blockman->ReadBlock(block, *pindex)) {
-        LogPrintf("Failed to red block from disk: %s\n", hash.ToString());
-        return std::nullopt;
-    }
-
     return block;
 }
 
-CBlockIndex* BlockReader::GetBlockIndex(const uint256& hash) const
+CBlockIndex* BlockReader::GetBlockIndexByHash(const uint256& hash) const
 {
     LOCK(cs_main);
     return m_blockman->LookupBlockIndex(hash);

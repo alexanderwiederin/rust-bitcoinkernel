@@ -43,16 +43,8 @@ BITCOINKERNEL_API int32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_ge
 BITCOINKERNEL_API int32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_validated_height(
     const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_best_validated_block(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_best_block_index(
     const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
-
-BITCOINKERNEL_API kernel_Block* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_by_height(
-    const kernel_blockreader_Reader* reader,
-    int32_t height) BITCOINKERNEL_ARG_NONNULL(1);
-
-BITCOINKERNEL_API kernel_Block* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_by_hash(
-    const kernel_blockreader_Reader* reader,
-    const kernel_BlockHash* block_hash) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
 BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_index_by_hash(
     const kernel_blockreader_Reader* reader,
@@ -84,8 +76,6 @@ BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_g
 
 BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_transaction_count(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API void kernel_blockreader_block_destroy(kernel_Block* block) BITCOINKERNEL_ARG_NONNULL(1);
-
 BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
 BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_version(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
@@ -111,6 +101,8 @@ BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_v
 BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_is_failed(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
 BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_witness(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_Block* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
 
 #ifdef __cplusplus
 }

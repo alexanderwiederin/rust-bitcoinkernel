@@ -65,15 +65,15 @@ public:
 
     IBDStatus GetIBDStatus() const;
 
-    CBlockIndex* GetBestValidatedBlock() const;
+    CBlockIndex* GetBestBlock() const;
 
     int GetValidatedHeight() const { return m_validated_chain.Height(); }
 
-    std::optional<CBlock> GetBlockByHeight(int height) const;
+    std::optional<CBlock*> GetBlockByHeight(int height) const;
 
-    std::optional<CBlock> GetBlock(const uint256& hash) const;
+    std::optional<CBlock*> GetBlockByIndex(const CBlockIndex* block_index) const;
 
-    CBlockIndex* GetBlockIndex(const uint256& hash) const;
+    CBlockIndex* GetBlockIndexByHash(const uint256& hash) const;
 
     CBlockIndex* GetBlockIndexByHeight(int height) const;
 
