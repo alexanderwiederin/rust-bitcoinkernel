@@ -936,7 +936,7 @@ kernel_BlockHash* kernel_block_get_hash(kernel_Block* block_)
     auto block{cast_cblocksharedpointer(block_)};
     auto hash{(*block)->GetHash()};
     auto block_hash = new kernel_BlockHash{};
-    std::memcpy(block_hash->hash, hash.begin(), sizeof(block_hash->hash));
+    std::memcpy(block_hash->hash, hash.begin(), sizeof(hash));
     return block_hash;
 }
 

@@ -371,13 +371,13 @@ kernel_Block* kernel_blockreader_get_block_by_index(const kernel_blockreader_Rea
     auto br = cast_const_blockreader(reader);
     const CBlockIndex* block_index{cast_const_block_index(block_index_)};
 
-    auto block{new std::shared_ptr<CBlock>(new CBlock{})};
-    if (!br->GetBlockByIndex(block_index)) {
+    auto block_opt = br->GetBlockByIndex(block_index);
+    if (!block_opt.has_value()) {
         LogError("Failed to read block.");
         return nullptr;
     }
 
-    return reinterpret_cast<kernel_Block*>(block);
+    return reinterpret_cast<kernel_Block*>(block_opt.value());
 }
 
 uint32_t kernel_block_get_transaction_count(const kernel_Block* block)
