@@ -113,6 +113,12 @@ BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_g
 
 BITCOINKERNEL_API const kernel_TransactionInput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_transaction_input(const kernel_Transaction*, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API const kernel_TransactionOutPoint* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_out_point(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_hash(const kernel_TransactionOutPoint* out_point) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_outpoint_get_index(const kernel_TransactionOutPoint*)
+
 #ifdef __cplusplus
 }
 #endif
