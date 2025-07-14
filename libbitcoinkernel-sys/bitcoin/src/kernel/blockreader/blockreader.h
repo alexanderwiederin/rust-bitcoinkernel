@@ -117,7 +117,7 @@ BITCOINKERNEL_API const kernel_TransactionOutPoint* BITCOINKERNEL_WARN_UNUSED_RE
 
 BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_hash(const kernel_TransactionOutPoint* out_point) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_outpoint_get_index(const kernel_TransactionOutPoint*)
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_outpoint_get_index(const kernel_TransactionOutPoint*);
 
 #ifdef __cplusplus
 }
