@@ -129,6 +129,11 @@ typedef struct kernel_TransactionOutput kernel_TransactionOutput;
 
 typedef struct kernel_TransactionInput kernel_TransactionInput;
 
+/**
+ * Opaque data structure for holding a transaction outpoint.
+ */
+
+typedef struct kernel_TransactionOutPoint kernel_TransactionOutPoint;
 
 /**
  * Opaque data structure for holding a logging connection.

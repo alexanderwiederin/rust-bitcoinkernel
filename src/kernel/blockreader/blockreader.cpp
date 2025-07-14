@@ -54,6 +54,16 @@ const CTransaction* cast_const_transaction(const kernel_Transaction* transaction
     return reinterpret_cast<const CTransaction*>(transaction);
 }
 
+const CTxIn* cast_const_transaction_input(const kernel_TransactionInput* input)
+{
+    return reinterpret_cast<const CTxIn*>(input);
+}
+
+const COutPoint* cast_const_transaction_out_point(const kernel_TransactionOutPoint* out_point)
+{
+    return reinterpret_cast<const COutPoint*>(out_point);
+}
+
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
 {
     switch (status) {
@@ -399,7 +409,7 @@ const kernel_Transaction* kernel_block_pointer_get_transaction(const kernel_Bloc
     return reinterpret_cast<const kernel_Transaction*>(block->vtx[index].get());
 }
 
-uint32_t kernel_transaction_get_transaction_input_count(const kernel_Transaction * _transaction)
+uint32_t kernel_transaction_get_transaction_input_count(const kernel_Transaction* _transaction)
 {
     const auto* transaction = cast_const_transaction(_transaction);
     return transaction->vin.size();
@@ -413,5 +423,29 @@ const kernel_TransactionInput* kernel_transaction_get_transaction_input(const ke
     }
     return reinterpret_cast<const kernel_TransactionInput*>(&transaction->vin[index]);
 }
+
+const kernel_TransactionOutPoint* kernel_transaction_input_get_out_point(const kernel_TransactionInput* _input)
+{
+    const auto* input = cast_const_transaction_input(_input);
+    return reinterpret_cast<const kernel_TransactionOutPoint*>(&input->prevout);
+}
+
+const kernel_BlockHash* kernel_transaction_out_point_get_hash(const kernel_TransactionOutPoint* _out_point)
+{
+    const auto* out_point = cast_const_transaction_out_point(_out_point);
+
+    auto* block_hash = new kernel_BlockHash{};
+    std::memcpy(block_hash->hash, out_point->hash.begin(), sizeof(block_hash));
+
+    return block_hash;
+}
+
+uint32_t kernel_transaction_out_point_get_index(const kernel_TransactionOutPoint* _out_point)
+{
+    const auto* input = cast_const_transaction_out_point(_out_point);
+
+    return input->n;
+}
+
 
 } // extern "C"
