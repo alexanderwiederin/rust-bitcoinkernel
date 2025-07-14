@@ -49,6 +49,11 @@ const CBlock* cast_const_block_pointer(const kernel_BlockPointer* block_pointer)
     return reinterpret_cast<const CBlock*>(block_pointer);
 }
 
+const CTransaction* cast_const_transaction(const kernel_Transaction* transaction)
+{
+    return reinterpret_cast<const CTransaction*>(transaction);
+}
+
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
 {
     switch (status) {
@@ -394,5 +399,19 @@ const kernel_Transaction* kernel_block_pointer_get_transaction(const kernel_Bloc
     return reinterpret_cast<const kernel_Transaction*>(block->vtx[index].get());
 }
 
+uint32_t kernel_transaction_get_transaction_input_count(const kernel_Transaction * _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+    return transaction->vin.size();
+}
+
+const kernel_TransactionInput* kernel_transaction_get_transaction_input(const kernel_Transaction* _transaction, size_t index)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+    if (index >= transaction->vin.size()) {
+        return nullptr;
+    }
+    return reinterpret_cast<const kernel_TransactionInput*>(&transaction->vin[index]);
+}
 
 } // extern "C"
