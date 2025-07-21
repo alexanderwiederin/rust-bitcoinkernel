@@ -117,7 +117,19 @@ BITCOINKERNEL_API const kernel_TransactionOutPoint* BITCOINKERNEL_WARN_UNUSED_RE
 
 BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_hash(const kernel_TransactionOutPoint* out_point) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_index(const kernel_TransactionOutPoint*);
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_index(const kernel_TransactionOutPoint* out_point);
+
+BITCOINKERNEL_API const kernel_TransactionScriptSig* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_script_sig(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_copy_script_sig_data(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_script_sig_is_push_only(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_script_sig_is_empty(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API void kernel_transaction_script_sig_destroy(kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+
 
 #ifdef __cplusplus
 }

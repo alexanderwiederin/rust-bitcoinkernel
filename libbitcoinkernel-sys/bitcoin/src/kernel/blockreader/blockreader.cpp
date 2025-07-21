@@ -7,6 +7,7 @@
 #include "kernel/cs_main.h"
 #include "logging.h"
 #include "primitives/transaction.h"
+#include "script/script.h"
 #include "streams.h"
 #include <cstddef>
 #include <cstdint>
@@ -62,6 +63,11 @@ const CTxIn* cast_const_transaction_input(const kernel_TransactionInput* input)
 const COutPoint* cast_const_transaction_out_point(const kernel_TransactionOutPoint* out_point)
 {
     return reinterpret_cast<const COutPoint*>(out_point);
+}
+
+const CScript* cast_const_script_sig(const kernel_TransactionScriptSig* script_sig)
+{
+    return reinterpret_cast<const CScript*>(script_sig);
 }
 
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
@@ -447,5 +453,37 @@ uint32_t kernel_transaction_out_point_get_index(const kernel_TransactionOutPoint
     return input->n;
 }
 
+const kernel_TransactionScriptSig* kernel_transaction_input_get_script_sig(const kernel_TransactionInput* _input)
+{
+    const auto* input = cast_const_transaction_input(_input);
+
+    return reinterpret_cast<const kernel_TransactionScriptSig*>(&input->scriptSig);
+}
+
+kernel_ByteArray* kernel_copy_script_sig_data(const kernel_TransactionScriptSig* _script_sig)
+{
+    const auto* script = cast_const_script_sig(_script_sig);
+
+    auto byte_array = new kernel_ByteArray{};
+    byte_array->size = script->size();
+    byte_array->data = new unsigned char[byte_array->size];
+    std::memcpy(byte_array->data, script->data(), byte_array->size);
+
+    return byte_array;
+}
+
+bool kernel_transaction_script_sig_is_push_only(const kernel_TransactionScriptSig* _script_sig)
+{
+    const auto* script = cast_const_script_sig(_script_sig);
+
+    return script->IsPushOnly();
+}
+
+bool kernel_transaction_script_sig_is_empty(const kernel_TransactionScriptSig* _script_sig)
+{
+    const auto* script = cast_const_script_sig(_script_sig);
+
+    return script->empty();
+}
 
 } // extern "C"
