@@ -70,6 +70,11 @@ const CScript* cast_const_script_sig(const kernel_TransactionScriptSig* script_s
     return reinterpret_cast<const CScript*>(script_sig);
 }
 
+const CScriptWitness* cast_const_witness(const kernel_TransactionWitness* witness)
+{
+    return reinterpret_cast<const CScriptWitness*>(witness);
+}
+
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
 {
     switch (status) {
@@ -472,18 +477,65 @@ kernel_ByteArray* kernel_copy_script_sig_data(const kernel_TransactionScriptSig*
     return byte_array;
 }
 
-bool kernel_transaction_script_sig_is_push_only(const kernel_TransactionScriptSig* _script_sig)
+bool kernel_script_sig_is_push_only(const kernel_TransactionScriptSig* _script_sig)
 {
     const auto* script = cast_const_script_sig(_script_sig);
 
     return script->IsPushOnly();
 }
 
-bool kernel_transaction_script_sig_is_empty(const kernel_TransactionScriptSig* _script_sig)
+bool kernel_script_sig_is_empty(const kernel_TransactionScriptSig* _script_sig)
 {
     const auto* script = cast_const_script_sig(_script_sig);
 
     return script->empty();
+}
+
+uint32_t kernel_transaction_input_get_n_sequence(const kernel_TransactionInput* _input)
+{
+    const auto* input = cast_const_transaction_input(_input);
+
+    return input->nSequence;
+}
+
+const kernel_TransactionWitness* kernel_transaction_input_get_witness(const kernel_TransactionInput* _input)
+{
+    const auto* input = cast_const_transaction_input(_input);
+
+    return reinterpret_cast<const kernel_TransactionWitness*>(&input->scriptWitness);
+}
+
+uint32_t kernel_witness_get_stack_size(const kernel_TransactionWitness* _witness)
+{
+    const auto* witness = cast_const_witness(_witness);
+
+    return witness->stack.size();
+}
+
+kernel_ByteArray* kernel_witness_get_stack_item(const kernel_TransactionWitness* _witness, uint32_t index)
+{
+    const auto* witness = cast_const_witness(_witness);
+
+    if (index >= witness->stack.size()) {
+        return nullptr;
+    }
+
+    const auto& stack_item = witness->stack.at(index);
+
+    auto byte_array = new kernel_ByteArray();
+    byte_array->size = stack_item.size();
+    byte_array->data = new unsigned char[byte_array->size];
+
+    std::memcpy(byte_array->data, stack_item.data(), byte_array->size);
+
+    return byte_array;
+}
+
+bool kernel_witness_is_null(const kernel_TransactionWitness* _witness)
+{
+    const auto* witness = cast_const_witness(_witness);
+
+    return witness->IsNull();
 }
 
 } // extern "C"
