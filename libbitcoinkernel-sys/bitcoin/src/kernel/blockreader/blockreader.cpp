@@ -538,4 +538,21 @@ bool kernel_witness_is_null(const kernel_TransactionWitness* _witness)
     return witness->IsNull();
 }
 
+uint32_t kernel_transaction_get_output_count(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    return transaction->vout.size();
+}
+
+const kernel_TransactionOutput* kernel_transaction_get_output(const kernel_Transaction* _transaction, size_t index)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    if (index >= transaction->vout.size()) {
+        return nullptr;
+    }
+
+    return reinterpret_cast<const kernel_TransactionOutput*>(&transaction->vout[index]);
+}
 } // extern "C"
