@@ -123,13 +123,19 @@ BITCOINKERNEL_API const kernel_TransactionScriptSig* BITCOINKERNEL_WARN_UNUSED_R
 
 BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_copy_script_sig_data(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_script_sig_is_push_only(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_sig_is_push_only(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_script_sig_is_empty(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_sig_is_empty(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API void kernel_transaction_script_sig_destroy(kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_n_sequence(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API const kernel_TransactionWitness* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_witness(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_size(const kernel_TransactionWitness* witness) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_item(const kernel_TransactionWitness* witness, uint32_t index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_is_null(const kernel_TransactionWitness* witness) BITCOINKERNEL_ARG_NONNULL(1);
 
 #ifdef __cplusplus
 }

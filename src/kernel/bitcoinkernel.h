@@ -139,6 +139,11 @@ typedef struct kernel_TransactionOutPoint kernel_TransactionOutPoint;
 typedef struct kernel_TransactionScriptSig kernel_TransactionScriptSig;
 
 /**
+ * Opaque data structure for holding a witness.
+ */
+typedef struct kernel_TransactionWitness kernel_TransactionWitness;
+
+/**
  * Opaque data structure for holding a logging connection.
  *
  * The logging connection can be used to manually stop logging.
