@@ -446,7 +446,7 @@ const kernel_BlockHash* kernel_transaction_out_point_get_hash(const kernel_Trans
     const auto* out_point = cast_const_transaction_out_point(_out_point);
 
     auto* block_hash = new kernel_BlockHash{};
-    std::memcpy(block_hash->hash, out_point->hash.begin(), sizeof(block_hash));
+    std::memcpy(block_hash->hash, out_point->hash.begin(), sizeof(block_hash->hash));
 
     return block_hash;
 }
