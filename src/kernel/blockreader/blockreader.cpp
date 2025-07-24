@@ -391,7 +391,7 @@ bool kernel_block_index_has_witness(const kernel_BlockIndex* block_index)
     return bi->nStatus & BLOCK_OPT_WITNESS;
 }
 
-kernel_BlockPointer* kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index_)
+kernel_Block* kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index_)
 {
     auto br = cast_const_blockreader(reader);
     const CBlockIndex* block_index{cast_const_block_index(block_index_)};
@@ -402,7 +402,7 @@ kernel_BlockPointer* kernel_blockreader_get_block_by_index(const kernel_blockrea
         return nullptr;
     }
 
-    return reinterpret_cast<kernel_BlockPointer*>(block_opt.value());
+    return reinterpret_cast<kernel_Block*>(block_opt.value());
 }
 
 uint32_t kernel_block_pointer_get_transaction_count(const kernel_BlockPointer* block_pointer)
@@ -420,13 +420,13 @@ const kernel_Transaction* kernel_block_pointer_get_transaction(const kernel_Bloc
     return reinterpret_cast<const kernel_Transaction*>(block->vtx[index].get());
 }
 
-uint32_t kernel_transaction_get_transaction_input_count(const kernel_Transaction* _transaction)
+uint32_t kernel_transaction_get_input_count(const kernel_Transaction* _transaction)
 {
     const auto* transaction = cast_const_transaction(_transaction);
     return transaction->vin.size();
 }
 
-const kernel_TransactionInput* kernel_transaction_get_transaction_input(const kernel_Transaction* _transaction, size_t index)
+const kernel_TransactionInput* kernel_transaction_get_input(const kernel_Transaction* _transaction, size_t index)
 {
     const auto* transaction = cast_const_transaction(_transaction);
     if (index >= transaction->vin.size()) {
