@@ -1,9 +1,11 @@
+use std::{thread::sleep, time::Duration};
+
 use bitcoinkernel::{
     blockreader::{BlockReader, BlockReaderError},
     ChainType, IBDStatus, Log, Logger,
 };
 use env_logger;
-use log::trace;
+use log::{info, trace};
 
 struct KernelLogger {}
 
@@ -15,77 +17,122 @@ impl Log for KernelLogger {
 
 fn main() -> Result<(), Box<BlockReaderError>> {
     env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(log::LevelFilter::Debug)
         .init();
 
     let _kernel_logger = Logger::new(KernelLogger {}).expect("Failed to create kernel logger");
 
     let datadir = "/Users/xyz/Library/Application Support/Bitcoin/signet";
 
-    let mut reader = BlockReader::new(datadir, ChainType::SIGNET)?;
-    println!("Blockreader created successfully");
+    let reader = BlockReader::new(datadir, ChainType::SIGNET).unwrap();
+    info!("Blockreader created successfully");
 
     let status = reader.get_ibd_status();
 
     match status {
-        IBDStatus::Synced => println!("Bitcoin core is synced"),
-        IBDStatus::InIBD => println!("Bitcoin core is in IBD"),
-        IBDStatus::NoData => println!("Bitcoin core has no data"),
+        IBDStatus::Synced => info!("Bitcoin core is synced"),
+        IBDStatus::InIBD => info!("Bitcoin core is in IBD"),
+        IBDStatus::NoData => info!("Bitcoin core has no data"),
     }
 
-    /* let best_block = reader.get_best_validated_block(); */
+    let mut block_index = reader.get_best_validated_block().unwrap();
+    info!(
+        "Got block index: prev hash={:?}",
+        block_index.prev_block_hash().unwrap().to_string()
+    );
+    info!("Hash: {}", block_index.block_hash());
+    info!("Height: {}", block_index.height());
+    info!("Transaction count: {}", block_index.transaction_count());
+    info!("Block index merkle root: {}", block_index.merkle_root());
+    info!("bits: {:08x}", block_index.bits());
+    info!("nonce: {}", block_index.nonce());
+    info!("median time past: {}", block_index.median_time_past());
+    info!("has block data: {}", block_index.has_block_data());
+    info!("has undo data: {}", block_index.has_undo_data());
+    info!(
+        "has valid transactions: {}",
+        block_index.has_valid_transactions()
+    );
+    info!("has valid chain: {}", block_index.has_valid_chain());
+    info!("has valid scripts: {}", block_index.has_valid_scripts());
+    info!("has failed: {}", block_index.is_failed());
+    info!("has witness: {}", block_index.has_witness());
 
-    /* println!("Best Block height: {}", best_block.unwrap().height()); */
-    let headers_data = reader.get_headers_raw(100, 2)?;
-    for header in headers_data.chunks_exact(80) {
-        println!("HELLO: {:?}", header);
+    let block = block_index.get_block().unwrap();
+
+    info!("Block Hash: {}", block.get_hash());
+
+    reader.refresh();
+
+    let count = block.get_transaction_count();
+
+    info!("Transaction count: {}", count);
+
+    let transaction = block.get_transaction(1).unwrap();
+    info!("transaction: {:?}", transaction);
+    let count = transaction.get_input_count();
+    info!("count: {}", count);
+
+    let input = transaction.get_input(0).unwrap();
+    info!("input: {:?}", input);
+
+    let out_point = input.get_out_point();
+    info!("outpoint: {:?}", out_point);
+
+    info!("outpoint tx id: {:?}", out_point.get_tx_id());
+    info!("outpoint index: {:?}", out_point.get_index());
+
+    let script = input.get_script_sig();
+    info!("script: {:?}", script);
+
+    info!("script is push only: {}", script.is_push_only());
+    info!("script is empty:{}", script.is_empty());
+
+    let n_sequence = input.get_n_sequence();
+    info!("n_sequence: {}", n_sequence);
+
+    let witness = input.get_witness();
+    info!("witness is null: {}", witness.is_null());
+
+    let stack_size = witness.get_stack_size();
+    info!("witness stack size: {}", stack_size);
+
+    let stack_item = witness.get_stack_item(0).unwrap();
+    info!("stack item: {:?}", stack_item);
+
+    let output_count = transaction.get_output_count();
+    info!("output count: {}", output_count);
+
+    let output = transaction.get_output(0).unwrap();
+    info!("output: {:?}", output);
+
+    let value = output.get_value();
+    info!("value: {}", value);
+
+    while let Ok(block_index) = block_index.previous() {
+        info!("Height: {}", block_index.height());
+        info!("Hash: {}", block_index.block_hash());
+
+        let block = block_index.get_block().unwrap();
+
+        for i in 0..block.get_transaction_count() {
+            let transaction = block.get_transaction(i).unwrap();
+            info!("transaction {}", i);
+
+            for j in 0..transaction.get_input_count() {
+                let input = transaction.get_input(j).unwrap();
+                let tx_id = input.get_out_point().get_tx_id();
+                let index = input.get_out_point().get_index();
+                info!("input #{}: tx_id: {}, index: {}", j, tx_id, index);
+            }
+
+            for j in 0..transaction.get_output_count() {
+                let output = transaction.get_output(j).unwrap();
+                let value = output.get_value();
+                info!("output #{}: value: {}", j, value);
+            }
+        }
     }
-
-    let genesis_hash = reader.get_genesis_hash()?;
-    println!("HASH: {:?}", genesis_hash);
-
-    let has_block_10 = reader.has_block(10);
-    println!("Has Block 10: {}", has_block_10);
-
-    let chain_height = reader.get_chain_height();
-    println!("chain height: {}", chain_height);
-
-    let block_hash = reader.get_block_hash(chain_height)?;
-    println!("block_hash: {:?}", block_hash);
-
-    let block = reader.get_block(chain_height)?;
-    println!("block: {:?}", block);
-
-    println!("Have same hash: {}", block.get_hash() == block_hash);
-
-    let best_validated_block = reader.get_best_validated_block().unwrap();
-    println!(
-        "Best Validated Block has same hash: {}",
-        best_validated_block.block_hash() == block_hash
-    );
-
-    let block_index_by_hash = reader.get_block_index_by_hash(&block_hash).unwrap();
-    println!(
-        "Has same height: {}, has same hash: {}",
-        block_index_by_hash.height() == chain_height,
-        block_index_by_hash.block_hash() == block_hash
-    );
-
-    let is_in_active_chain = reader.is_block_in_active_chain(&block_index_by_hash);
-    println!("Is in active chain: {}", is_in_active_chain);
-
-    let block_index_by_height = reader.get_block_index_by_height(chain_height).unwrap();
-    println!(
-        "Block Index by height yields same hash: {}",
-        block_index_by_height.block_hash() == block_index_by_hash.block_hash()
-    );
-
-    let block_headers = reader.get_block_header(chain_height).unwrap();
-    println!("Got block headers: {:?}", block_headers);
-
-    let block_headers_2 = reader.get_headers_raw(chain_height, 1).unwrap();
-
-    println!("Got second block header: {:?}", block_headers_2);
 
     Ok(())
 }

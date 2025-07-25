@@ -309,8 +309,8 @@ impl Drop for ChainParams {
 }
 
 /// Exposes the result after validating a block.
-pub trait BlockChecked: Fn(UnownedBlock, ValidationMode, BlockValidationResult) {}
-impl<F: Fn(UnownedBlock, ValidationMode, BlockValidationResult)> BlockChecked for F {}
+pub trait BlockChecked: Fn(BlockRef, ValidationMode, BlockValidationResult) {}
+impl<F: Fn(BlockRef, ValidationMode, BlockValidationResult)> BlockChecked for F {}
 
 /// A holder struct for validation interface callbacks
 pub struct ValidationInterfaceCallbacks {
@@ -326,7 +326,7 @@ unsafe extern "C" fn vi_block_checked_wrapper(
     let holder = &*(user_data as *mut ValidationInterfaceCallbacks);
     let result = kernel_get_block_validation_result_from_block_validation_state(stateIn);
     let mode = kernel_get_validation_mode_from_block_validation_state(stateIn);
-    (holder.block_checked)(UnownedBlock::new(block), mode.into(), result.into());
+    (holder.block_checked)(BlockRef::new(block), mode.into(), result.into());
 }
 
 /// The main context struct. This should be setup through the [`ContextBuilder`] and
@@ -628,6 +628,7 @@ impl Drop for TxOut {
 }
 
 /// A single transaction.
+#[derive(Debug, Clone)]
 pub struct Transaction {
     inner: *mut kernel_Transaction,
 }
@@ -657,13 +658,14 @@ impl Drop for Transaction {
 }
 
 /// A single unowned block. Can only be used for copying data from it.
-pub struct UnownedBlock {
+#[derive(Debug, Clone)]
+pub struct BlockRef {
     inner: *const kernel_BlockPointer,
 }
 
-impl UnownedBlock {
-    fn new(block: *const kernel_BlockPointer) -> UnownedBlock {
-        UnownedBlock { inner: block }
+impl BlockRef {
+    fn new(block: *const kernel_BlockPointer) -> BlockRef {
+        BlockRef { inner: block }
     }
 
     pub fn get_hash(&self) -> BlockHash {
@@ -672,11 +674,28 @@ impl UnownedBlock {
             hash: unsafe { (&*hash).hash },
         };
         unsafe { kernel_block_hash_destroy(hash) };
-        return res;
+        res
+    }
+
+    pub fn get_transaction_count(&self) -> usize {
+        let count = unsafe { kernel_block_pointer_get_transaction_count(self.inner) };
+        count as usize
+    }
+
+    pub fn get_transaction(&self, index: usize) -> Option<TransactionRef> {
+        let transaction = unsafe { kernel_block_pointer_get_transaction(self.inner, index) };
+        if transaction.is_null() {
+            return None;
+        }
+
+        Some(TransactionRef {
+            inner: transaction,
+            marker: PhantomData,
+        })
     }
 }
 
-impl Into<Vec<u8>> for UnownedBlock {
+impl Into<Vec<u8>> for BlockRef {
     fn into(self) -> Vec<u8> {
         let raw_block = unsafe { kernel_copy_block_pointer_data(self.inner) };
         let vec = unsafe {
@@ -685,6 +704,162 @@ impl Into<Vec<u8>> for UnownedBlock {
         .to_vec();
         unsafe { kernel_byte_array_destroy(raw_block) };
         vec
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionRef {
+    inner: *const kernel_Transaction,
+    marker: PhantomData<BlockRef>,
+}
+
+impl TransactionRef {
+    pub fn get_input_count(&self) -> usize {
+        let count = unsafe { kernel_transaction_get_input_count(self.inner) };
+        count as usize
+    }
+
+    pub fn get_input(&self, index: usize) -> Option<TxInRef> {
+        let input = unsafe { kernel_transaction_get_input(self.inner, index) };
+        if input.is_null() {
+            return None;
+        }
+
+        Some(TxInRef {
+            inner: input,
+            marker: PhantomData,
+        })
+    }
+
+    pub fn get_output_count(&self) -> usize {
+        let count = unsafe { kernel_transaction_get_output_count(self.inner) };
+        count as usize
+    }
+
+    pub fn get_output(&self, index: usize) -> Option<TxOutRef> {
+        let output = unsafe { kernel_transaction_get_output(self.inner, index) };
+        if output.is_null() {
+            return None;
+        }
+
+        Some(TxOutRef {
+            inner: output,
+            marker: PhantomData,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TxOutRef {
+    inner: *const kernel_TransactionOutput,
+    marker: PhantomData<BlockRef>,
+}
+
+impl TxOutRef {
+    pub fn get_value(&self) -> i64 {
+        unsafe {
+            let mut_ptr = self.inner as *mut kernel_TransactionOutput;
+            kernel_get_transaction_output_amount(mut_ptr)
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct TxInRef {
+    inner: *const kernel_TransactionInput,
+    marker: PhantomData<BlockRef>,
+}
+
+impl TxInRef {
+    pub fn get_out_point(&self) -> OutPointRef {
+        let out_point = unsafe { kernel_transaction_input_get_out_point(self.inner) };
+
+        OutPointRef {
+            inner: out_point,
+            marker: PhantomData,
+        }
+    }
+
+    pub fn get_script_sig(&self) -> ScriptSigRef {
+        let script_sig = unsafe { kernel_transaction_input_get_script_sig(self.inner) };
+
+        ScriptSigRef {
+            inner: script_sig,
+            marker: PhantomData,
+        }
+    }
+
+    pub fn get_n_sequence(&self) -> u32 {
+        unsafe { kernel_transaction_input_get_n_sequence(self.inner) }
+    }
+
+    pub fn get_witness(&self) -> WitnessRef {
+        let witness = unsafe { kernel_transaction_input_get_witness(self.inner) };
+
+        WitnessRef {
+            inner: witness,
+            marker: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WitnessRef {
+    inner: *const kernel_TransactionWitness,
+    marker: PhantomData<BlockRef>,
+}
+
+impl WitnessRef {
+    pub fn get_stack_size(&self) -> u32 {
+        unsafe { kernel_witness_get_stack_size(self.inner) }
+    }
+
+    pub fn get_stack_item(&self, index: u32) -> Option<Vec<u8>> {
+        let raw_item = unsafe { kernel_witness_get_stack_item(self.inner, index) };
+        let vec = unsafe {
+            std::slice::from_raw_parts((*raw_item).data, (*raw_item).size.try_into().unwrap())
+        }
+        .to_vec();
+        Some(vec)
+    }
+
+    pub fn is_null(&self) -> bool {
+        unsafe { kernel_witness_is_null(self.inner) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScriptSigRef {
+    inner: *const kernel_TransactionScriptSig,
+    marker: PhantomData<BlockRef>,
+}
+
+impl ScriptSigRef {
+    pub fn is_push_only(&self) -> bool {
+        unsafe { kernel_script_sig_is_push_only(self.inner) }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        unsafe { kernel_script_sig_is_empty(self.inner) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OutPointRef {
+    inner: *const kernel_TransactionOutPoint,
+    marker: PhantomData<BlockRef>,
+}
+
+impl OutPointRef {
+    pub fn get_tx_id(&self) -> BlockHash {
+        let hash = unsafe { kernel_transaction_out_point_get_hash(self.inner) };
+        let res = BlockHash {
+            hash: unsafe { (&*hash).hash },
+        };
+        res
+    }
+
+    pub fn get_index(&self) -> u32 {
+        unsafe { kernel_transaction_out_point_get_index(self.inner) }
     }
 }
 

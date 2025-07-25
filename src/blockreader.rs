@@ -1,8 +1,8 @@
-use std::{ffi::CString, fmt};
+use std::{ffi::CString, fmt, sync::Arc};
 
 use libbitcoinkernel_sys::*;
 
-use crate::{BlockHash, ChainParams, ChainType};
+use crate::{Block, BlockHash, BlockRef, ChainParams, ChainType, Transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IBDStatus {
@@ -35,6 +35,7 @@ pub enum BlockReaderError {
     BlockNotFound(BlockIdentifier),
     ReadError(i32),
     ChainParamsError(String),
+    TransactionIndexOutOfRange(i32, usize),
 }
 
 impl std::fmt::Display for BlockReaderError {
@@ -52,6 +53,11 @@ impl std::fmt::Display for BlockReaderError {
             },
             BlockReaderError::ReadError(height) => write!(f, "Read error at height {}", height),
             BlockReaderError::ChainParamsError(msg) => write!(f, "Chain params error: {}", msg),
+            BlockReaderError::TransactionIndexOutOfRange(height, index) => write!(
+                f,
+                "Transaction index {} out of range at height {}",
+                index, height
+            ),
         }
     }
 }
@@ -60,16 +66,22 @@ impl std::error::Error for BlockReaderError {}
 
 pub struct BlockReaderIndex {
     inner: *mut kernel_BlockIndex,
+    reader: Arc<BlockReader>,
 }
 
 impl BlockReaderIndex {
-    pub(crate) unsafe fn from_raw_borrowed(ptr: *mut kernel_BlockIndex) -> Option<Self> {
+    pub(crate) unsafe fn from_raw_borrowed(
+        ptr: *mut kernel_BlockIndex,
+        reader: Arc<BlockReader>,
+    ) -> Option<Self> {
         if ptr.is_null() {
             None
         } else {
-            Some(BlockReaderIndex { inner: ptr })
+            Some(BlockReaderIndex { inner: ptr, reader })
         }
     }
+
+    /* Basic Metadata */
 
     pub fn height(&self) -> i32 {
         unsafe { kernel_block_index_get_height(self.inner) }
@@ -79,12 +91,93 @@ impl BlockReaderIndex {
         unsafe {
             let hash_ptr = kernel_block_index_get_block_hash(self.inner);
             let result = BlockHash {
-                hash: (*hash_ptr).hash,
+                hash: (&*hash_ptr).hash,
             };
             kernel_block_hash_destroy(hash_ptr);
             result
         }
     }
+
+    pub fn prev_block_hash(&self) -> Option<BlockHash> {
+        unsafe {
+            let prev_block_hash = kernel_block_index_get_previous_block_hash(self.inner);
+            if prev_block_hash.is_null() {
+                return None;
+            }
+            let result = BlockHash {
+                hash: (*prev_block_hash).hash,
+            };
+            kernel_block_hash_destroy(prev_block_hash);
+            Some(result)
+        }
+    }
+
+    pub fn timestamp(&self) -> u32 {
+        unsafe { kernel_block_index_get_timestamp(self.inner) }
+    }
+
+    pub fn transaction_count(&self) -> u32 {
+        unsafe { kernel_block_index_get_transaction_count(self.inner) }
+    }
+
+    pub fn version(&self) -> u32 {
+        unsafe { kernel_block_index_get_version(self.inner) }
+    }
+
+    pub fn merkle_root(&self) -> BlockHash {
+        unsafe {
+            let merkle_root = kernel_block_index_get_merkle_root(self.inner);
+            let result = BlockHash {
+                hash: (*merkle_root).hash,
+            };
+            kernel_block_hash_destroy(merkle_root);
+            result
+        }
+    }
+
+    pub fn bits(&self) -> u32 {
+        unsafe { kernel_block_index_get_bits(self.inner) }
+    }
+
+    pub fn nonce(&self) -> u32 {
+        unsafe { kernel_block_index_get_nonce(self.inner) }
+    }
+
+    pub fn median_time_past(&self) -> u32 {
+        unsafe { kernel_block_index_get_median_time_past(self.inner) }
+    }
+
+    /* Block Status */
+
+    pub fn has_block_data(&self) -> bool {
+        unsafe { kernel_block_index_has_block_data(self.inner) }
+    }
+
+    pub fn has_undo_data(&self) -> bool {
+        unsafe { kernel_block_index_has_undo_data(self.inner) }
+    }
+
+    pub fn has_valid_transactions(&self) -> bool {
+        unsafe { kernel_block_index_has_valid_transactions(self.inner) }
+    }
+
+    pub fn has_valid_chain(&self) -> bool {
+        unsafe { kernel_block_index_has_valid_chain(self.inner) }
+    }
+
+    pub fn has_valid_scripts(&self) -> bool {
+        unsafe { kernel_block_index_has_valid_scripts(self.inner) }
+    }
+
+    pub fn is_failed(&self) -> bool {
+        unsafe { kernel_block_index_is_failed(self.inner) }
+    }
+
+    pub fn has_witness(&self) -> bool {
+        unsafe { kernel_block_index_has_witness(self.inner) }
+    }
+
+    /* Block Header */
 
     pub fn raw_header(&self) -> Result<Vec<u8>, BlockReaderError> {
         unsafe {
@@ -103,71 +196,47 @@ impl BlockReaderIndex {
         }
     }
 
-    pub fn timestamp(&self) -> u32 {
-        unsafe { kernel_block_index_get_timestamp(self.inner) }
+    /* Block */
+
+    pub fn get_block(&self) -> Result<BlockRef, BlockReaderError> {
+        unsafe {
+            let block = kernel_blockreader_get_block_by_index(self.reader.inner, self.inner);
+            if block.is_null() {
+                return Err(BlockReaderError::BlockNotFound(BlockIdentifier::Hash(
+                    self.block_hash(),
+                )));
+            }
+
+            Ok(BlockRef { inner: block })
+        }
     }
 
-    pub fn transaction_count(&self) -> u32 {
-        unsafe { kernel_Block_index_get_transaction_count(self.inner) }
+    /* Chain Navigation */
+
+    pub fn previous(&self) -> Result<BlockReaderIndex, BlockReaderError> {
+        let inner = unsafe { kernel_get_previous_block_index(self.inner) };
+        if inner.is_null() {
+            return Err(BlockReaderError::BlockNotFound(BlockIdentifier::Height(
+                self.height() - 1,
+            )));
+        }
+        unsafe { kernel_block_index_destroy(self.inner) };
+        return Ok(BlockReaderIndex {
+            inner,
+            reader: self.reader.clone(),
+        });
     }
 }
 
 unsafe impl Send for BlockReaderIndex {}
 unsafe impl Sync for BlockReaderIndex {}
 
-pub struct BlockRef {
-    inner: *mut kernel_Block,
-}
-
-unsafe impl Send for BlockRef {}
-unsafe impl Sync for BlockRef {}
-
-impl BlockRef {
-    pub fn get_hash(&self) -> BlockHash {
-        unsafe {
-            let hash_ptr = kernel_blockreader_block_get_hash(self.inner);
-            let result = BlockHash {
-                hash: (*hash_ptr).hash,
-            };
-            kernel_block_hash_destroy(hash_ptr);
-            result
-        }
-    }
-}
-
-impl From<BlockRef> for Vec<u8> {
-    fn from(value: BlockRef) -> Self {
-        let raw_block = unsafe { kernel_copy_block_data(value.inner) };
-        let vec =
-            unsafe { std::slice::from_raw_parts((*raw_block).data, (*raw_block).size) }.to_vec();
-
-        unsafe { kernel_byte_array_destroy(raw_block) };
-        vec
-    }
-}
-
-impl Drop for BlockRef {
-    fn drop(&mut self) {
-        unsafe { kernel_blockreader_block_destroy(self.inner) };
-    }
-}
-
-impl fmt::Debug for BlockRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.inner.is_null() {
-            write!(f, "BlockRef(null)")
-        } else {
-            write!(f, "BlockRef(ptr: {:p})", self.inner)
-        }
-    }
-}
-
 pub struct BlockReader {
     inner: *mut kernel_blockreader_Reader,
 }
 
 impl BlockReader {
-    pub fn new(datadir: &str, chain_type: ChainType) -> Result<Self, BlockReaderError> {
+    pub fn new(datadir: &str, chain_type: ChainType) -> Result<Arc<Self>, BlockReaderError> {
         let datadir_cstr =
             CString::new(datadir).map_err(|e| BlockReaderError::InvalidPath(e.to_string()))?;
 
@@ -183,10 +252,10 @@ impl BlockReader {
             ));
         }
 
-        Ok(BlockReader { inner })
+        Ok(Arc::new(BlockReader { inner }))
     }
 
-    pub fn refresh(&mut self) {
+    pub fn refresh(&self) {
         unsafe {
             kernel_blockreader_refresh(self.inner);
         }
@@ -201,7 +270,7 @@ impl BlockReader {
 
     pub fn get_chain_height(&self) -> i32 {
         unsafe {
-            let ptr = kernel_blockreader_get_best_validated_block(self.inner);
+            let ptr = kernel_blockreader_get_best_block_index(self.inner);
             if ptr.is_null() {
                 return 0;
             }
@@ -249,118 +318,10 @@ impl BlockReader {
         }
     }
 
-    pub fn get_block(&self, height: i32) -> Result<BlockRef, BlockReaderError> {
-        if height < 0 {
-            return Err(BlockReaderError::ReadError(height));
-        }
-
+    pub fn get_best_validated_block(self: &Arc<Self>) -> Option<BlockReaderIndex> {
         unsafe {
-            let block_ptr = kernel_blockreader_get_block_by_height(self.inner, height);
-            if block_ptr.is_null() {
-                return Err(BlockReaderError::BlockNotFound(BlockIdentifier::Height(
-                    height,
-                )));
-            }
-
-            Ok(BlockRef { inner: block_ptr })
-        }
-    }
-
-    pub fn get_best_validated_block(&self) -> Option<BlockReaderIndex> {
-        unsafe {
-            let ptr = kernel_blockreader_get_best_validated_block(self.inner);
-            BlockReaderIndex::from_raw_borrowed(ptr)
-        }
-    }
-
-    pub fn get_block_index_by_hash(
-        &self,
-        hash: &BlockHash,
-    ) -> Result<BlockReaderIndex, BlockReaderError> {
-        let block_hash = kernel_BlockHash { hash: hash.hash };
-        unsafe {
-            let block_index = kernel_blockreader_get_block_index_by_hash(self.inner, &block_hash);
-            if block_index.is_null() {
-                Err(BlockReaderError::Internal("Block not found".to_string()))
-            } else {
-                Ok(BlockReaderIndex { inner: block_index })
-            }
-        }
-    }
-
-    pub fn get_block_by_hash(&self, hash: &BlockHash) -> Result<BlockRef, BlockReaderError> {
-        let block_hash = kernel_BlockHash { hash: hash.hash };
-        unsafe {
-            let block_ptr = kernel_blockreader_get_block_by_hash(self.inner, &block_hash);
-            if block_ptr.is_null() {
-                return Err(BlockReaderError::Internal("Block not found".to_string()));
-            }
-            Ok(BlockRef { inner: block_ptr })
-        }
-    }
-
-    pub fn get_genesis_hash(&self) -> Result<BlockHash, BlockReaderError> {
-        unsafe {
-            let hash_ptr = kernel_blockreader_get_genesis_hash(self.inner);
-            if hash_ptr.is_null() {
-                return Err(BlockReaderError::Internal(
-                    "Failed to get genesis hash".to_string(),
-                ));
-            }
-
-            let result = BlockHash {
-                hash: (*hash_ptr).hash,
-            };
-            kernel_block_hash_destroy(hash_ptr);
-            Ok(result)
-        }
-    }
-
-    pub fn is_block_in_active_chain(&self, block_index: &BlockReaderIndex) -> bool {
-        unsafe { kernel_blockreader_is_block_in_active_chain(self.inner, block_index.inner) }
-    }
-
-    pub fn get_block_index_by_height(
-        &self,
-        height: i32,
-    ) -> Result<BlockReaderIndex, BlockReaderError> {
-        if height < 0 {
-            return Err(BlockReaderError::ReadError(height));
-        }
-
-        unsafe {
-            let block_index = kernel_blockreader_get_block_index_by_height(self.inner, height);
-            if block_index.is_null() {
-                return Err(BlockReaderError::BlockNotFound(BlockIdentifier::Height(
-                    height,
-                )));
-            }
-
-            Ok(BlockReaderIndex { inner: block_index })
-        }
-    }
-
-    pub fn get_block_header(&self, height: i32) -> Result<Vec<u8>, BlockReaderError> {
-        let block_index = self.get_block_index_by_height(height)?;
-        block_index.raw_header()
-    }
-
-    pub fn get_headers_raw(
-        &self,
-        start_height: i32,
-        count: usize,
-    ) -> Result<Vec<u8>, BlockReaderError> {
-        unsafe {
-            let batch = kernel_blockreader_get_headers_raw(self.inner, start_height, count);
-            if batch.is_null() {
-                return Err(BlockReaderError::Internal(
-                    "Failed to get geaders batch".to_string(),
-                ));
-            }
-
-            let data = std::slice::from_raw_parts((*batch).data, (*batch).size).to_vec();
-            kernel_byte_array_destroy(batch);
-            Ok(data)
+            let ptr = kernel_blockreader_get_best_block_index(self.inner);
+            BlockReaderIndex::from_raw_borrowed(ptr, Arc::clone(self))
         }
     }
 }

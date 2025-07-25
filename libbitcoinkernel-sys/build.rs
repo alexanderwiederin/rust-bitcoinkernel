@@ -85,6 +85,16 @@ fn main() {
         .rust_edition(RustEdition::Edition2021)
         .clang_arg(format!("-I{}", include_path.display()))
         .clang_arg(format!("-I{}", include_path.join("kernel").display()))
+        .clang_arg("-xc++")
+        .clang_arg("-std=c++20")
+        .clang_arg("-I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1")
+        .blocklist_type("_Tp")
+        .blocklist_item("std_value")
+        .blocklist_type("std::.*")
+        .allowlist_function("bitcoinkernel_.*")
+        .allowlist_type("bitcoinkernel_.*")
+        .allowlist_function("kernel_.*")
+        .allowlist_type("kernel_.*")
         .generate()
         .expect("Unable to generate bindings");
 
