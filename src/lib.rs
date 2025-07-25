@@ -1094,6 +1094,53 @@ impl ChainstateManager {
         let n_tx_undo = unsafe { kernel_block_undo_size(inner) }.try_into().unwrap();
         Ok(BlockUndo { inner, n_tx_undo })
     }
+
+    pub fn process_new_block_headers(
+        &self,
+        headers: &[u8],
+        min_pow_checked: bool,
+    ) -> Result<Option<BlockIndex>, KernelError> {
+        if headers.len() % 80 != 0 {
+            return Err(KernelError::Internal(
+                "Headers length must be multiple of 80 bytes".to_string(),
+            ));
+        }
+
+        let header_count = headers.len() / 80;
+        if header_count == 0 {
+            return Err(KernelError::Internal(
+                "Must provide at least one header".to_string(),
+            ));
+        }
+
+        let mut last_accepted: *mut kernel_BlockIndex = std::ptr::null_mut();
+
+        let success = unsafe {
+            kernel_process_new_block_headers(
+                self.context.inner,
+                self.inner,
+                headers.as_ptr(),
+                header_count,
+                min_pow_checked,
+                &mut last_accepted,
+            )
+        };
+
+        if !success {
+            return Err(KernelError::Internal(
+                "Failed to process block headers".to_string(),
+            ));
+        }
+
+        if last_accepted.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(BlockIndex {
+                inner: last_accepted,
+                marker: PhantomData,
+            }))
+        }
+    }
 }
 
 impl Drop for ChainstateManager {
