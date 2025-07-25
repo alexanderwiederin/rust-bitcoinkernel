@@ -1182,3 +1182,51 @@ bool kernel_chainstate_manager_process_block(
 
     return chainman.ProcessNewBlock(*blockptr, /*force_processing=*/true, /*min_pow_checked=*/true, /*new_block=*/new_block);
 }
+
+bool kernel_process_new_block_headers(
+        const kernel_Context* context_,
+        kernel_ChainstateManager* chainman_,
+        const unsigned char* block_headers,
+        size_t block_headers_len,
+        bool min_pow_checked,
+        kernel_BlockIndex** last_accepted)
+{
+    try {
+        auto chainman{cast_chainstate_manager(chainman_)};
+
+        std::vector<CBlockHeader> headers;
+        headers.reserve(block_headers_len);
+
+        for (size_t i = 0; i < block_headers_len; ++i) {
+            const unsigned char* header_data = block_headers + (i * 80);
+            DataStream stream{std::span{header_data, 80}};
+
+            CBlockHeader header;
+            try {
+                stream >> header;
+                headers.push_back(header);
+            } catch (const std::exception&) {
+                LogDebug(BCLog::KERNEL, "Failed to parse block header at index %zu", i);
+                return false;
+            }
+        }
+
+        BlockValidationState state;
+        const CBlockIndex* ppindex = nullptr;
+
+        bool success = chainman->ProcessNewBlockHeaders(headers, min_pow_checked, state, &ppindex);
+
+        if (success && last_accepted && ppindex) {
+            *last_accepted = reinterpret_cast<kernel_BlockIndex*>(const_cast<CBlockIndex*>(ppindex));
+        }
+
+        if (!success) {
+            LogDebug(BCLog::KERNEL, "ProcessNewBlockHeaders failed: %s", state.ToString());
+        }
+
+        return success;
+    } catch (const std::exception& e) {
+        LogError("Failed to process block headers: %s", e.what());
+        return false;
+    }
+}
