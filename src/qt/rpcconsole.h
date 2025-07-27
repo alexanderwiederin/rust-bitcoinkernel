@@ -20,6 +20,7 @@
 
 class PlatformStyle;
 class RPCExecutor;
+class RPCTimerInterface;
 class WalletModel;
 
 namespace interfaces {
@@ -165,6 +166,7 @@ private:
     QString cmdBeforeBrowsing;
     QList<NodeId> cachedNodeids;
     const PlatformStyle* const platformStyle;
+    RPCTimerInterface *rpcTimerInterface = nullptr;
     QMenu *peersTableContextMenu = nullptr;
     QMenu *banTableContextMenu = nullptr;
     int consoleFontSize = 0;

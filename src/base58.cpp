@@ -9,8 +9,8 @@
 #include <util/strencodings.h>
 #include <util/string.h>
 
-#include <cassert>
-#include <cstring>
+#include <assert.h>
+#include <string.h>
 
 #include <limits>
 

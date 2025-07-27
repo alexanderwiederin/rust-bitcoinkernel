@@ -6,7 +6,7 @@
 #define BITCOIN_CRYPTO_CHACHA20POLY1305_H
 
 #include <cstddef>
-#include <cstdint>
+#include <stdint.h>
 
 #include <crypto/chacha20.h>
 #include <crypto/poly1305.h>

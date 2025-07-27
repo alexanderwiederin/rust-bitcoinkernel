@@ -8,7 +8,7 @@
 #include <test/util/setup_common.h>
 #include <util/strencodings.h>
 
-#include <cstdint>
+#include <stdint.h>
 #include <string>
 
 #include <boost/test/unit_test.hpp>

@@ -19,8 +19,6 @@
 static constexpr size_t MAX_TX_INDEX_CACHE{1024_MiB};
 //! Max memory allocated to all block filter index caches combined in bytes.
 static constexpr size_t MAX_FILTER_INDEX_CACHE{1024_MiB};
-//! Maximum dbcache size on 32-bit systems.
-static constexpr size_t MAX_32BIT_DBCACHE{1024_MiB};
 
 namespace node {
 CacheSizes CalculateCacheSizes(const ArgsManager& args, size_t n_indexes)
@@ -30,8 +28,7 @@ CacheSizes CalculateCacheSizes(const ArgsManager& args, size_t n_indexes)
     if (std::optional<int64_t> db_cache = args.GetIntArg("-dbcache")) {
         if (*db_cache < 0) db_cache = 0;
         uint64_t db_cache_bytes = SaturatingLeftShift<uint64_t>(*db_cache, 20);
-        constexpr auto max_db_cache{sizeof(void*) == 4 ? MAX_32BIT_DBCACHE : std::numeric_limits<size_t>::max()};
-        total_cache = std::max<size_t>(MIN_DB_CACHE, std::min<uint64_t>(db_cache_bytes, max_db_cache));
+        total_cache = std::max<size_t>(MIN_DB_CACHE, std::min<uint64_t>(db_cache_bytes, std::numeric_limits<size_t>::max()));
     }
 
     IndexCacheSizes index_sizes;

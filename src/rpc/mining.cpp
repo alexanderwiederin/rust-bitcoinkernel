@@ -43,8 +43,8 @@
 #include <validation.h>
 #include <validationinterface.h>
 
-#include <cstdint>
 #include <memory>
+#include <stdint.h>
 
 using interfaces::BlockRef;
 using interfaces::BlockTemplate;
@@ -388,7 +388,8 @@ static RPCHelpMan generateblock()
         block.vtx.insert(block.vtx.end(), txs.begin(), txs.end());
         RegenerateCommitments(block, chainman);
 
-        if (BlockValidationState state{TestBlockValidity(chainman.ActiveChainstate(), block, /*check_pow=*/false, /*check_merkle_root=*/false)}; !state.IsValid()) {
+        BlockValidationState state;
+        if (!TestBlockValidity(state, chainman.GetParams(), chainman.ActiveChainstate(), block, chainman.m_blockman.LookupBlockIndex(block.hashPrevBlock), /*fCheckPOW=*/false, /*fCheckMerkleRoot=*/false)) {
             throw JSONRPCError(RPC_VERIFY_ERROR, strprintf("TestBlockValidity failed: %s", state.ToString()));
         }
     }
@@ -744,7 +745,13 @@ static RPCHelpMan getblocktemplate()
                 return "duplicate-inconclusive";
             }
 
-            return BIP22ValidationResult(TestBlockValidity(chainman.ActiveChainstate(), block, /*check_pow=*/false, /*check_merkle_root=*/true));
+            // TestBlockValidity only supports blocks built on the current Tip
+            if (block.hashPrevBlock != tip) {
+                return "inconclusive-not-best-prevblk";
+            }
+            BlockValidationState state;
+            TestBlockValidity(state, chainman.GetParams(), chainman.ActiveChainstate(), block, chainman.m_blockman.LookupBlockIndex(block.hashPrevBlock), /*fCheckPOW=*/false, /*fCheckMerkleRoot=*/true);
+            return BIP22ValidationResult(state);
         }
 
         const UniValue& aClientRules = oparam.find_value("rules");

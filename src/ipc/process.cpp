@@ -13,11 +13,11 @@
 
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
-#include <cerrno>
+#include <errno.h>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>

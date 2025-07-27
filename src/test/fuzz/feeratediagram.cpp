@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <cstdint>
+#include <stdint.h>
 
 #include <vector>
 
@@ -12,7 +12,7 @@
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
 
-#include <cassert>
+#include <assert.h>
 
 namespace {
 

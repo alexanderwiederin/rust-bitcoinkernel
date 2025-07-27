@@ -42,7 +42,7 @@ TransactionError BroadcastTransaction(NodeContext& node, const CTransactionRef t
 
     std::promise<void> promise;
     Txid txid = tx->GetHash();
-    Wtxid wtxid = tx->GetWitnessHash();
+    uint256 wtxid = tx->GetWitnessHash();
     bool callback_set = false;
 
     {

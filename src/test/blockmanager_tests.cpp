@@ -32,11 +32,8 @@ BOOST_AUTO_TEST_CASE(blockmanager_find_block_pos)
     const BlockManager::Options blockman_opts{
         .chainparams = *params,
         .blocks_dir = m_args.GetBlocksDirPath(),
+        .block_tree_dir = m_args.GetDataDirNet() / "blocks" / "index",
         .notifications = notifications,
-        .block_tree_db_params = DBParams{
-            .path = m_args.GetDataDirNet() / "blocks" / "index",
-            .cache_bytes = 0,
-        },
     };
     BlockManager blockman{*Assert(m_node.shutdown_signal), blockman_opts};
     // simulate adding a genesis block normally
@@ -153,11 +150,8 @@ BOOST_AUTO_TEST_CASE(blockmanager_flush_block_file)
     node::BlockManager::Options blockman_opts{
         .chainparams = Params(),
         .blocks_dir = m_args.GetBlocksDirPath(),
+        .block_tree_dir = m_args.GetDataDirNet() / "blocks" / "index",
         .notifications = notifications,
-        .block_tree_db_params = DBParams{
-            .path = m_args.GetDataDirNet() / "blocks" / "index",
-            .cache_bytes = 0,
-        },
     };
     BlockManager blockman{*Assert(m_node.shutdown_signal), blockman_opts};
 
@@ -190,12 +184,12 @@ BOOST_AUTO_TEST_CASE(blockmanager_flush_block_file)
     BOOST_CHECK_EQUAL(read_block.nVersion, 0);
     {
         ASSERT_DEBUG_LOG("Errors in block header");
-        BOOST_CHECK(!blockman.ReadBlock(read_block, pos1, {}));
+        BOOST_CHECK(!blockman.ReadBlock(read_block, pos1));
         BOOST_CHECK_EQUAL(read_block.nVersion, 1);
     }
     {
         ASSERT_DEBUG_LOG("Errors in block header");
-        BOOST_CHECK(!blockman.ReadBlock(read_block, pos2, {}));
+        BOOST_CHECK(!blockman.ReadBlock(read_block, pos2));
         BOOST_CHECK_EQUAL(read_block.nVersion, 2);
     }
 
@@ -212,7 +206,7 @@ BOOST_AUTO_TEST_CASE(blockmanager_flush_block_file)
     BOOST_CHECK_EQUAL(blockman.CalculateCurrentUsage(), (TEST_BLOCK_SIZE + STORAGE_HEADER_BYTES) * 2);
 
     // Block 2 was not overwritten:
-    BOOST_CHECK(!blockman.ReadBlock(read_block, pos2, {}));
+    blockman.ReadBlock(read_block, pos2);
     BOOST_CHECK_EQUAL(read_block.nVersion, 2);
 }
 

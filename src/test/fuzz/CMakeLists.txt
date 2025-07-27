@@ -59,7 +59,6 @@ add_executable(fuzz
   kitchen_sink.cpp
   load_external_block_file.cpp
   locale.cpp
-  merkle.cpp
   merkleblock.cpp
   message.cpp
   miniscript.cpp

@@ -592,9 +592,11 @@ set(Python3_FIND_FRAMEWORK LAST CACHE STRING "")
 set(Python3_FIND_UNVERSIONED_NAMES FIRST CACHE STRING "")
 mark_as_advanced(Python3_FIND_FRAMEWORK Python3_FIND_UNVERSIONED_NAMES)
 find_package(Python3 3.10 COMPONENTS Interpreter)
-if(NOT TARGET Python3::Interpreter)
+if(Python3_EXECUTABLE)
+  set(PYTHON_COMMAND ${Python3_EXECUTABLE})
+else()
   list(APPEND configure_warnings
-    "Minimum required Python not found."
+    "Minimum required Python not found. Utils and rpcauth tests are disabled."
   )
 endif()
 
@@ -637,6 +639,8 @@ add_subdirectory(test)
 add_subdirectory(doc)
 
 add_subdirectory(src)
+
+include(cmake/tests.cmake)
 
 include(Maintenance)
 setup_split_debug_script()
