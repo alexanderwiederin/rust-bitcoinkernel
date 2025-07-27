@@ -155,6 +155,12 @@ BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_g
 
 BITCOINKERNEL_API const kernel_TransactionOutput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_output(const kernel_Transaction* transaction, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API const kernel_ScriptPubkey* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_output_get_script_pubkey(const kernel_TransactionOutput* output) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API size_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_get_size(const kernel_ScriptPubkey* script_pubkey) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const unsigned char* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_get_data(const kernel_ScriptPubkey* script_pubkey) BITCOINKERNEL_ARG_NONNULL(1);
+
 #ifdef __cplusplus
 }
 #endif
