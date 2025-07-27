@@ -240,7 +240,6 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   index/coinstatsindex.cpp
   index/txindex.cpp
   init.cpp
-  kernel/blocktreestorage.cpp
   kernel/chain.cpp
   kernel/checks.cpp
   kernel/coinstats.cpp
@@ -474,6 +473,7 @@ if(BUILD_UTIL_CHAINSTATE)
       bitcoinkernel
   )
 endif()
+
 
 add_subdirectory(test/util)
 if(BUILD_BENCH)

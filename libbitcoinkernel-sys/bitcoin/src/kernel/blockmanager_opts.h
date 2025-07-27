@@ -27,10 +27,8 @@ struct BlockManagerOpts {
     uint64_t prune_target{0};
     bool fast_prune{false};
     const fs::path blocks_dir;
-    const fs::path block_tree_dir;
-    bool wipe_block_tree_data{false};
     Notifications& notifications;
-    bool read_only{false};
+    DBParams block_tree_db_params;
 };
 
 } // namespace kernel

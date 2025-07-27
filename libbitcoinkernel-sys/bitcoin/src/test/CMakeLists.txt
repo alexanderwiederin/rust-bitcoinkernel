@@ -23,7 +23,6 @@ add_executable(test_bitcoin
   blockfilter_index_tests.cpp
   blockfilter_tests.cpp
   blockmanager_tests.cpp
-  blocktreestorage_tests.cpp
   bloom_tests.cpp
   bswap_tests.cpp
   chainstate_write_tests.cpp
@@ -107,6 +106,7 @@ add_executable(test_bitcoin
   transaction_tests.cpp
   translation_tests.cpp
   txdownload_tests.cpp
+  txgraph_tests.cpp
   txindex_tests.cpp
   txpackage_tests.cpp
   txreconciliation_tests.cpp
