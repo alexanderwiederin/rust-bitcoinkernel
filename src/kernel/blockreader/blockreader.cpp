@@ -60,6 +60,11 @@ const CTxIn* cast_const_transaction_input(const kernel_TransactionInput* input)
     return reinterpret_cast<const CTxIn*>(input);
 }
 
+const CTxOut* cast_const_transaction_output(const kernel_TransactionOutput* output)
+{
+    return reinterpret_cast<const CTxOut*>(output);
+}
+
 const COutPoint* cast_const_transaction_out_point(const kernel_TransactionOutPoint* out_point)
 {
     return reinterpret_cast<const COutPoint*>(out_point);
@@ -73,6 +78,12 @@ const CScript* cast_const_script_sig(const kernel_TransactionScriptSig* script_s
 const CScriptWitness* cast_const_witness(const kernel_TransactionWitness* witness)
 {
     return reinterpret_cast<const CScriptWitness*>(witness);
+}
+
+const CScript* cast_const_script_pubkey(const kernel_ScriptPubkey* script_pubkey)
+{
+    assert(script_pubkey);
+    return reinterpret_cast<const CScript*>(script_pubkey);
 }
 
 kernel_blockreader_IBDStatus cast_ibd_status(IBDStatus status)
@@ -612,5 +623,24 @@ const kernel_TransactionOutput* kernel_transaction_get_output(const kernel_Trans
     }
 
     return reinterpret_cast<const kernel_TransactionOutput*>(&transaction->vout[index]);
+}
+
+const kernel_ScriptPubkey* kernel_transaction_output_get_script_pubkey(const kernel_TransactionOutput* _output)
+{
+    const auto* output = cast_const_transaction_output(_output);
+
+    return reinterpret_cast<const kernel_ScriptPubkey*>(&output->scriptPubKey);
+}
+
+size_t kernel_script_pubkey_get_size(const kernel_ScriptPubkey* _script_pubkey)
+{
+    const auto* script_pubkey = cast_const_script_pubkey(_script_pubkey);
+    return script_pubkey->size();
+}
+
+const unsigned char* kernel_script_pubkey_get_data(const kernel_ScriptPubkey* _script_pubkey)
+{
+    const auto* script_pubkey = cast_const_script_pubkey(_script_pubkey);
+    return script_pubkey->data();
 }
 } // extern "C"
