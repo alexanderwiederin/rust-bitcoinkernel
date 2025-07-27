@@ -50,7 +50,6 @@ public:
 
     /** Return path to main database file for logs and error messages. */
     std::string Filename() override { return fs::PathToString(m_filepath); }
-    std::vector<fs::path> Files() override { return {m_filepath}; }
 
     std::string Format() override { return "bdb_ro"; }
 

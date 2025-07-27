@@ -21,16 +21,16 @@ endif()
 
 find_path(QRencode_INCLUDE_DIR
   NAMES qrencode.h
-  HINTS ${PC_QRencode_INCLUDE_DIRS}
+  PATHS ${PC_QRencode_INCLUDE_DIRS}
 )
 
 find_library(QRencode_LIBRARY_RELEASE
   NAMES qrencode
-  HINTS ${PC_QRencode_LIBRARY_DIRS}
+  PATHS ${PC_QRencode_LIBRARY_DIRS}
 )
 find_library(QRencode_LIBRARY_DEBUG
   NAMES qrencoded qrencode
-  HINTS ${PC_QRencode_LIBRARY_DIRS}
+  PATHS ${PC_QRencode_LIBRARY_DIRS}
 )
 include(SelectLibraryConfigurations)
 select_library_configurations(QRencode)

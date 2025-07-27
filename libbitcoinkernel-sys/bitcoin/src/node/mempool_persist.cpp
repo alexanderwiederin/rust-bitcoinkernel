@@ -17,7 +17,6 @@
 #include <util/fs.h>
 #include <util/fs_helpers.h>
 #include <util/signalinterrupt.h>
-#include <util/syserror.h>
 #include <util/time.h>
 #include <validation.h>
 
@@ -107,7 +106,7 @@ bool LoadMempool(CTxMemPool& pool, const fs::path& load_path, Chainstate& active
                     // wallet(s) having loaded it while we were processing
                     // mempool transactions; consider these as valid, instead of
                     // failed, but mark them as 'already there'
-                    if (pool.exists(tx->GetHash())) {
+                    if (pool.exists(GenTxid::Txid(tx->GetHash()))) {
                         ++already_there;
                     } else {
                         ++failed;
@@ -169,8 +168,7 @@ bool DumpMempool(const CTxMemPool& pool, const fs::path& dump_path, FopenFn mock
 
     auto mid = SteadyClock::now();
 
-    const fs::path file_fspath{dump_path + ".new"};
-    AutoFile file{mockable_fopen_function(file_fspath, "wb")};
+    AutoFile file{mockable_fopen_function(dump_path + ".new", "wb")};
     if (file.IsNull()) {
         return false;
     }
@@ -201,14 +199,9 @@ bool DumpMempool(const CTxMemPool& pool, const fs::path& dump_path, FopenFn mock
         LogInfo("Writing %d unbroadcast transactions to file.\n", unbroadcast_txids.size());
         file << unbroadcast_txids;
 
-        if (!skip_file_commit && !file.Commit()) {
-            (void)file.fclose();
+        if (!skip_file_commit && !file.Commit())
             throw std::runtime_error("Commit failed");
-        }
-        if (file.fclose() != 0) {
-            throw std::runtime_error(
-                strprintf("Error closing %s: %s", fs::PathToString(file_fspath), SysErrorString(errno)));
-        }
+        file.fclose();
         if (!RenameOver(dump_path + ".new", dump_path)) {
             throw std::runtime_error("Rename failed");
         }
@@ -220,7 +213,6 @@ bool DumpMempool(const CTxMemPool& pool, const fs::path& dump_path, FopenFn mock
                   fs::file_size(dump_path));
     } catch (const std::exception& e) {
         LogInfo("Failed to dump mempool: %s. Continuing anyway.\n", e.what());
-        (void)file.fclose();
         return false;
     }
     return true;

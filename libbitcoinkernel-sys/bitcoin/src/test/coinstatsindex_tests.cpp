@@ -6,6 +6,7 @@
 #include <index/coinstatsindex.h>
 #include <interfaces/chain.h>
 #include <kernel/coinstats.h>
+#include <test/util/index.h>
 #include <test/util/setup_common.h>
 #include <test/util/validation.h>
 #include <validation.h>
@@ -32,7 +33,9 @@ BOOST_FIXTURE_TEST_CASE(coinstatsindex_initial_sync, TestChain100Setup)
     // is started.
     BOOST_CHECK(!coin_stats_index.BlockUntilSyncedToCurrentChain());
 
-    coin_stats_index.Sync();
+    BOOST_REQUIRE(coin_stats_index.StartBackgroundSync());
+
+    IndexWaitSynced(coin_stats_index, *Assert(m_node.shutdown_signal));
 
     // Check that CoinStatsIndex works for genesis block.
     const CBlockIndex* genesis_block_index;
@@ -82,7 +85,8 @@ BOOST_FIXTURE_TEST_CASE(coinstatsindex_unclean_shutdown, TestChain100Setup)
     {
         CoinStatsIndex index{interfaces::MakeChain(m_node), 1 << 20};
         BOOST_REQUIRE(index.Init());
-        index.Sync();
+        BOOST_REQUIRE(index.StartBackgroundSync());
+        IndexWaitSynced(index, *Assert(m_node.shutdown_signal));
         std::shared_ptr<const CBlock> new_block;
         CBlockIndex* new_block_index = nullptr;
         {

@@ -33,9 +33,7 @@ class DebugLogHelper
 
 public:
     explicit DebugLogHelper(std::string message, MatchFn match = [](const std::string*){ return true; });
-
-    //! Mark as noexcept(false) to catch any thrown exceptions.
-    ~DebugLogHelper() noexcept(false) { check_found(); }
+    ~DebugLogHelper() { check_found(); }
 };
 
 #define ASSERT_DEBUG_LOG(message) DebugLogHelper UNIQUE_NAME(debugloghelper)(message)

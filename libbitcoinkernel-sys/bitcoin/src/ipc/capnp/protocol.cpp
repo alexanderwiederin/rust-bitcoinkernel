@@ -16,8 +16,8 @@
 #include <mp/util.h>
 #include <util/threadnames.h>
 
-#include <cassert>
-#include <cerrno>
+#include <assert.h>
+#include <errno.h>
 #include <future>
 #include <memory>
 #include <mutex>

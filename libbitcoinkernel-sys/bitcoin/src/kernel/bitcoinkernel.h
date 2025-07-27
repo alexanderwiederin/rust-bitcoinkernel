@@ -21,7 +21,7 @@
 #else
 #define BITCOINKERNEL_API
 #endif
-#elif defined(__GNUC__) && defined(BITCOINKERNEL_BUILD)
+#elif defined(__GNUC__) && (__GNUC__ >= 4) && defined(BITCOINKERNEL_BUILD)
 #define BITCOINKERNEL_API __attribute__((visibility("default")))
 #else
 #define BITCOINKERNEL_API
@@ -79,7 +79,7 @@ extern "C" {
  * @section error Error handling
  *
  * Functions communicate an error through their return types, usually returning
- * a nullptr, 0, or false if an error is encountered. Additionally, verification
+ * a nullptr, or false if an error is encountered. Additionally, verification
  * functions, e.g. for scripts, may communicate more detailed error information
  * through status code out parameters.
  *
@@ -122,6 +122,26 @@ typedef struct kernel_ScriptPubkey kernel_ScriptPubkey;
  * Opaque data structure for holding a transaction output.
  */
 typedef struct kernel_TransactionOutput kernel_TransactionOutput;
+
+/**
+ * Opaque data structure for holding a transaction input.
+ */
+typedef struct kernel_TransactionInput kernel_TransactionInput;
+
+/**
+ * Opaque data structure for holding a transaction outpoint.
+ */
+typedef struct kernel_TransactionOutPoint kernel_TransactionOutPoint;
+
+/**
+ * Opaque data structure for holding a script signature.
+ */
+typedef struct kernel_TransactionScriptSig kernel_TransactionScriptSig;
+
+/**
+ * Opaque data structure for holding a witness.
+ */
+typedef struct kernel_TransactionWitness kernel_TransactionWitness;
 
 /**
  * Opaque data structure for holding a logging connection.
@@ -300,8 +320,7 @@ typedef enum {
 /**
  * Holds the validation interface callbacks. The user data pointer may be used
  * to point to user-defined structures to make processing the validation
- * callbacks easier. Note that these callbacks block any further validation
- * execution when they are called.
+ * callbacks easier.
  */
 typedef struct {
     const void* user_data;                                //!< Holds a user-defined opaque structure that is passed to the validation
@@ -459,7 +478,7 @@ BITCOINKERNEL_API void kernel_transaction_destroy(kernel_Transaction* transactio
  * @brief Create a script pubkey from serialized data.
  * @param[in] script_pubkey     Non-null.
  * @param[in] script_pubkey_len Length of the script pubkey data.
- * @return                      The script pubkey.
+ * @return                      The script pubkey, or null on error.
  */
 BITCOINKERNEL_API kernel_ScriptPubkey* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_create(
     const unsigned char* script_pubkey, size_t script_pubkey_len
@@ -470,7 +489,7 @@ BITCOINKERNEL_API kernel_ScriptPubkey* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_s
  * @param[in] script_pubkey Non-null.
  * @return                  The serialized script pubkey data.
  */
-BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_copy_data(
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_copy_script_pubkey_data(
         const kernel_ScriptPubkey* script_pubkey
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
@@ -504,7 +523,7 @@ BITCOINKERNEL_API kernel_TransactionOutput* kernel_transaction_output_create(
  * @param[in] transaction_output Non-null.
  * @return                       The data for the output's script pubkey.
  */
-BITCOINKERNEL_API kernel_ScriptPubkey* kernel_transaction_output_copy_script_pubkey(kernel_TransactionOutput* transaction_output
+BITCOINKERNEL_API kernel_ScriptPubkey* kernel_copy_script_pubkey_from_output(kernel_TransactionOutput* transaction_output
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
@@ -513,7 +532,7 @@ BITCOINKERNEL_API kernel_ScriptPubkey* kernel_transaction_output_copy_script_pub
  * @param[in] transaction_output Non-null.
  * @return                       The amount.
  */
-BITCOINKERNEL_API int64_t kernel_transaction_output_get_amount(kernel_TransactionOutput* transaction_output
+BITCOINKERNEL_API int64_t kernel_get_transaction_output_amount(kernel_TransactionOutput* transaction_output
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
@@ -572,7 +591,7 @@ BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_verify_script(
  * Log messages will be buffered until this function is called, or a logging
  * connection is created.
  */
-BITCOINKERNEL_API void kernel_logging_disable();
+BITCOINKERNEL_API void kernel_disable_logging();
 
 /**
  * @brief Set the log level of the global internal logger. This does not
@@ -587,7 +606,7 @@ BITCOINKERNEL_API void kernel_logging_disable();
  *                     will be logged at the specified level and above.
  * @param[in] level    Log level at which the log category is set.
  */
-BITCOINKERNEL_API void kernel_logging_set_level_category(const kernel_LogCategory category, kernel_LogLevel level);
+BITCOINKERNEL_API void kernel_add_log_level_category(const kernel_LogCategory category, kernel_LogLevel level);
 
 /**
  * @brief Enable a specific log category for the global internal logger. This
@@ -597,7 +616,7 @@ BITCOINKERNEL_API void kernel_logging_set_level_category(const kernel_LogCategor
  *
  * @param[in] category If kernel_LOG_ALL is chosen, all categories will be enabled.
  */
-BITCOINKERNEL_API void kernel_logging_enable_category(const kernel_LogCategory category);
+BITCOINKERNEL_API void kernel_enable_log_category(const kernel_LogCategory category);
 
 /**
  * @brief Disable a specific log category for the global internal logger. This
@@ -607,7 +626,7 @@ BITCOINKERNEL_API void kernel_logging_enable_category(const kernel_LogCategory c
  *
  * @param[in] category If kernel_LOG_ALL is chosen, all categories will be disabled.
  */
-BITCOINKERNEL_API void kernel_logging_disable_category(const kernel_LogCategory category);
+BITCOINKERNEL_API void kernel_disable_log_category(const kernel_LogCategory category);
 
 /**
  * @brief Start logging messages through the provided callback. Log messages
@@ -801,17 +820,6 @@ BITCOINKERNEL_API bool kernel_chainstate_manager_options_set_wipe_dbs(
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief Sets block tree db in memory in the options.
- *
- * @param[in] chainstate_manager_options   Non-null, created by @ref kernel_chainstate_manager_options_create.
- * @param[in] block_tree_db_in_memory      Set block tree db in memory.
- */
-BITCOINKERNEL_API void kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-    kernel_ChainstateManagerOptions* chainstate_manager_options,
-    bool block_tree_db_in_memory
-) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
  * @brief Sets chainstate db in memory in the options.
  *
  * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
@@ -863,7 +871,7 @@ BITCOINKERNEL_API kernel_ChainstateManager* BITCOINKERNEL_WARN_UNUSED_RESULT ker
  * @param[in] block_file_paths_len Length of the block_file_paths array.
  * @return                         True if the import blocks call was completed successfully.
  */
-BITCOINKERNEL_API bool kernel_chainstate_manager_import_blocks(const kernel_Context* context,
+BITCOINKERNEL_API bool kernel_import_blocks(const kernel_Context* context,
                           kernel_ChainstateManager* chainstate_manager,
                           const char** block_file_paths, size_t* block_file_paths_lens, size_t block_file_paths_len
 ) BITCOINKERNEL_ARG_NONNULL(1, 2);
@@ -909,7 +917,7 @@ BITCOINKERNEL_API void kernel_chainstate_manager_destroy(kernel_ChainstateManage
  * @param[in] block_index        Non-null.
  * @return                       The read out block, or null on error.
  */
-BITCOINKERNEL_API kernel_Block* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_read(
+BITCOINKERNEL_API kernel_Block* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_read_block_from_disk(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager,
     const kernel_BlockIndex* block_index
@@ -936,7 +944,7 @@ BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_bloc
     kernel_Block* block
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
-/**
+/** @name ByteArray
  * @brief Calculate and return the hash of a block.
  *
  * @param[in] block Non-null.
@@ -950,9 +958,9 @@ BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_bloc
  * @brief Copies block data into the returned byte array.
  *
  * @param[in] block  Non-null.
- * @return           Allocated byte array holding the block data.
+ * @return           Allocated byte array holding the block data, or null on error.
  */
-BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_copy_data(
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_copy_block_data(
     kernel_Block* block
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
@@ -960,9 +968,9 @@ BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_bloc
  * @brief Copies block data into the returned byte array.
  *
  * @param[in] block  Non-null.
- * @return           Allocated byte array holding the block data.
+ * @return           Allocated byte array holding the block data, or null on error.
  */
-BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_pointer_copy_data(
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_copy_block_pointer_data(
     const kernel_BlockPointer* block
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
@@ -993,14 +1001,14 @@ BITCOINKERNEL_API void kernel_byte_array_destroy(kernel_ByteArray* byte_array);
 /**
  * Returns the validation mode from an opaque block validation state pointer.
  */
-BITCOINKERNEL_API kernel_ValidationMode kernel_block_validation_state_get_validation_mode(
+BITCOINKERNEL_API kernel_ValidationMode kernel_get_validation_mode_from_block_validation_state(
     const kernel_BlockValidationState* block_validation_state
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
  * Returns the validation result from an opaque block validation state pointer.
  */
-BITCOINKERNEL_API kernel_BlockValidationResult kernel_block_validation_state_get_block_validation_result(
+BITCOINKERNEL_API kernel_BlockValidationResult kernel_get_block_validation_result_from_block_validation_state(
     const kernel_BlockValidationState* block_validation_state
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
@@ -1017,9 +1025,9 @@ BITCOINKERNEL_API kernel_BlockValidationResult kernel_block_validation_state_get
  *
  * @param[in] context            Non-null.
  * @param[in] chainstate_manager Non-null.
- * @return                       The block index of the current tip, or null if the chain is empty.
+ * @return                       The block index of the current tip.
  */
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_tip(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_block_index_from_tip(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager
 ) BITCOINKERNEL_ARG_NONNULL(1, 2);
@@ -1031,7 +1039,7 @@ BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blo
  * @param[in] chainstate_manager Non-null.
  * @return                       The block index of the genesis block, or null on error.
  */
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_genesis(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_block_index_from_genesis(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager
 ) BITCOINKERNEL_ARG_NONNULL(1, 2);
@@ -1042,10 +1050,9 @@ BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blo
  * @param[in] context            Non-null.
  * @param[in] chainstate_manager Non-null.
  * @param[in] block_hash         Non-null.
- * @return                       The block index of the block with the passed in hash, or null if
- *                               the block hash is not found.
+ * @return                       The block index of the block with the passed in hash, or null on error.
  */
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_by_hash(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_block_index_from_hash(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager,
     kernel_BlockHash* block_hash
@@ -1058,10 +1065,9 @@ BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blo
  * @param[in] context            Non-null.
  * @param[in] chainstate_manager Non-null.
  * @param[in] block_height       Height in the chain of the to be retrieved block index.
- * @return                       The block index at a certain height in the currently active chain,
- *                               or null if the height is out of bounds.
+ * @return                       The block index at a certain height in the currently active chain, or null on error.
  */
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_by_height(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_block_index_from_height(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager,
     int block_height
@@ -1075,10 +1081,9 @@ BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blo
  * @param[in] context            Non-null.
  * @param[in] block_index        Non-null.
  * @param[in] chainstate_manager Non-null.
- * @return                       The next block index in the currently active chain, or null if
- *                               the block_index is the chain tip.
+ * @return                       The next block index in the currently active chain, or null on error.
  */
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_next(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_next_block_index(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager,
     const kernel_BlockIndex* block_index
@@ -1091,7 +1096,7 @@ BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blo
  * @param[in] block_index Non-null.
  * @return                The previous block index, or null on error or if the current block index is the genesis block.
  */
-BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_previous(
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_previous_block_index(
     const kernel_BlockIndex* block_index
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
@@ -1127,7 +1132,7 @@ BITCOINKERNEL_API void kernel_block_index_destroy(kernel_BlockIndex* block_index
  * @param[in] block_index        Non-null.
  * @return                       The read out block undo data, or null on error.
  */
-BITCOINKERNEL_API kernel_BlockUndo* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_read(
+BITCOINKERNEL_API kernel_BlockUndo* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_read_block_undo_from_disk(
     const kernel_Context* context,
     kernel_ChainstateManager* chainstate_manager,
     const kernel_BlockIndex* block_index
@@ -1150,10 +1155,9 @@ BITCOINKERNEL_API uint64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_si
  *
  * @param[in] block_undo             Non-null, the block undo data from which tx_undo was retrieved from.
  * @param[in] transaction_undo_index The index of the transaction undo data within the block undo data.
- * @return                           The number of previous transaction outputs in the transaction,
- *                                   or 0 if the provided index is out of bounds.
+ * @return                           The number of previous transaction outputs in the transaction.
  */
-BITCOINKERNEL_API uint64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_get_transaction_undo_size(
+BITCOINKERNEL_API uint64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_transaction_undo_size(
     const kernel_BlockUndo* block_undo,
     uint64_t transaction_undo_index
 ) BITCOINKERNEL_ARG_NONNULL(1);
@@ -1169,16 +1173,15 @@ BITCOINKERNEL_API uint64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_ge
  *                                   undo data.
  * @return                           The block height of the output, or 0 if provided indices are out of bounds.
  */
-BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_get_transaction_output_height_by_index(
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_undo_output_height_by_index(
     const kernel_BlockUndo* block_undo,
     uint64_t transaction_undo_index,
     uint64_t output_index
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief Return a transaction output contained in the transaction undo data
- * of a block undo data at a certain index. This value is copied from the
- * underlying data and thus owned entirely by the user.
+ * @brief Return a transaction output contained in the transaction undo data of
+ * a block undo data at a certain index.
  *
  * @param[in] block_undo             Non-null.
  * @param[in] transaction_undo_index The index of the transaction undo data within the block undo data.
@@ -1186,7 +1189,7 @@ BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_ge
  *                                   transaction undo data.
  * @return                           A transaction output pointer, or null if provided indices are out of bounds.
  */
-BITCOINKERNEL_API kernel_TransactionOutput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_undo_copy_transaction_output_by_index(
+BITCOINKERNEL_API kernel_TransactionOutput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_get_undo_output_by_index(
     const kernel_BlockUndo* block_undo,
     uint64_t transaction_undo_index,
     uint64_t output_index
@@ -1208,7 +1211,7 @@ BITCOINKERNEL_API void kernel_block_undo_destroy(kernel_BlockUndo* block_undo);
  * @brief Return the block hash associated with a block index.
  *
  * @param[in] block_index Non-null.
- * @return    The block hash, or null if the block index has no associated hash.
+ * @return    The block hash.
  */
 BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_block_hash(
     const kernel_BlockIndex* block_index
@@ -1220,15 +1223,6 @@ BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_bloc
 BITCOINKERNEL_API void kernel_block_hash_destroy(kernel_BlockHash* block_hash);
 
 ///@}
-
-BITCOINKERNEL_API bool kernel_process_new_block_headers(
-        const kernel_Context* context,
-        kernel_ChainstateManager* chaintate_manager,
-        const unsigned char* block_headers,
-        size_t block_headers_len,
-        bool min_pow_checked,
-        kernel_BlockIndex** last_accepted
-) BITCOINKERNEL_ARG_NONNULL(1, 2, 3);
 
 #ifdef __cplusplus
 } // extern "C"

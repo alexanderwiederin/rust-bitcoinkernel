@@ -12,10 +12,10 @@
 #include <util/bitset.h>
 #include <util/feefrac.h>
 
-#include <cstdint>
+#include <stdint.h>
 #include <numeric>
-#include <utility>
 #include <vector>
+#include <utility>
 
 namespace {
 

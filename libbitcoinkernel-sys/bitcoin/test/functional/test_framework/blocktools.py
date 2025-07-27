@@ -107,7 +107,7 @@ def create_block(hashprev=None, coinbase=None, ntime=None, *, version=None, tmpl
     block.vtx.append(coinbase)
     if txlist:
         for tx in txlist:
-            if type(tx) is str:
+            if not hasattr(tx, 'calc_sha256'):
                 tx = tx_from_hex(tx)
             block.vtx.append(tx)
     block.hashMerkleRoot = block.calc_merkle_root()
@@ -134,6 +134,7 @@ def add_witness_commitment(block, nonce=0):
 
     # witness commitment is the last OP_RETURN output in coinbase
     block.vtx[0].vout.append(CTxOut(0, get_witness_script(witness_root, witness_nonce)))
+    block.vtx[0].rehash()
     block.hashMerkleRoot = block.calc_merkle_root()
     block.rehash()
 
@@ -175,6 +176,7 @@ def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_scr
         coinbaseoutput2.nValue = 0
         coinbaseoutput2.scriptPubKey = extra_output_script
         coinbase.vout.append(coinbaseoutput2)
+    coinbase.calc_sha256()
     return coinbase
 
 def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, output_script=None):
@@ -187,8 +189,9 @@ def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, output_script=No
         output_script = CScript()
     tx = CTransaction()
     assert n < len(prevtx.vout)
-    tx.vin.append(CTxIn(COutPoint(prevtx.txid_int, n), script_sig, SEQUENCE_FINAL))
+    tx.vin.append(CTxIn(COutPoint(prevtx.sha256, n), script_sig, SEQUENCE_FINAL))
     tx.vout.append(CTxOut(amount, output_script))
+    tx.calc_sha256()
     return tx
 
 def get_legacy_sigopcount_block(block, accurate=True):

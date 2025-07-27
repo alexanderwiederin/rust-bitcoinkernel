@@ -5,7 +5,7 @@
 #ifndef BITCOIN_CRYPTO_SIPHASH_H
 #define BITCOIN_CRYPTO_SIPHASH_H
 
-#include <cstdint>
+#include <stdint.h>
 
 #include <span.h>
 #include <uint256.h>
