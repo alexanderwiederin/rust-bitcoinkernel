@@ -431,6 +431,52 @@ const kernel_BlockHash* kernel_transaction_get_hash(const kernel_Transaction* _t
     return block_hash;
 }
 
+bool kernel_transaction_is_null(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    return transaction->IsNull();
+}
+
+const kernel_BlockHash* kernel_transaction_get_witness_hash(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    auto witness_hash = transaction->GetWitnessHash();
+
+    auto block_hash = new kernel_BlockHash{};
+    std::memcpy(block_hash->hash, witness_hash.begin(), sizeof(witness_hash));
+    return block_hash;
+}
+
+int64_t kernel_transaction_get_value_out(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    return transaction->GetValueOut();
+}
+
+int64_t kernel_transaction_get_total_size(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    return transaction->GetTotalSize();
+}
+
+bool kernel_transaction_is_coinbase(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    return transaction->IsCoinBase();
+}
+
+bool kernel_transaction_has_witness(const kernel_Transaction* _transaction)
+{
+    const auto* transaction = cast_const_transaction(_transaction);
+
+    return transaction->HasWitness();
+}
+
 uint32_t kernel_transaction_get_input_count(const kernel_Transaction* _transaction)
 {
     const auto* transaction = cast_const_transaction(_transaction);
@@ -461,6 +507,7 @@ const kernel_BlockHash* kernel_transaction_out_point_get_hash(const kernel_Trans
 
     return block_hash;
 }
+
 
 uint32_t kernel_transaction_out_point_get_index(const kernel_TransactionOutPoint* _out_point)
 {

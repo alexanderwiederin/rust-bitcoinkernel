@@ -111,6 +111,18 @@ BITCOINKERNEL_API const kernel_Transaction* BITCOINKERNEL_WARN_UNUSED_RESULT ker
 
 BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_hash(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_is_null(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_witness_hash(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API int64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_value_out(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API int64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_total_size(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_is_coinbase(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_has_witness(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
 BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_input_count(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
 
 BITCOINKERNEL_API const kernel_TransactionInput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_input(const kernel_Transaction*, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
