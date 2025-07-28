@@ -173,8 +173,8 @@ impl From<ChainType> for kernel_ChainType {
 }
 
 /// The chain's tip was updated to the provided block hash.
-pub trait BlockTip: Fn(SynchronizationState, BlockHash, f64) {}
-impl<F: Fn(SynchronizationState, BlockHash, f64)> BlockTip for F {}
+pub trait BlockTip: Fn(SynchronizationState, Hash, f64) {}
+impl<F: Fn(SynchronizationState, Hash, f64)> BlockTip for F {}
 
 /// A new best block header was added.
 pub trait HeaderTip: Fn(SynchronizationState, i64, i64, bool) {}
@@ -219,7 +219,7 @@ unsafe extern "C" fn kn_block_tip_wrapper(
 ) {
     let holder = &*(user_data as *mut KernelNotificationInterfaceCallbacks);
     let hash = kernel_block_index_get_block_hash(block_index);
-    let res = BlockHash { hash: (*hash).hash };
+    let res = Hash { hash: (*hash).hash };
     kernel_block_hash_destroy(hash);
     (holder.kn_block_tip)(state.into(), res, verification_progress);
 }
@@ -668,9 +668,9 @@ impl BlockRef {
         BlockRef { inner: block }
     }
 
-    pub fn get_hash(&self) -> BlockHash {
+    pub fn get_hash(&self) -> Hash {
         let hash = unsafe { kernel_block_pointer_get_hash(self.inner) };
-        let res = BlockHash {
+        let res = Hash {
             hash: unsafe { (&*hash).hash },
         };
         unsafe { kernel_block_hash_destroy(hash) };
@@ -714,6 +714,14 @@ pub struct TransactionRef {
 }
 
 impl TransactionRef {
+    pub fn get_hash(&self) -> Hash {
+        let hash = unsafe { kernel_transaction_get_hash(self.inner) };
+        let res = Hash {
+            hash: unsafe { (&*hash).hash },
+        };
+        res
+    }
+
     pub fn get_input_count(&self) -> usize {
         let count = unsafe { kernel_transaction_get_input_count(self.inner) };
         count as usize
@@ -747,6 +755,55 @@ impl TransactionRef {
             marker: PhantomData,
         })
     }
+
+    pub fn is_null(&self) -> bool {
+        unsafe { kernel_transaction_is_null(self.inner) }
+    }
+
+    pub fn get_witness_hash(&self) -> Hash {
+        let hash = unsafe { kernel_transaction_get_witness_hash(self.inner) };
+        let res = Hash {
+            hash: unsafe { (&*hash).hash },
+        };
+
+        res
+    }
+
+    pub fn get_value_out(&self) -> i64 {
+        unsafe { kernel_transaction_get_value_out(self.inner) }
+    }
+
+    pub fn get_total_size(&self) -> i64 {
+        unsafe { kernel_transaction_get_total_size(self.inner) }
+    }
+
+    pub fn is_coinbase(&self) -> bool {
+        unsafe { kernel_transaction_is_coinbase(self.inner) }
+    }
+
+    pub fn has_witness(&self) -> bool {
+        unsafe { kernel_transaction_has_witness(self.inner) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScriptPubkeyRef {
+    inner: *const kernel_ScriptPubkey,
+    marker: PhantomData<BlockRef>,
+}
+
+impl ScriptPubkeyRef {
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            let data_ptr = kernel_script_pubkey_get_data(self.inner);
+            let size = kernel_script_pubkey_get_size(self.inner);
+            if data_ptr == std::ptr::null() || size == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(data_ptr, size)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -760,6 +817,15 @@ impl TxOutRef {
         unsafe {
             let mut_ptr = self.inner as *mut kernel_TransactionOutput;
             kernel_get_transaction_output_amount(mut_ptr)
+        }
+    }
+
+    pub fn get_script_pubkey(&self) -> ScriptPubkeyRef {
+        let script_pubkey_ptr = unsafe { kernel_transaction_output_get_script_pubkey(self.inner) };
+
+        ScriptPubkeyRef {
+            inner: script_pubkey_ptr,
+            marker: PhantomData,
         }
     }
 }
@@ -850,9 +916,9 @@ pub struct OutPointRef {
 }
 
 impl OutPointRef {
-    pub fn get_tx_id(&self) -> BlockHash {
+    pub fn get_tx_id(&self) -> Hash {
         let hash = unsafe { kernel_transaction_out_point_get_hash(self.inner) };
-        let res = BlockHash {
+        let res = Hash {
             hash: unsafe { (&*hash).hash },
         };
         res
@@ -872,9 +938,9 @@ unsafe impl Send for Block {}
 unsafe impl Sync for Block {}
 
 impl Block {
-    pub fn get_hash(&self) -> BlockHash {
+    pub fn get_hash(&self) -> Hash {
         let hash = unsafe { kernel_block_get_hash(self.inner) };
-        let res = BlockHash {
+        let res = Hash {
             hash: unsafe { (&*hash).hash },
         };
         unsafe { kernel_block_hash_destroy(hash) };
@@ -930,11 +996,21 @@ unsafe impl Sync for BlockIndex {}
 
 /// A type for a Block hash.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct BlockHash {
+pub struct Hash {
     pub hash: [u8; 32],
 }
 
-impl std::fmt::Display for BlockHash {
+impl Hash {
+    pub fn display_order(&self) -> String {
+        self.hash
+            .iter()
+            .rev()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>()
+    }
+}
+
+impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let hex_string = self
             .hash
@@ -966,9 +1042,9 @@ impl BlockIndex {
     }
 
     /// Get the current block hash associated with this BlockIndex.
-    pub fn block_hash(&self) -> BlockHash {
+    pub fn block_hash(&self) -> Hash {
         let hash = unsafe { kernel_block_index_get_block_hash(self.inner) };
-        let res = BlockHash {
+        let res = Hash {
             hash: unsafe { (&*hash).hash },
         };
         unsafe { kernel_block_hash_destroy(hash) };
@@ -1212,7 +1288,7 @@ impl<'a> ChainstateManager {
     }
 
     /// Get a block index entry by its hash.
-    pub fn get_block_index_by_hash(&self, hash: BlockHash) -> Result<BlockIndex, KernelError> {
+    pub fn get_block_index_by_hash(&self, hash: Hash) -> Result<BlockIndex, KernelError> {
         let mut block_hash = kernel_BlockHash { hash: hash.hash };
         let inner = unsafe {
             kernel_get_block_index_from_hash(self.context.inner, self.inner, &mut block_hash)

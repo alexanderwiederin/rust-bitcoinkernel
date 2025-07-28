@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<BlockReaderError>> {
         "Got block index: prev hash={:?}",
         block_index.prev_block_hash().unwrap().to_string()
     );
-    info!("Hash: {}", block_index.block_hash());
+    info!("Hash: {}", block_index.block_hash().display_order());
     info!("Height: {}", block_index.height());
     info!("Transaction count: {}", block_index.transaction_count());
     info!("Block index merkle root: {}", block_index.merkle_root());
@@ -70,6 +70,8 @@ fn main() -> Result<(), Box<BlockReaderError>> {
 
     let transaction = block.get_transaction(1).unwrap();
     info!("transaction: {:?}", transaction);
+    info!("tx id: {}", transaction.get_hash().display_order());
+
     let count = transaction.get_input_count();
     info!("count: {}", count);
 
@@ -109,30 +111,51 @@ fn main() -> Result<(), Box<BlockReaderError>> {
     let value = output.get_value();
     info!("value: {}", value);
 
-    while let Ok(block_index) = block_index.previous() {
-        info!("Height: {}", block_index.height());
-        info!("Hash: {}", block_index.block_hash());
+    let is_null = transaction.is_null();
+    info!("tx is null: {}", is_null);
 
-        let block = block_index.get_block().unwrap();
+    let witness_hash = transaction.get_witness_hash();
+    info!("witness hash: {}", witness_hash);
 
-        for i in 0..block.get_transaction_count() {
-            let transaction = block.get_transaction(i).unwrap();
-            info!("transaction {}", i);
+    let value_out = transaction.get_value_out();
+    info!("value out: {}", value_out);
 
-            for j in 0..transaction.get_input_count() {
-                let input = transaction.get_input(j).unwrap();
-                let tx_id = input.get_out_point().get_tx_id();
-                let index = input.get_out_point().get_index();
-                info!("input #{}: tx_id: {}, index: {}", j, tx_id, index);
-            }
+    let total_size = transaction.get_total_size();
+    info!("total size: {}", total_size);
 
-            for j in 0..transaction.get_output_count() {
-                let output = transaction.get_output(j).unwrap();
-                let value = output.get_value();
-                info!("output #{}: value: {}", j, value);
-            }
-        }
-    }
+    let is_coinbase = transaction.is_coinbase();
+    info!("is_coinbase: {}", is_coinbase);
+
+    let has_witness = transaction.has_witness();
+    info!("has witness: {}", has_witness);
+
+    let script_pubkey = output.get_script_pubkey();
+    info!("script pub key: {:?}", script_pubkey.as_bytes());
+
+    // while let Ok(block_index) = block_index.previous() {
+    //     info!("Height: {}", block_index.height());
+    //     info!("Hash: {}", block_index.block_hash());
+    //
+    //     let block = block_index.get_block().unwrap();
+    //
+    //     for i in 0..block.get_transaction_count() {
+    //         let transaction = block.get_transaction(i).unwrap();
+    //         info!("transaction {}", i);
+    //
+    //         for j in 0..transaction.get_input_count() {
+    //             let input = transaction.get_input(j).unwrap();
+    //             let tx_id = input.get_out_point().get_tx_id();
+    //             let index = input.get_out_point().get_index();
+    //             info!("input #{}: tx_id: {}, index: {}", j, tx_id, index);
+    //         }
+    //
+    //         for j in 0..transaction.get_output_count() {
+    //             let output = transaction.get_output(j).unwrap();
+    //             let value = output.get_value();
+    //             info!("output #{}: value: {}", j, value);
+    //         }
+    //     }
+    // }
 
     Ok(())
 }

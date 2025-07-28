@@ -2,7 +2,7 @@ use std::{ffi::CString, fmt, sync::Arc};
 
 use libbitcoinkernel_sys::*;
 
-use crate::{Block, BlockHash, BlockRef, ChainParams, ChainType, Transaction};
+use crate::{Block, BlockRef, ChainParams, ChainType, Hash, Transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IBDStatus {
@@ -25,7 +25,7 @@ impl From<kernel_blockreader_IBDStatus> for IBDStatus {
 #[derive(Debug)]
 pub enum BlockIdentifier {
     Height(i32),
-    Hash(BlockHash),
+    Hash(Hash),
 }
 
 #[derive(Debug)]
@@ -87,10 +87,10 @@ impl BlockReaderIndex {
         unsafe { kernel_block_index_get_height(self.inner) }
     }
 
-    pub fn block_hash(&self) -> BlockHash {
+    pub fn block_hash(&self) -> Hash {
         unsafe {
             let hash_ptr = kernel_block_index_get_block_hash(self.inner);
-            let result = BlockHash {
+            let result = Hash {
                 hash: (&*hash_ptr).hash,
             };
             kernel_block_hash_destroy(hash_ptr);
@@ -98,13 +98,13 @@ impl BlockReaderIndex {
         }
     }
 
-    pub fn prev_block_hash(&self) -> Option<BlockHash> {
+    pub fn prev_block_hash(&self) -> Option<Hash> {
         unsafe {
             let prev_block_hash = kernel_block_index_get_previous_block_hash(self.inner);
             if prev_block_hash.is_null() {
                 return None;
             }
-            let result = BlockHash {
+            let result = Hash {
                 hash: (*prev_block_hash).hash,
             };
             kernel_block_hash_destroy(prev_block_hash);
@@ -124,10 +124,10 @@ impl BlockReaderIndex {
         unsafe { kernel_block_index_get_version(self.inner) }
     }
 
-    pub fn merkle_root(&self) -> BlockHash {
+    pub fn merkle_root(&self) -> Hash {
         unsafe {
             let merkle_root = kernel_block_index_get_merkle_root(self.inner);
-            let result = BlockHash {
+            let result = Hash {
                 hash: (*merkle_root).hash,
             };
             kernel_block_hash_destroy(merkle_root);
@@ -290,7 +290,7 @@ impl BlockReader {
         }
     }
 
-    pub fn get_block_hash(&self, height: i32) -> Result<BlockHash, BlockReaderError> {
+    pub fn get_block_hash(&self, height: i32) -> Result<Hash, BlockReaderError> {
         if height < 0 {
             return Err(BlockReaderError::ReadError(height));
         }
@@ -314,7 +314,7 @@ impl BlockReader {
 
             kernel_block_hash_destroy(hash_ptr);
 
-            Ok(BlockHash { hash: hash_data })
+            Ok(Hash { hash: hash_data })
         }
     }
 
