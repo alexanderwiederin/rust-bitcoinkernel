@@ -408,11 +408,6 @@ public:
         return kernel_chainstate_manager_options_set_wipe_dbs(m_options.get(), wipe_block_tree, wipe_chainstate);
     }
 
-    void SetBlockTreeDbInMemory(bool block_tree_db_in_memory) const noexcept
-    {
-        kernel_chainstate_manager_options_set_block_tree_db_in_memory(m_options.get(), block_tree_db_in_memory);
-    }
-
     void SetChainstateDbInMemory(bool chainstate_db_in_memory) const noexcept
     {
         kernel_chainstate_manager_options_set_chainstate_db_in_memory(m_options.get(), chainstate_db_in_memory);

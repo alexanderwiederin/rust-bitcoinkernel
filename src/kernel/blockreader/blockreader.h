@@ -1,0 +1,170 @@
+// Copyright (c) 2022-present The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_KERNEL_BLOCKREADER_BLOCKREADER_H
+#define BITCOIN_KERNEL_BLOCKREADER_BLOCKREADER_H
+
+#include <cstddef>
+#include <cstdint>
+#include <kernel/bitcoinkernel.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
+typedef struct kernel_blockreader_Reader kernel_blockreader_Reader;
+
+typedef enum {
+    kernel_blockreader_IBD_STATUS_NO_DATA,
+    kernel_blockreader_IBD_STATUS_IN_IBD,
+    kernel_blockreader_IBD_STATUS_SYNCED
+} kernel_blockreader_IBDStatus;
+
+/*
+ * BLOCKREADER GENERAL METHODS
+ */
+
+BITCOINKERNEL_API kernel_blockreader_Reader* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_create(
+    const kernel_ChainParameters* chain_params,
+    const char* data_dir,
+    size_t data_dir_len) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API void kernel_blockreader_refresh(
+    kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API void kernel_blockreader_destroy(kernel_blockreader_Reader* reader);
+
+BITCOINKERNEL_API kernel_blockreader_IBDStatus kernel_blockreader_get_ibd_status(
+    const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API int32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_header_height(
+    const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API int32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_validated_height(
+    const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_best_block_index(
+    const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_index_by_hash(
+    const kernel_blockreader_Reader* reader,
+    const kernel_BlockHash* block_hash) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API kernel_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_index_by_height(
+    const kernel_blockreader_Reader* reader,
+    int32_t height) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_block_get_hash(
+    kernel_Block* block) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_genesis_hash(
+    const kernel_blockreader_Reader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_is_block_in_active_chain(
+    const kernel_blockreader_Reader* reader,
+    const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_headers_raw(
+    const kernel_blockreader_Reader* reader,
+    int32_t start_height,
+    size_t count) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_raw_header(
+    const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_timestamp(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_transaction_count(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_version(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_bits(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_nonce(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_get_median_time_past(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_block_data(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_undo_data(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_valid_transactions(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_valid_chain(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_valid_scripts(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_is_failed(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_index_has_witness(const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_BlockPointer* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_pointer_get_transaction_count(const kernel_BlockPointer* block_pointer) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_Transaction* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_block_pointer_get_transaction(const kernel_BlockPointer* block_pointer, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_hash(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_is_null(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_witness_hash(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API int64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_value_out(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API int64_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_total_size(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_is_coinbase(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_has_witness(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_input_count(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_TransactionInput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_input(const kernel_Transaction*, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_TransactionOutPoint* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_out_point(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_hash(const kernel_TransactionOutPoint* out_point) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_out_point_get_index(const kernel_TransactionOutPoint* out_point);
+
+BITCOINKERNEL_API const kernel_TransactionScriptSig* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_script_sig(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_copy_script_sig_data(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_sig_is_push_only(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_sig_is_empty(const kernel_TransactionScriptSig* script_sig) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_n_sequence(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_TransactionWitness* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_input_get_witness(const kernel_TransactionInput* input) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_size(const kernel_TransactionWitness* witness) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_item(const kernel_TransactionWitness* witness, uint32_t index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_is_null(const kernel_TransactionWitness* witness) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API uint32_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_output_count(const kernel_Transaction* transaction) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_TransactionOutput* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_get_output(const kernel_Transaction* transaction, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_ScriptPubkey* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_transaction_output_get_script_pubkey(const kernel_TransactionOutput* output) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API size_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_get_size(const kernel_ScriptPubkey* script_pubkey) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const unsigned char* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_get_data(const kernel_ScriptPubkey* script_pubkey) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API const kernel_BlockUndo* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_undo_data(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
