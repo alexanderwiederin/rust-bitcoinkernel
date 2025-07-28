@@ -1222,13 +1222,14 @@ BITCOINKERNEL_API void kernel_block_hash_destroy(kernel_BlockHash* block_hash);
 ///@}
 
 BITCOINKERNEL_API bool kernel_process_new_block_headers(
-        const kernel_Context* context,
-        kernel_ChainstateManager* chaintate_manager,
-        const unsigned char* block_headers,
-        size_t block_headers_len,
-        bool min_pow_checked,
-        kernel_BlockIndex** last_accepted
-) BITCOINKERNEL_ARG_NONNULL(1, 2, 3);
+    const kernel_Context* context,
+    kernel_ChainstateManager* chaintate_manager,
+    const unsigned char* block_headers,
+    size_t block_headers_len,
+    bool min_pow_checked,
+    kernel_BlockIndex** last_accepted) BITCOINKERNEL_ARG_NONNULL(1, 2, 3);
+
+BITCOINKERNEL_API kernel_BlockIndex* kernel_block_index_get_best_header(const kernel_Context*, kernel_ChainstateManager* chaintate_manager) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
 #ifdef __cplusplus
 } // extern "C"

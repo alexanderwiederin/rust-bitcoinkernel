@@ -1184,12 +1184,12 @@ bool kernel_chainstate_manager_process_block(
 }
 
 bool kernel_process_new_block_headers(
-        const kernel_Context* context_,
-        kernel_ChainstateManager* chainman_,
-        const unsigned char* block_headers,
-        size_t block_headers_len,
-        bool min_pow_checked,
-        kernel_BlockIndex** last_accepted)
+    const kernel_Context* context_,
+    kernel_ChainstateManager* chainman_,
+    const unsigned char* block_headers,
+    size_t block_headers_len,
+    bool min_pow_checked,
+    kernel_BlockIndex** last_accepted)
 {
     try {
         auto chainman{cast_chainstate_manager(chainman_)};
@@ -1230,3 +1230,11 @@ bool kernel_process_new_block_headers(
         return false;
     }
 }
+
+kernel_BlockIndex* kernel_block_index_get_best_header(const kernel_Context* context_, kernel_ChainstateManager* chainman_)
+{
+    auto chainman{cast_chainstate_manager(chainman_)};
+    return reinterpret_cast<kernel_BlockIndex*>(WITH_LOCK(chainman->GetMutex(), return chainman->m_best_header));
+}
+
+
