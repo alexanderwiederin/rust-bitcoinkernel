@@ -1141,6 +1141,13 @@ impl ChainstateManager {
             }))
         }
     }
+
+    pub fn get_best_header(&self) -> BlockIndex {
+        BlockIndex {
+            inner: unsafe { kernel_block_index_get_best_header(self.context.inner, self.inner) },
+            marker: PhantomData,
+        }
+    }
 }
 
 impl Drop for ChainstateManager {
