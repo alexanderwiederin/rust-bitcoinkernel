@@ -1,5 +1,4 @@
 
-#include <undo.h>
 #include <chain.h>
 #include <cstddef>
 #include <exception>
@@ -10,6 +9,7 @@
 #include <optional>
 #include <reader_impl.h>
 #include <uint256.h>
+#include <undo.h>
 #include <util/signalinterrupt.h>
 
 namespace blockreader {

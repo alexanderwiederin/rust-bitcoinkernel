@@ -653,4 +653,16 @@ const kernel_BlockUndo* kernel_blockreader_get_undo_data(const kernel_blockreade
 
     return reinterpret_cast<kernel_BlockUndo*>(block_undo);
 }
+
+const unsigned char* kernel_script_sig_get_data(const kernel_TransactionScriptSig* _script_sig)
+{
+    const auto* script_sig = cast_const_script_sig(_script_sig);
+    return script_sig->data();
+}
+
+size_t kernel_script_sig_get_size(const kernel_TransactionScriptSig* _script_sig)
+{
+    const auto* script_sig = cast_const_script_sig(_script_sig);
+    return script_sig->size();
+}
 } // extern "C"
