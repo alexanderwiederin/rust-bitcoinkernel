@@ -5,7 +5,6 @@
 #ifndef BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 #define BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 
-#include <undo.h>
 #include <chain.h>
 #include <kernel/chainparams.h>
 #include <kernel/context.h>
@@ -14,6 +13,7 @@
 #include <node/blockstorage.h>
 #include <optional>
 #include <uint256.h>
+#include <undo.h>
 #include <util/fs.h>
 #include <util/signalinterrupt.h>
 
