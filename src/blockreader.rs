@@ -2,7 +2,7 @@ use std::{ffi::CString, fmt, sync::Arc};
 
 use libbitcoinkernel_sys::*;
 
-use crate::{Block, BlockRef, ChainParams, ChainType, Hash, Transaction};
+use crate::{Block, BlockRef, BlockUndoRef, ChainParams, ChainType, Hash, Transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IBDStatus {
@@ -33,6 +33,7 @@ pub enum BlockReaderError {
     Internal(String),
     InvalidPath(String),
     BlockNotFound(BlockIdentifier),
+    UndoDataNotFound(i32),
     ReadError(i32),
     ChainParamsError(String),
     TransactionIndexOutOfRange(i32, usize),
@@ -58,6 +59,9 @@ impl std::fmt::Display for BlockReaderError {
                 "Transaction index {} out of range at height {}",
                 index, height
             ),
+            BlockReaderError::UndoDataNotFound(height) => {
+                write!(f, "Undo data at height {} not found", height)
+            }
         }
     }
 }
@@ -198,7 +202,7 @@ impl BlockReaderIndex {
 
     /* Block */
 
-    pub fn get_block(&self) -> Result<BlockRef, BlockReaderError> {
+    pub fn block(&self) -> Result<BlockRef, BlockReaderError> {
         unsafe {
             let block = kernel_blockreader_get_block_by_index(self.reader.inner, self.inner);
             if block.is_null() {
@@ -208,6 +212,14 @@ impl BlockReaderIndex {
             }
 
             Ok(BlockRef { inner: block })
+        }
+    }
+
+    pub fn block_undo(&self) -> Result<BlockUndoRef, BlockReaderError> {
+        unsafe {
+            let block_undo = kernel_blockreader_get_undo_data(self.reader.inner, self.inner);
+
+            Ok(BlockUndoRef { inner: block_undo })
         }
     }
 
@@ -261,14 +273,14 @@ impl BlockReader {
         }
     }
 
-    pub fn get_ibd_status(&self) -> IBDStatus {
+    pub fn ibd_status(&self) -> IBDStatus {
         unsafe {
             let status = kernel_blockreader_get_ibd_status(self.inner);
             status.into()
         }
     }
 
-    pub fn get_chain_height(&self) -> i32 {
+    pub fn chain_height(&self) -> i32 {
         unsafe {
             let ptr = kernel_blockreader_get_best_block_index(self.inner);
             if ptr.is_null() {
@@ -290,7 +302,7 @@ impl BlockReader {
         }
     }
 
-    pub fn get_block_hash(&self, height: i32) -> Result<Hash, BlockReaderError> {
+    pub fn hash(&self, height: i32) -> Result<Hash, BlockReaderError> {
         if height < 0 {
             return Err(BlockReaderError::ReadError(height));
         }
@@ -318,7 +330,7 @@ impl BlockReader {
         }
     }
 
-    pub fn get_best_validated_block(self: &Arc<Self>) -> Option<BlockReaderIndex> {
+    pub fn best_validated_block(self: &Arc<Self>) -> Option<BlockReaderIndex> {
         unsafe {
             let ptr = kernel_blockreader_get_best_block_index(self.inner);
             BlockReaderIndex::from_raw_borrowed(ptr, Arc::clone(self))

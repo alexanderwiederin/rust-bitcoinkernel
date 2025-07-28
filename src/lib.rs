@@ -609,12 +609,12 @@ impl TxOut {
     }
 
     /// Get the amount associated with this transaction output
-    pub fn get_value(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         unsafe { kernel_get_transaction_output_amount(self.inner) }
     }
 
     /// Get the script pubkey of this output
-    pub fn get_script_pubkey(&self) -> ScriptPubkey {
+    pub fn script_pubkey(&self) -> ScriptPubkey {
         ScriptPubkey {
             inner: unsafe { kernel_copy_script_pubkey_from_output(self.inner) },
         }
@@ -668,7 +668,7 @@ impl BlockRef {
         BlockRef { inner: block }
     }
 
-    pub fn get_hash(&self) -> Hash {
+    pub fn hash(&self) -> Hash {
         let hash = unsafe { kernel_block_pointer_get_hash(self.inner) };
         let res = Hash {
             hash: unsafe { (&*hash).hash },
@@ -677,12 +677,12 @@ impl BlockRef {
         res
     }
 
-    pub fn get_transaction_count(&self) -> usize {
+    pub fn transaction_count(&self) -> usize {
         let count = unsafe { kernel_block_pointer_get_transaction_count(self.inner) };
         count as usize
     }
 
-    pub fn get_transaction(&self, index: usize) -> Option<TransactionRef> {
+    pub fn transaction(&self, index: usize) -> Option<TransactionRef> {
         let transaction = unsafe { kernel_block_pointer_get_transaction(self.inner, index) };
         if transaction.is_null() {
             return None;
@@ -714,7 +714,7 @@ pub struct TransactionRef {
 }
 
 impl TransactionRef {
-    pub fn get_hash(&self) -> Hash {
+    pub fn hash(&self) -> Hash {
         let hash = unsafe { kernel_transaction_get_hash(self.inner) };
         let res = Hash {
             hash: unsafe { (&*hash).hash },
@@ -722,12 +722,12 @@ impl TransactionRef {
         res
     }
 
-    pub fn get_input_count(&self) -> usize {
+    pub fn input_count(&self) -> usize {
         let count = unsafe { kernel_transaction_get_input_count(self.inner) };
         count as usize
     }
 
-    pub fn get_input(&self, index: usize) -> Option<TxInRef> {
+    pub fn input(&self, index: usize) -> Option<TxInRef> {
         let input = unsafe { kernel_transaction_get_input(self.inner, index) };
         if input.is_null() {
             return None;
@@ -739,12 +739,12 @@ impl TransactionRef {
         })
     }
 
-    pub fn get_output_count(&self) -> usize {
+    pub fn output_count(&self) -> usize {
         let count = unsafe { kernel_transaction_get_output_count(self.inner) };
         count as usize
     }
 
-    pub fn get_output(&self, index: usize) -> Option<TxOutRef> {
+    pub fn output(&self, index: usize) -> Option<TxOutRef> {
         let output = unsafe { kernel_transaction_get_output(self.inner, index) };
         if output.is_null() {
             return None;
@@ -760,7 +760,7 @@ impl TransactionRef {
         unsafe { kernel_transaction_is_null(self.inner) }
     }
 
-    pub fn get_witness_hash(&self) -> Hash {
+    pub fn witness_hash(&self) -> Hash {
         let hash = unsafe { kernel_transaction_get_witness_hash(self.inner) };
         let res = Hash {
             hash: unsafe { (&*hash).hash },
@@ -769,11 +769,11 @@ impl TransactionRef {
         res
     }
 
-    pub fn get_value_out(&self) -> i64 {
+    pub fn value_out(&self) -> i64 {
         unsafe { kernel_transaction_get_value_out(self.inner) }
     }
 
-    pub fn get_total_size(&self) -> i64 {
+    pub fn total_size(&self) -> i64 {
         unsafe { kernel_transaction_get_total_size(self.inner) }
     }
 
@@ -813,14 +813,14 @@ pub struct TxOutRef {
 }
 
 impl TxOutRef {
-    pub fn get_value(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         unsafe {
             let mut_ptr = self.inner as *mut kernel_TransactionOutput;
             kernel_get_transaction_output_amount(mut_ptr)
         }
     }
 
-    pub fn get_script_pubkey(&self) -> ScriptPubkeyRef {
+    pub fn script_pubkey(&self) -> ScriptPubkeyRef {
         let script_pubkey_ptr = unsafe { kernel_transaction_output_get_script_pubkey(self.inner) };
 
         ScriptPubkeyRef {
@@ -836,7 +836,7 @@ pub struct TxInRef {
 }
 
 impl TxInRef {
-    pub fn get_out_point(&self) -> OutPointRef {
+    pub fn out_point(&self) -> OutPointRef {
         let out_point = unsafe { kernel_transaction_input_get_out_point(self.inner) };
 
         OutPointRef {
@@ -845,7 +845,7 @@ impl TxInRef {
         }
     }
 
-    pub fn get_script_sig(&self) -> ScriptSigRef {
+    pub fn script_sig(&self) -> ScriptSigRef {
         let script_sig = unsafe { kernel_transaction_input_get_script_sig(self.inner) };
 
         ScriptSigRef {
@@ -854,11 +854,11 @@ impl TxInRef {
         }
     }
 
-    pub fn get_n_sequence(&self) -> u32 {
+    pub fn n_sequence(&self) -> u32 {
         unsafe { kernel_transaction_input_get_n_sequence(self.inner) }
     }
 
-    pub fn get_witness(&self) -> WitnessRef {
+    pub fn witness(&self) -> WitnessRef {
         let witness = unsafe { kernel_transaction_input_get_witness(self.inner) };
 
         WitnessRef {
@@ -875,11 +875,11 @@ pub struct WitnessRef {
 }
 
 impl WitnessRef {
-    pub fn get_stack_size(&self) -> u32 {
+    pub fn stack_size(&self) -> u32 {
         unsafe { kernel_witness_get_stack_size(self.inner) }
     }
 
-    pub fn get_stack_item(&self, index: u32) -> Option<Vec<u8>> {
+    pub fn stack_item(&self, index: u32) -> Option<Vec<u8>> {
         let raw_item = unsafe { kernel_witness_get_stack_item(self.inner, index) };
         let vec = unsafe {
             std::slice::from_raw_parts((*raw_item).data, (*raw_item).size.try_into().unwrap())
@@ -916,7 +916,7 @@ pub struct OutPointRef {
 }
 
 impl OutPointRef {
-    pub fn get_tx_id(&self) -> Hash {
+    pub fn tx_id(&self) -> Hash {
         let hash = unsafe { kernel_transaction_out_point_get_hash(self.inner) };
         let res = Hash {
             hash: unsafe { (&*hash).hash },
@@ -924,7 +924,7 @@ impl OutPointRef {
         res
     }
 
-    pub fn get_index(&self) -> u32 {
+    pub fn index(&self) -> u32 {
         unsafe { kernel_transaction_out_point_get_index(self.inner) }
     }
 }
@@ -938,7 +938,7 @@ unsafe impl Send for Block {}
 unsafe impl Sync for Block {}
 
 impl Block {
-    pub fn get_hash(&self) -> Hash {
+    pub fn hash(&self) -> Hash {
         let hash = unsafe { kernel_block_get_hash(self.inner) };
         let res = Hash {
             hash: unsafe { (&*hash).hash },
@@ -1058,6 +1058,56 @@ impl<'a> Drop for BlockIndex {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct BlockUndoRef {
+    inner: *const kernel_BlockUndo,
+}
+
+impl BlockUndoRef {
+    pub fn transaction_count(&self) -> u64 {
+        unsafe { kernel_block_undo_size(self.inner) }
+    }
+
+    pub fn transaction_undo_size(&self, transaction_index: u64) -> u64 {
+        unsafe { kernel_get_transaction_undo_size(self.inner, transaction_index) }
+    }
+
+    pub fn prevout_height_by_index(
+        &self,
+        transaction_index: u64,
+        prevout_index: u64,
+    ) -> Result<u32, KernelError> {
+        let height = unsafe {
+            kernel_get_undo_output_height_by_index(self.inner, transaction_index, prevout_index)
+        };
+
+        if height == 0 {
+            return Err(KernelError::OutOfBounds);
+        }
+        Ok(height)
+    }
+
+    pub fn prevout_by_index(
+        &self,
+        transaction_index: u64,
+        prevout_index: u64,
+    ) -> Result<TxOutRef, KernelError> {
+        let prev_out = unsafe {
+            kernel_get_undo_output_by_index(self.inner, transaction_index, prevout_index)
+        };
+
+        if prev_out.is_null() {
+            return Err(KernelError::OutOfBounds);
+        }
+
+        let res = TxOutRef {
+            inner: prev_out,
+            marker: PhantomData,
+        };
+        Ok(res)
+    }
+}
+
 /// The undo data of a block is used internally during re-orgs. It holds the
 /// previous transaction outputs of a block's transactions. This data may be
 /// useful for building indexes.
@@ -1071,12 +1121,12 @@ unsafe impl Sync for BlockUndo {}
 impl BlockUndo {
     /// Gets the number of previous outputs associated with a transaction in a
     /// [`Block`] by its index.
-    pub fn get_transaction_undo_size(&self, transaction_index: u64) -> u64 {
+    pub fn transaction_undo_size(&self, transaction_index: u64) -> u64 {
         unsafe { kernel_get_transaction_undo_size(self.inner, transaction_index) }
     }
 
     /// Gets the previous output creation height by its index.
-    pub fn get_prevout_height_by_index(
+    pub fn prevout_height_by_index(
         &self,
         transaction_index: u64,
         prevout_index: u64,
@@ -1091,7 +1141,7 @@ impl BlockUndo {
     }
 
     /// Gets the previous output of a transaction by its index.
-    pub fn get_prevout_by_index(
+    pub fn prevout_by_index(
         &self,
         transaction_index: u64,
         prevout_index: u64,
@@ -1257,7 +1307,7 @@ impl<'a> ChainstateManager {
 
     /// Get the block index entry of the current chain tip. Once returned,
     /// there is no guarantee that it remains in the active chain.
-    pub fn get_block_index_tip(&self) -> BlockIndex {
+    pub fn block_index_tip(&self) -> BlockIndex {
         BlockIndex {
             inner: unsafe { kernel_get_block_index_from_tip(self.context.inner, self.inner) },
             marker: PhantomData,
@@ -1265,7 +1315,7 @@ impl<'a> ChainstateManager {
     }
 
     /// Get the block index entry of the genesis block.
-    pub fn get_block_index_genesis(&self) -> BlockIndex {
+    pub fn block_index_genesis(&self) -> BlockIndex {
         BlockIndex {
             inner: unsafe { kernel_get_block_index_from_genesis(self.context.inner, self.inner) },
             marker: PhantomData,
@@ -1274,7 +1324,7 @@ impl<'a> ChainstateManager {
 
     /// Retrieve a block index by its height in the currently active chain.
     /// Once retrieved there is no guarantee that it remains in the active chain.
-    pub fn get_block_index_by_height(&self, block_height: i32) -> Result<BlockIndex, KernelError> {
+    pub fn block_index_by_height(&self, block_height: i32) -> Result<BlockIndex, KernelError> {
         let inner = unsafe {
             kernel_get_block_index_from_height(self.context.inner, self.inner, block_height)
         };
@@ -1288,7 +1338,7 @@ impl<'a> ChainstateManager {
     }
 
     /// Get a block index entry by its hash.
-    pub fn get_block_index_by_hash(&self, hash: Hash) -> Result<BlockIndex, KernelError> {
+    pub fn block_index_by_hash(&self, hash: Hash) -> Result<BlockIndex, KernelError> {
         let mut block_hash = kernel_BlockHash { hash: hash.hash };
         let inner = unsafe {
             kernel_get_block_index_from_hash(self.context.inner, self.inner, &mut block_hash)
@@ -1306,7 +1356,7 @@ impl<'a> ChainstateManager {
 
     /// Get the next block index entry in the chain. If this is the tip, or
     /// otherwise a leaf in the block tree, return an error.
-    pub fn get_next_block_index(&self, block_index: BlockIndex) -> Result<BlockIndex, KernelError> {
+    pub fn next_block_index(&self, block_index: BlockIndex) -> Result<BlockIndex, KernelError> {
         let inner = unsafe {
             kernel_get_next_block_index(self.context.inner, self.inner, block_index.inner)
         };
