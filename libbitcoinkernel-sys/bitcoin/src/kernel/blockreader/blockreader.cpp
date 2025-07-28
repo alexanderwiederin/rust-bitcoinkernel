@@ -643,4 +643,14 @@ const unsigned char* kernel_script_pubkey_get_data(const kernel_ScriptPubkey* _s
     const auto* script_pubkey = cast_const_script_pubkey(_script_pubkey);
     return script_pubkey->data();
 }
+
+const kernel_BlockUndo* kernel_blockreader_get_undo_data(const kernel_blockreader_Reader* _reader, const kernel_BlockIndex* _block_index)
+{
+    const auto* reader = cast_const_blockreader(_reader);
+    const auto block_index{cast_const_block_index(_block_index)};
+
+    auto block_undo = reader->GetUndoData(block_index);
+
+    return reinterpret_cast<kernel_BlockUndo*>(block_undo);
+}
 } // extern "C"

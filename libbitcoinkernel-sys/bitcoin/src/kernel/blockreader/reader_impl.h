@@ -5,6 +5,7 @@
 #ifndef BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 #define BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 
+#include <undo.h>
 #include <chain.h>
 #include <kernel/chainparams.h>
 #include <kernel/context.h>
@@ -78,6 +79,8 @@ public:
     CBlockIndex* GetBlockIndexByHeight(int height) const;
 
     uint256 GetGenesisHash() const;
+
+    CBlockUndo* GetUndoData(const CBlockIndex* block_index) const;
 
 private:
     bool LoadBlockIndex();

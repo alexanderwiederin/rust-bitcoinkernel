@@ -1,4 +1,5 @@
 
+#include <undo.h>
 #include <chain.h>
 #include <cstddef>
 #include <exception>
@@ -162,4 +163,19 @@ uint256 BlockReader::GetGenesisHash() const
     return m_validated_chain.Genesis()->GetBlockHash();
 }
 
+CBlockUndo* BlockReader::GetUndoData(const CBlockIndex* block_index) const
+{
+    if (block_index->nHeight < 1) {
+        LogDebug(BCLog::KERNEL, "The genesis block does not have undo data.");
+        return nullptr;
+    }
+
+    auto block_undo{new CBlockUndo{}};
+    if (!m_blockman->ReadBlockUndo(*block_undo, *block_index)) {
+        LogError("Failed to read block undo data.");
+        return nullptr;
+    }
+
+    return block_undo;
+}
 } // namespace blockreader

@@ -161,6 +161,8 @@ BITCOINKERNEL_API size_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_g
 
 BITCOINKERNEL_API const unsigned char* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_script_pubkey_get_data(const kernel_ScriptPubkey* script_pubkey) BITCOINKERNEL_ARG_NONNULL(1);
 
+BITCOINKERNEL_API const kernel_BlockUndo* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_blockreader_get_undo_data(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index) BITCOINKERNEL_ARG_NONNULL(1);
+
 #ifdef __cplusplus
 }
 #endif
