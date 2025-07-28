@@ -124,6 +124,26 @@ typedef struct kernel_ScriptPubkey kernel_ScriptPubkey;
 typedef struct kernel_TransactionOutput kernel_TransactionOutput;
 
 /**
+ * Opaque data structure for holding a transaction input.
+ */
+typedef struct kernel_TransactionInput kernel_TransactionInput;
+
+/**
+ * Opaque data structure for holding a transaction outpoint.
+ */
+typedef struct kernel_TransactionOutPoint kernel_TransactionOutPoint;
+
+/**
+ * Opaque data structure for holding a script signature.
+ */
+typedef struct kernel_TransactionScriptSig kernel_TransactionScriptSig;
+
+/**
+ * Opaque data structure for holding a witness.
+ */
+typedef struct kernel_TransactionWitness kernel_TransactionWitness;
+
+/**
  * Opaque data structure for holding a logging connection.
  *
  * The logging connection can be used to manually stop logging.
@@ -797,17 +817,6 @@ BITCOINKERNEL_API bool kernel_chainstate_manager_options_set_wipe_dbs(
     kernel_ChainstateManagerOptions* chainstate_manager_options,
     bool wipe_block_tree_db,
     bool wipe_chainstate_db
-) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
- * @brief Sets block tree db in memory in the options.
- *
- * @param[in] chainstate_manager_options   Non-null, created by @ref kernel_chainstate_manager_options_create.
- * @param[in] block_tree_db_in_memory      Set block tree db in memory.
- */
-BITCOINKERNEL_API void kernel_chainstate_manager_options_set_block_tree_db_in_memory(
-    kernel_ChainstateManagerOptions* chainstate_manager_options,
-    bool block_tree_db_in_memory
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
