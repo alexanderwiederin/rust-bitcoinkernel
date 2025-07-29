@@ -433,7 +433,7 @@ size_t kernel_witness_get_stack_size(const kernel_TransactionWitness* _witness)
     return witness->stack.size();
 }
 
-kernel_ByteArray* kernel_witness_get_stack_item(const kernel_TransactionWitness* _witness, uint32_t index)
+kernel_ByteArray* kernel_witness_get_stack_item(const kernel_TransactionWitness* _witness, size_t index)
 {
     const auto* witness = cast_const_witness(_witness);
 
