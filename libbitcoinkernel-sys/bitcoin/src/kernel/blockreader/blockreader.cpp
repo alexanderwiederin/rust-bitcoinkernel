@@ -2,20 +2,19 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "chain.h"
-#include "kernel/bitcoinkernel.h"
-#include "kernel/cs_main.h"
-#include "logging.h"
-#include "primitives/transaction.h"
-#include "script/script.h"
-#include "streams.h"
+#include <chain.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <kernel/bitcoinkernel.h>
 #include <kernel/blockreader/blockreader.h>
 #include <kernel/blockreader/reader_impl.h>
-#include <memory>
+#include <kernel/cs_main.h>
+#include <logging.h>
+#include <primitives/transaction.h>
+#include <script/script.h>
+#include <streams.h>
 
 using namespace blockreader;
 
@@ -25,12 +24,6 @@ BlockReader* cast_blockreader(kernel_blockreader_Reader* reader)
 {
     assert(reader);
     return reinterpret_cast<BlockReader*>(reader);
-}
-
-CBlock* cast_block(kernel_Block* block)
-{
-    assert(block);
-    return reinterpret_cast<CBlock*>(block);
 }
 
 const BlockReader* cast_const_blockreader(const kernel_blockreader_Reader* reader)
@@ -144,109 +137,10 @@ kernel_blockreader_IBDStatus kernel_blockreader_get_ibd_status(const kernel_bloc
     return cast_ibd_status(br->GetIBDStatus());
 }
 
-kernel_BlockIndex* kernel_blockreader_get_best_block_index(const kernel_blockreader_Reader* reader)
+const kernel_BlockIndex* kernel_blockreader_get_best_block_index(const kernel_blockreader_Reader* reader)
 {
     auto br = cast_const_blockreader(reader);
     return reinterpret_cast<kernel_BlockIndex*>(br->GetBestBlock());
-}
-
-kernel_BlockHash* kernel_blockreader_block_get_hash(kernel_Block* block)
-{
-    auto cblock = cast_block(block);
-    auto hash = cblock->GetHash();
-
-    auto block_hash = new kernel_BlockHash{};
-    std::memcpy(block_hash->hash, hash.begin(), sizeof(hash));
-    return block_hash;
-}
-
-kernel_BlockIndex* kernel_blockreader_get_block_index_by_height(
-    const kernel_blockreader_Reader* reader,
-    int32_t height)
-{
-    auto br = cast_const_blockreader(reader);
-    return reinterpret_cast<kernel_BlockIndex*>(br->GetBlockIndexByHeight(height));
-}
-
-kernel_BlockHash* kernel_blockreader_get_genesis_hash(const kernel_blockreader_Reader* reader)
-{
-    auto br = cast_const_blockreader(reader);
-
-    uint256 genesis_hash = br->GetGenesisHash();
-
-    auto hash = new kernel_BlockHash{};
-
-    std::memcpy(hash->hash, genesis_hash.begin(), sizeof(genesis_hash));
-
-    return hash;
-}
-
-bool kernel_blockreader_is_block_in_active_chain(
-    const kernel_blockreader_Reader* reader,
-    const kernel_BlockIndex* block_index)
-{
-    auto br = cast_const_blockreader(reader);
-    auto bi = reinterpret_cast<const CBlockIndex*>(block_index);
-
-    auto cblock_at_height = br->GetBlockIndexByHeight(bi->nHeight);
-    return cblock_at_height->GetBlockHash() == bi->GetBlockHash();
-}
-
-kernel_ByteArray* kernel_blockreader_get_headers_raw(
-    const kernel_blockreader_Reader* reader,
-    int32_t start_height,
-    size_t count)
-{
-    try {
-        if (count == 0) {
-            return nullptr;
-        }
-
-        auto br = cast_const_blockreader(reader);
-
-        std::vector<unsigned char> header_data;
-        header_data.reserve(count * 80);
-
-        DataStream stream;
-        size_t retrieved = 0;
-
-        for (size_t i = 0; i < count; i++) {
-            int32_t height = start_height + static_cast<int32_t>(i);
-
-            auto block_index = br->GetBlockIndexByHeight(height);
-            if (!block_index) {
-                break;
-            }
-
-            const auto* cblock_index = reinterpret_cast<const CBlockIndex*>(block_index);
-            const CBlockHeader& header = cblock_index->GetBlockHeader();
-
-            stream = DataStream{};
-            stream << header;
-
-            if (stream.size() != 80) {
-                LogError("Header size error at height %d", height);
-                break;
-            }
-
-            std::vector<unsigned char> stream_data(stream.size());
-            std::memcpy(stream_data.data(), stream.data(), stream.size());
-            header_data.insert(header_data.end(), stream_data.begin(), stream_data.end());
-            retrieved++;
-        }
-
-        if (retrieved == 0) return nullptr;
-
-        auto batch = new kernel_ByteArray{};
-        batch->size = header_data.size();
-        batch->data = new unsigned char[batch->size];
-        std::memcpy(batch->data, header_data.data(), batch->size);
-
-        return batch;
-    } catch (const std::exception& e) {
-        LogError("Failed to get headers raw: %s", e.what());
-        return nullptr;
-    }
 }
 
 kernel_ByteArray* kernel_block_index_get_raw_header(
@@ -277,36 +171,6 @@ uint32_t kernel_block_index_get_timestamp(const kernel_BlockIndex* block_index)
     return cblock_index->GetBlockHeader().nTime;
 }
 
-uint32_t kernel_block_index_get_transaction_count(const kernel_BlockIndex* block_index)
-{
-    const auto* cblock_index = cast_const_block_index(block_index);
-    return cblock_index->nTx;
-}
-
-kernel_BlockIndex* kernel_blockreader_get_block_index_by_hash(
-    const kernel_blockreader_Reader* reader,
-    const kernel_BlockHash* hash)
-{
-    auto br = cast_const_blockreader(reader);
-    uint256 hash_uint256;
-    std::memcpy(hash_uint256.begin(), hash->hash, 32);
-    return reinterpret_cast<kernel_BlockIndex*>(br->GetBlockIndexByHash(hash_uint256));
-}
-
-kernel_BlockHash* kernel_block_index_get_previous_block_hash(const kernel_BlockIndex* block_index)
-{
-    auto* bi = cast_const_block_index(block_index);
-
-    CBlockIndex* prev_index = bi->pprev;
-    if (!prev_index) return nullptr;
-
-    auto prev_block_hash = prev_index->GetBlockHash();
-
-    auto block_hash = new kernel_BlockHash{};
-    std::memcpy(block_hash->hash, prev_block_hash.begin(), sizeof(prev_block_hash));
-    return block_hash;
-}
-
 uint32_t kernel_block_index_get_version(const kernel_BlockIndex* block_index)
 {
     auto* bi = cast_const_block_index(block_index);
@@ -314,7 +178,7 @@ uint32_t kernel_block_index_get_version(const kernel_BlockIndex* block_index)
     return bi->nVersion;
 }
 
-kernel_BlockHash* kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index)
+const kernel_BlockHash* kernel_block_index_get_merkle_root(const kernel_BlockIndex* block_index)
 {
     auto* bi = cast_const_block_index(block_index);
 
@@ -402,7 +266,7 @@ bool kernel_block_index_has_witness(const kernel_BlockIndex* block_index)
     return bi->nStatus & BLOCK_OPT_WITNESS;
 }
 
-kernel_BlockPointer* kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index_)
+const kernel_BlockPointer* kernel_blockreader_get_block_by_index(const kernel_blockreader_Reader* reader, const kernel_BlockIndex* block_index_)
 {
     auto br = cast_const_blockreader(reader);
     const CBlockIndex* block_index{cast_const_block_index(block_index_)};
@@ -413,10 +277,10 @@ kernel_BlockPointer* kernel_blockreader_get_block_by_index(const kernel_blockrea
         return nullptr;
     }
 
-    return reinterpret_cast<kernel_BlockPointer*>(block_opt.value());
+    return reinterpret_cast<const kernel_BlockPointer*>(block_opt.value());
 }
 
-uint32_t kernel_block_pointer_get_transaction_count(const kernel_BlockPointer* block_pointer)
+size_t kernel_block_pointer_get_transaction_count(const kernel_BlockPointer* block_pointer)
 {
     const auto* block = cast_const_block_pointer(block_pointer);
     return block->vtx.size();
@@ -467,7 +331,7 @@ int64_t kernel_transaction_get_value_out(const kernel_Transaction* _transaction)
     return transaction->GetValueOut();
 }
 
-int64_t kernel_transaction_get_total_size(const kernel_Transaction* _transaction)
+size_t kernel_transaction_get_total_size(const kernel_Transaction* _transaction)
 {
     const auto* transaction = cast_const_transaction(_transaction);
 
@@ -488,7 +352,7 @@ bool kernel_transaction_has_witness(const kernel_Transaction* _transaction)
     return transaction->HasWitness();
 }
 
-uint32_t kernel_transaction_get_input_count(const kernel_Transaction* _transaction)
+size_t kernel_transaction_get_input_count(const kernel_Transaction* _transaction)
 {
     const auto* transaction = cast_const_transaction(_transaction);
     return transaction->vin.size();
@@ -534,18 +398,6 @@ const kernel_TransactionScriptSig* kernel_transaction_input_get_script_sig(const
     return reinterpret_cast<const kernel_TransactionScriptSig*>(&input->scriptSig);
 }
 
-kernel_ByteArray* kernel_copy_script_sig_data(const kernel_TransactionScriptSig* _script_sig)
-{
-    const auto* script = cast_const_script_sig(_script_sig);
-
-    auto byte_array = new kernel_ByteArray{};
-    byte_array->size = script->size();
-    byte_array->data = new unsigned char[byte_array->size];
-    std::memcpy(byte_array->data, script->data(), byte_array->size);
-
-    return byte_array;
-}
-
 bool kernel_script_sig_is_push_only(const kernel_TransactionScriptSig* _script_sig)
 {
     const auto* script = cast_const_script_sig(_script_sig);
@@ -574,7 +426,7 @@ const kernel_TransactionWitness* kernel_transaction_input_get_witness(const kern
     return reinterpret_cast<const kernel_TransactionWitness*>(&input->scriptWitness);
 }
 
-uint32_t kernel_witness_get_stack_size(const kernel_TransactionWitness* _witness)
+size_t kernel_witness_get_stack_size(const kernel_TransactionWitness* _witness)
 {
     const auto* witness = cast_const_witness(_witness);
 
@@ -607,7 +459,7 @@ bool kernel_witness_is_null(const kernel_TransactionWitness* _witness)
     return witness->IsNull();
 }
 
-uint32_t kernel_transaction_get_output_count(const kernel_Transaction* _transaction)
+size_t kernel_transaction_get_output_count(const kernel_Transaction* _transaction)
 {
     const auto* transaction = cast_const_transaction(_transaction);
 
