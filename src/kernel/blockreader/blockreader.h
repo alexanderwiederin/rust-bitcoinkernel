@@ -108,7 +108,7 @@ BITCOINKERNEL_API const kernel_TransactionWitness* BITCOINKERNEL_WARN_UNUSED_RES
 
 BITCOINKERNEL_API size_t BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_size(const kernel_TransactionWitness* witness) BITCOINKERNEL_ARG_NONNULL(1);
 
-BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_item(const kernel_TransactionWitness* witness, uint32_t index) BITCOINKERNEL_ARG_NONNULL(1);
+BITCOINKERNEL_API kernel_ByteArray* BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_get_stack_item(const kernel_TransactionWitness* witness, size_t index) BITCOINKERNEL_ARG_NONNULL(1);
 
 BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT kernel_witness_is_null(const kernel_TransactionWitness* witness) BITCOINKERNEL_ARG_NONNULL(1);
 
