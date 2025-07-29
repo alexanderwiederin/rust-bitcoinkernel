@@ -773,7 +773,7 @@ impl TransactionRef {
         unsafe { kernel_transaction_get_value_out(self.inner) }
     }
 
-    pub fn total_size(&self) -> i64 {
+    pub fn total_size(&self) -> usize {
         unsafe { kernel_transaction_get_total_size(self.inner) }
     }
 
@@ -875,11 +875,11 @@ pub struct WitnessRef {
 }
 
 impl WitnessRef {
-    pub fn stack_size(&self) -> u32 {
+    pub fn stack_size(&self) -> usize {
         unsafe { kernel_witness_get_stack_size(self.inner) }
     }
 
-    pub fn stack_item(&self, index: u32) -> Option<Vec<u8>> {
+    pub fn stack_item(&self, index: usize) -> Option<Vec<u8>> {
         let raw_item = unsafe { kernel_witness_get_stack_item(self.inner, index) };
         let vec = unsafe {
             std::slice::from_raw_parts((*raw_item).data, (*raw_item).size.try_into().unwrap())
@@ -900,6 +900,18 @@ pub struct ScriptSigRef {
 }
 
 impl ScriptSigRef {
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            let data_ptr = kernel_script_sig_get_data(self.inner);
+            let size = kernel_script_sig_get_size(self.inner);
+            if data_ptr == std::ptr::null() || size == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(data_ptr, size)
+            }
+        }
+    }
+
     pub fn is_push_only(&self) -> bool {
         unsafe { kernel_script_sig_is_push_only(self.inner) }
     }
@@ -994,7 +1006,7 @@ pub struct BlockIndex {
 unsafe impl Send for BlockIndex {}
 unsafe impl Sync for BlockIndex {}
 
-/// A type for a Block hash.
+/// A type for a hash.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Hash {
     pub hash: [u8; 32],
