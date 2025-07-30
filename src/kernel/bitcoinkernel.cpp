@@ -1237,4 +1237,36 @@ kernel_BlockIndex* kernel_block_index_get_best_header(const kernel_Context* cont
     return reinterpret_cast<kernel_BlockIndex*>(WITH_LOCK(chainman->GetMutex(), return chainman->m_best_header));
 }
 
+bool kernel_accept_block(const kernel_Context* context, kernel_Block* block_, kernel_ChainstateManager* chainman_)
+{
+    try {
+        auto chainman{cast_chainstate_manager(chainman_)};
+        auto blockptr{cast_cblocksharedpointer(block_)};
+
+        CBlockIndex* pindex = nullptr;
+        BlockValidationState state;
+        bool fNewBlock = false;
+
+        LOCK(cs_main);
+
+        bool success = chainman->AcceptBlock(
+                *blockptr,
+                state,
+                &pindex,
+                true,
+                nullptr,
+                &fNewBlock,
+                true
+        );
+
+        if (!success) {
+            LogDebug(BCLog::KERNEL, "AcceptBlock failed %s", state.ToString());
+        }
+
+        return success;
+    } catch (const std::exception& e) {
+        LogError("Failed to accept block: %s", e.what());
+        return false;
+    }
+}
 
