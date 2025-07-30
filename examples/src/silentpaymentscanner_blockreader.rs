@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::env;
 use std::fmt;
+use std::fmt::format;
 use std::process;
 
 use bitcoin::hashes::Hash;
@@ -37,6 +39,40 @@ fn vec_to_hex_string(data: &Vec<u8>) -> String {
         hex_string.push_str(&format!("{:02x}", byte));
     }
     hex_string
+}
+
+#[derive(Debug)]
+pub struct ProcessingError {
+    pub height: i32,
+    pub tx_index: Option<usize>,
+    pub tx_id: Option<String>,
+    pub input_index: Option<usize>,
+    pub error_type: ErrorType,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorType {
+    BlockRead,
+    UndoDataRead,
+    TransactionAccess,
+    PrevoutAccess,
+    ScanTransaction,
+    CountMismatch,
+    NoValidPublicKeys,
+    TweakDataCalculation,
+    SharedSecretCalculation,
+    PublicKeyExtraction,
+    InvalidTxid,
+    InvalidXOnlyPublicKey,
+    TransactionScan,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScanContext {
+    pub height: i32,
+    pub tx_index: usize,
+    pub tx_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -111,111 +147,257 @@ fn parse_keys() -> (Receiver, SecretKey) {
     (receiver, scan_key.inner)
 }
 
-fn scan_tx(receiver: &Receiver, secret_scan_key: &SecretKey, scan_tx_helper: &ScanTxHelper) {
-    let input_pub_keys: Vec<PublicKey> = scan_tx_helper
-        .ins
-        .iter()
-        .filter_map(|input| {
-            get_pubkey_from_input(&input.script_sig, &input.witness, &input.prevout).unwrap()
-        })
-        .collect();
+fn scan_tx(
+    receiver: &Receiver,
+    secret_scan_key: &SecretKey,
+    scan_tx_helper: &ScanTxHelper,
+    context: &ScanContext,
+    errors: &mut Vec<ProcessingError>,
+) -> bool {
+    let mut input_pub_keys = Vec::new();
+    let mut pubkey_extraction_errors = 0;
+
+    for (input_index, input) in scan_tx_helper.ins.iter().enumerate() {
+        match get_pubkey_from_input(&input.script_sig, &input.witness, &input.prevout) {
+            Ok(Some(pubkey)) => input_pub_keys.push(pubkey),
+            Ok(None) => {
+                errors.push(ProcessingError {
+                    height: context.height,
+                    tx_index: Some(context.tx_index),
+                    tx_id: Some(context.tx_id.clone()),
+                    input_index: Some(input_index),
+                    error_type: ErrorType::PublicKeyExtraction,
+                    message: format!("No valid public key found in input {}", input_index),
+                });
+            }
+            Err(e) => {
+                errors.push(ProcessingError {
+                    height: context.height,
+                    tx_index: Some(context.tx_index),
+                    tx_id: Some(context.tx_id.clone()),
+                    input_index: Some(input_index),
+                    error_type: ErrorType::PublicKeyExtraction,
+                    message: format!(
+                        "Failed to extract public key from input {}: {}",
+                        input_index, e
+                    ),
+                });
+                pubkey_extraction_errors += 1;
+            }
+        }
+    }
 
     if input_pub_keys.is_empty() {
-        println!("No valid public keys found in transaction");
-        return;
+        errors.push(ProcessingError {
+            height: context.height,
+            tx_index: Some(context.tx_index),
+            tx_id: Some(context.tx_id.clone()),
+            input_index: None,
+            error_type: ErrorType::NoValidPublicKeys,
+            message: format!(
+                "No valid public keys found in transaction (feiled ot extract from {} inputs)",
+                pubkey_extraction_errors,
+            ),
+        });
+        return false;
+    }
+
+    let mut outpoints_data = Vec::new();
+    for (input_index, input) in scan_tx_helper.ins.iter().enumerate() {
+        match bitcoin::Txid::from_slice(&input.prevout_data.0) {
+            Ok(txid) => {
+                outpoints_data.push((txid.to_string(), input.prevout_data.1));
+            }
+            Err(e) => {
+                errors.push(ProcessingError {
+                    height: context.height,
+                    tx_index: Some(context.tx_index),
+                    tx_id: Some(context.tx_id.clone()),
+                    input_index: Some(input_index),
+                    error_type: ErrorType::InvalidTxid,
+                    message: format!(
+                        "Invalid transaction ID format for input {}: {}",
+                        input_index, e
+                    ),
+                });
+                return false;
+            }
+        }
     }
 
     let pubkeys_ref: Vec<&PublicKey> = input_pub_keys.iter().collect();
-    let outpoints_data: Vec<_> = scan_tx_helper
-        .ins
-        .iter()
-        .map(|input| {
-            let txid = bitcoin::Txid::from_slice(&input.prevout_data.0)
-                .unwrap()
-                .to_string();
-            (txid, input.prevout_data.1)
-        })
-        .collect();
-
     let tweak_data = match calculate_tweak_data(&pubkeys_ref, &outpoints_data) {
         Ok(data) => data,
         Err(e) => {
-            println!("Failed to calculate tweak data: {:?}", e);
-            return;
+            errors.push(ProcessingError {
+                height: context.height,
+                tx_index: Some(context.tx_index),
+                tx_id: Some(context.tx_id.clone()),
+                input_index: None,
+                error_type: ErrorType::TweakDataCalculation,
+                message: format!("Failed to calculate tweak data: {:?}", e),
+            });
+            return false;
         }
     };
 
     let ecdh_shared_secret = match calculate_shared_secret(tweak_data, *secret_scan_key) {
         Ok(secret) => secret,
         Err(e) => {
-            println!("Failed to calculate shared secret: {}", e);
-            return;
+            errors.push(ProcessingError {
+                height: context.height,
+                tx_index: Some(context.tx_index),
+                tx_id: Some(context.tx_id.clone()),
+                input_index: None,
+                error_type: ErrorType::SharedSecretCalculation,
+                message: format!("Failed to calculate shared secret: {}", e),
+            });
+            return false;
         }
     };
 
-    let pubkeys_to_check: Vec<XOnlyPublicKey> = scan_tx_helper
-        .outs
-        .iter()
-        .filter_map(|script_pubkey| {
-            if let Ok(res) = XOnlyPublicKey::from_slice(&script_pubkey[2..]) {
-                Some(res)
-            } else {
-                None
-            }
-        })
-        .collect();
+    let mut pubkeys_to_check = Vec::new();
+    let mut invalid_pubkey_count = 0;
 
-    if let Ok(res) = receiver.scan_transaction(&ecdh_shared_secret, pubkeys_to_check) {
-        println!("\nres: {:?}\n", res);
+    for (output_index, script_pubkey) in scan_tx_helper.outs.iter().enumerate() {
+        if script_pubkey.len() < 2 {
+            errors.push(ProcessingError {
+                height: context.height,
+                tx_index: Some(context.tx_index),
+                tx_id: Some(context.tx_id.clone()),
+                input_index: None,
+                error_type: ErrorType::InvalidXOnlyPublicKey,
+                message: format!(
+                    "Script pubkey too short for output {}: {} bytes",
+                    output_index,
+                    script_pubkey.len()
+                ),
+            });
+            invalid_pubkey_count += 1;
+            continue;
+        }
+
+        match XOnlyPublicKey::from_slice(&script_pubkey[2..]) {
+            Ok(pubkey) => pubkeys_to_check.push(pubkey),
+            Err(e) => {
+                errors.push(ProcessingError {
+                    height: context.height,
+                    tx_index: Some(context.tx_index),
+                    tx_id: Some(context.tx_id.clone()),
+                    input_index: None,
+                    error_type: ErrorType::InvalidXOnlyPublicKey,
+                    message: format!(
+                        "Invalid XOnlyPublicKey format for output {}, {}",
+                        output_index, e
+                    ),
+                });
+                invalid_pubkey_count += 1;
+            }
+        }
+    }
+
+    if invalid_pubkey_count > 0 && pubkeys_to_check.is_empty() {
+        errors.push(ProcessingError {
+            height: context.height,
+            tx_index: Some(context.tx_index),
+            tx_id: Some(context.tx_id.clone()),
+            input_index: None,
+            error_type: ErrorType::InvalidXOnlyPublicKey,
+            message: format!(
+                "No valid XOnlyPublicKeys found in {} outputs",
+                scan_tx_helper.outs.len()
+            ),
+        });
+        return false;
+    }
+
+    match receiver.scan_transaction(&ecdh_shared_secret, pubkeys_to_check) {
+        Ok(res) => {
+            println!("/nres {:?}\n", res);
+            true
+        }
+        Err(e) => {
+            errors.push(ProcessingError {
+                height: context.height,
+                tx_index: Some(context.tx_index),
+                tx_id: Some(context.tx_id.clone()),
+                input_index: None,
+                error_type: ErrorType::TransactionScan,
+                message: format!("Transaction scan failed: {}", e),
+            });
+            false
+        }
     }
 }
 
-fn process_block(block_index: &BlockReaderIndex, receiver: &Receiver, secret_scan_key: &SecretKey) {
+fn process_block_with_error_collection(
+    block_index: &BlockReaderIndex,
+    receiver: &Receiver,
+    secret_scan_key: &SecretKey,
+) -> Vec<ProcessingError> {
+    let mut errors = Vec::new();
+    let height = block_index.height();
+
     let block_ref = match block_index.block() {
         Ok(block) => block,
         Err(e) => {
-            eprint!(
-                "Failed to read block at height {}: {}",
-                block_index.height(),
-                e
-            );
-            return;
+            errors.push(ProcessingError {
+                height,
+                tx_index: None,
+                tx_id: None,
+                input_index: None,
+                error_type: ErrorType::BlockRead,
+                message: e.to_string(),
+            });
+            return errors;
         }
     };
 
     let block_undo = match block_index.block_undo() {
         Ok(undo) => undo,
         Err(e) => {
-            eprint!(
-                "Failed to read undo data at height {}: {}",
-                block_index.height(),
-                e
-            );
-            return;
+            errors.push(ProcessingError {
+                height,
+                tx_index: None,
+                tx_id: None,
+                input_index: None,
+                error_type: ErrorType::UndoDataRead,
+                message: e.to_string(),
+            });
+            return errors;
         }
     };
 
     let tx_count = block_ref.transaction_count();
     let undo_tx_count = block_undo.transaction_count() as usize;
 
-    if tx_count > 1 {
-        assert_eq!(
-            tx_count - 1,
-            undo_tx_count,
-            "Transaction count mismatch at height {}",
-            block_index.height()
-        );
+    if tx_count > 1 && tx_count - 1 != undo_tx_count {
+        errors.push(ProcessingError {
+            height,
+            tx_index: None,
+            tx_id: None,
+            input_index: None,
+            error_type: ErrorType::CountMismatch,
+            message: format!(
+                "Transaction cout mismatch: {} vs {}",
+                tx_count - 1,
+                undo_tx_count
+            ),
+        });
     }
 
     for tx_index in 1..tx_count {
         let transaction = match block_ref.transaction(tx_index) {
             Some(tx) => tx,
             None => {
-                eprint!(
-                    "Failed to get transaction {} at height {}",
-                    tx_index,
-                    block_index.height()
-                );
+                errors.push(ProcessingError {
+                    height,
+                    tx_index: Some(tx_index),
+                    tx_id: None,
+                    input_index: None,
+                    error_type: ErrorType::TransactionAccess,
+                    message: format!("Failed to get transaction {}", tx_index),
+                });
                 continue;
             }
         };
@@ -256,13 +438,14 @@ fn process_block(block_index: &BlockReaderIndex, receiver: &Receiver, secret_sca
             let prevout = match block_undo.prevout_by_index(undo_tx_index, input_index as u64) {
                 Ok(prevout) => prevout,
                 Err(e) => {
-                    eprintln!(
-                        "Failed to get prevout for input {} in tx {} at height {}: {}",
-                        input_index,
-                        tx_index,
-                        block_index.height(),
-                        e
-                    );
+                    errors.push(ProcessingError {
+                        height,
+                        tx_index: Some(tx_index),
+                        tx_id: Some(transaction.hash().display_order()),
+                        input_index: Some(input_index),
+                        error_type: ErrorType::PrevoutAccess,
+                        message: e.to_string(),
+                    });
                     continue;
                 }
             };
@@ -292,14 +475,79 @@ fn process_block(block_index: &BlockReaderIndex, receiver: &Receiver, secret_sca
                 prevout_data: (tx_id.hash.to_vec(), vout),
             });
         }
-
-        scan_tx(receiver, secret_scan_key, &scan_tx_helper); // todo: check clone()
-        println!(
-            "Processed transaction {} at height {} with {} inputs and {} outputs",
+        let scan_context = ScanContext {
             tx_index,
-            block_index.height(),
-            scan_tx_helper.ins.len(),
-            scan_tx_helper.outs.len()
+            height,
+            tx_id: transaction.hash().display_order(),
+        };
+
+        let scan_success = scan_tx(
+            receiver,
+            secret_scan_key,
+            &scan_tx_helper,
+            &scan_context,
+            &mut errors,
+        );
+        if scan_success {
+            println!(
+                "Processed transaction {} at height {} with {} inputs and {} outputs",
+                tx_index,
+                height,
+                scan_tx_helper.ins.len(),
+                scan_tx_helper.outs.len()
+            );
+        }
+    }
+
+    errors
+}
+
+fn log_all_errors(all_errors: &[ProcessingError]) {
+    if all_errors.is_empty() {
+        println!("✅ No errors encountered during processing!");
+        return;
+    }
+    println!(
+        "\n🚨 Processing completed with {} errors:",
+        all_errors.len()
+    );
+    let mut error_counts: HashMap<ErrorType, usize> = HashMap::new();
+    for error in all_errors {
+        *error_counts.entry(error.error_type.clone()).or_insert(0) += 1;
+    }
+    println!("\n📊 Error Summary:");
+    for (error_type, count) in &error_counts {
+        println!("  {:?}: {} occurrences", error_type, count);
+    }
+    println!("\n📝 Detailed Error Log:");
+    for (i, error) in all_errors.iter().enumerate() {
+        let mut location_parts = Vec::new();
+
+        if let Some(tx) = error.tx_index {
+            location_parts.push(format!("tx:{}", tx));
+        }
+
+        if let Some(tx_id) = &error.tx_id {
+            location_parts.push(format!("id:{}", tx_id));
+        }
+
+        if let Some(input) = error.input_index {
+            location_parts.push(format!("input:{}", input));
+        }
+
+        let location = if location_parts.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", location_parts.join(" "))
+        };
+
+        println!(
+            "{}. Height {}{}: {} - {}",
+            i + 1,
+            error.height,
+            location,
+            format!("{:?}", error.error_type),
+            error.message
         );
     }
 }
@@ -316,16 +564,33 @@ fn main() {
     let data_dir = args[1].clone();
 
     let reader = BlockReader::new(&data_dir, ChainType::SIGNET).unwrap();
+    let mut all_errors = Vec::new();
+
     if let Some(best_block) = reader.best_validated_block() {
         let (receiver, secret_scan_key) = parse_keys();
         let mut current_block_index = best_block;
 
-        process_block(&current_block_index, &receiver, &secret_scan_key);
+        let mut block_errors =
+            process_block_with_error_collection(&current_block_index, &receiver, &secret_scan_key);
+        all_errors.append(&mut block_errors);
 
-        while let Ok(prev_block) = current_block_index.previous() {
-            process_block(&prev_block, &receiver, &secret_scan_key);
-
-            current_block_index = prev_block;
+        for _i in 0..1 {
+            match current_block_index.previous() {
+                Ok(previous_block) => {
+                    let mut block_errors = process_block_with_error_collection(
+                        &previous_block,
+                        &receiver,
+                        &secret_scan_key,
+                    );
+                    all_errors.append(&mut block_errors);
+                    current_block_index = previous_block;
+                }
+                Err(_) => {
+                    continue;
+                }
+            }
         }
+
+        log_all_errors(&all_errors);
     }
 }
