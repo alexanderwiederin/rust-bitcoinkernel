@@ -1148,6 +1148,10 @@ impl ChainstateManager {
             marker: PhantomData,
         }
     }
+
+    pub fn accept_block(&self, block: &Block) -> bool {
+        unsafe { kernel_accept_block(self.context.inner, block.inner, self.inner) }
+    }
 }
 
 impl Drop for ChainstateManager {
