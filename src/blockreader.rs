@@ -33,7 +33,6 @@ pub enum BlockReaderError {
     Internal(String),
     InvalidPath(String),
     BlockNotFound(BlockIdentifier),
-    UndoDataNotFound(i32),
     ReadError(i32),
     ChainParamsError(String),
     TransactionIndexOutOfRange(i32, usize),
@@ -59,9 +58,6 @@ impl std::fmt::Display for BlockReaderError {
                 "Transaction index {} out of range at height {}",
                 index, height
             ),
-            BlockReaderError::UndoDataNotFound(height) => {
-                write!(f, "Undo data at height {} not found", height)
-            }
         }
     }
 }
