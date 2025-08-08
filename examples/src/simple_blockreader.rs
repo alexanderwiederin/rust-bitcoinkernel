@@ -1,3 +1,5 @@
+use std::{env, process};
+
 use bitcoinkernel::{BlockReader, BlockReaderIndex, ChainType};
 use env_logger;
 use log::{info, warn};
@@ -39,7 +41,7 @@ fn process_block(index: &BlockReaderIndex, block_number: usize) {
 
             let mut inputs_value = 0i64;
             for prevout_idx in 0..undo_size {
-                if let Ok(prevout) = block_undo.prevout_by_index(undo_tx_idx, prevout_idx) {
+                if let Some(prevout) = block_undo.prevout_by_index(undo_tx_idx, prevout_idx) {
                     inputs_value += prevout.value();
                 }
             }
@@ -58,41 +60,21 @@ fn process_block(index: &BlockReaderIndex, block_number: usize) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logger();
+    let args: Vec<String> = env::args().collect();
 
-    info!("Initializing BlockReader...");
-    let reader = BlockReader::new(
-        "/Users/xyz/Library/Application Support/Bitcoin/signet",
-        ChainType::SIGNET,
-    )
-    .unwrap();
-
-    let mut current_index = reader.best_validated_block_index().unwrap();
-
-    for i in 0..10 {
-        process_block(&current_index, i + 1);
-
-        match current_index.previous() {
-            Ok(prev) => current_index = prev,
-            Err(e) => {
-                warn!("Reached end of chain or error at block {}: {}", i + 1, e);
-                break;
-            }
-        }
+    if args.len() < 2 {
+        eprintln!("Usage: {} <path_to_data_dir>", args[0]);
+        process::exit(1);
     }
 
-    info!("\n");
-    info!("======  Starting iterator approach  ======");
-    info!("\n");
+    let data_dir = args[1].clone();
+    let reader = BlockReader::new(&data_dir, ChainType::SIGNET).unwrap();
 
     let start_index = reader.best_validated_block_index().unwrap();
 
     for (i, block_index) in start_index.iter_backwards().take(10).enumerate() {
         process_block(&block_index, i);
     }
-
-    info!("\n");
-    info!("======  Starting while iterator approach  ======");
-    info!("\n");
 
     let start_index_2 = reader.best_validated_block_index().unwrap();
 
@@ -103,18 +85,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         info!("block height: {}", block_index.height());
     }
-
-    // Iterator Integration demo
-
-    let best_block_index = reader.best_validated_block_index().unwrap();
-
-    let _ = best_block_index
-        .iter_backwards()
-        .take(100)
-        .filter(|idx| idx.has_block_data())
-        .map(|idx| idx.block().unwrap())
-        .filter(|block| block.transaction_count() > 1000)
-        .collect::<Vec<_>>();
 
     Ok(())
 }

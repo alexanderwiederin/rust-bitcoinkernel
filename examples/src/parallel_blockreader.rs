@@ -3,8 +3,8 @@ use bitcoinkernel::{
 };
 use env_logger;
 use log::info;
-use std::thread;
 use std::time::Instant;
+use std::{env, process, thread};
 
 fn setup_logger() {
     env_logger::Builder::from_default_env()
@@ -13,21 +13,6 @@ fn setup_logger() {
         .format_module_path(false)
         .format_target(false)
         .init();
-}
-
-fn collect_block_range(
-    start_index: BlockReaderIndex,
-    count: usize,
-) -> Result<Vec<BlockReaderIndex>, BlockReaderError> {
-    let mut indexes = Vec::with_capacity(count);
-    let mut current = start_index;
-
-    for _ in 0..count {
-        indexes.push(current.clone());
-        current = current.previous()?;
-    }
-
-    Ok(indexes)
 }
 
 fn analyze_block(
@@ -67,16 +52,19 @@ fn parallel_chain_analysis(
     start_index: BlockReaderIndex,
     num_blocks: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("=== Parallel Chain Analysis ===");
+    info!("=== Parallel Chain Analysis (Forward) ===");
     info!("Analyzing {} blocks using multiple threads", num_blocks);
 
     let start_time = Instant::now();
 
-    let indexes = collect_block_range(start_index, num_blocks)?;
+    let indexes = start_index
+        .iter_forwards()
+        .take(num_blocks)
+        .collect::<Vec<_>>();
     info!("Collected {} block indexes", indexes.len());
 
-    let num_threads = std::cmp::min(4, num_blocks);
-    let chunk_size = (indexes.len() + num_threads - 1) / num_threads;
+    let num_threads = std::cmp::min(4, indexes.len());
+    let chunk_size = indexes.len().div_ceil(num_threads);
 
     info!(
         "Using {} threads with ~{} blocks per thread",
@@ -146,7 +134,7 @@ fn parallel_chain_analysis(
     let total_fees: i64 = all_results.iter().map(|a| a.total_fees).sum();
     let large_tx_blocks = all_results.iter().filter(|a| a.has_large_tx).count();
 
-    info!("📊 Summary Statistics:");
+    info!("Summary Statistics:");
     info!("  Total transactions: {}", total_transactions);
     info!("  Total fees: {} BTC", satoshis_to_btc(total_fees));
     info!("  Blocks with large transactions: {}", large_tx_blocks);
@@ -162,18 +150,17 @@ fn sequential_chain_analysis(
     start_index: BlockReaderIndex,
     num_blocks: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("=== Sequential Chain Analysis (for comparison) ===");
+    info!("=== Sequential Chain Analysis (Forward, for comparison) ===");
 
     let start_time = Instant::now();
-    let mut current = start_index;
+    let iterator = start_index.iter_forwards();
 
-    for i in 0..num_blocks {
-        let analysis = analyze_block(current.clone(), i)?;
+    for (i, current) in iterator.take(num_blocks).enumerate() {
+        let analysis = analyze_block(current, i)?;
         info!(
             "Sequential: Block {} (height {}) complete",
             analysis.block_num, analysis.height
         );
-        current = current.previous()?;
     }
 
     let elapsed = start_time.elapsed();
@@ -206,7 +193,7 @@ fn calculate_block_fees(block: &BlockRef, undo: &BlockUndoRef) -> Result<i64, Bl
 
             let mut inputs_value = 0i64;
             for prevout_idx in 0..undo_size {
-                if let Ok(prevout) = undo.prevout_by_index(undo_tx_idx, prevout_idx) {
+                if let Some(prevout) = undo.prevout_by_index(undo_tx_idx, prevout_idx) {
                     inputs_value += prevout.value();
                 }
             }
@@ -238,29 +225,38 @@ fn satoshis_to_btc(sats: i64) -> f64 {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logger();
+    let args: Vec<String> = env::args().collect();
 
-    let reader = BlockReader::new(
-        "/Users/xyz/Library/Application Support/Bitcoin/signet",
-        ChainType::SIGNET,
-    )?;
+    if args.len() < 2 {
+        eprintln!("Usage: {} <path_to_data_dir>", args[0]);
+        process::exit(1);
+    }
 
-    let start_index = reader
+    let data_dir = args[1].clone();
+    let reader = BlockReader::new(&data_dir, ChainType::SIGNET).unwrap();
+
+    let best_index = reader
         .best_validated_block_index()
         .ok_or("No validated blocks found")?;
 
+    let num_blocks = 100;
+
+    let start_height = best_index.height().saturating_sub(num_blocks);
+    let start_index = reader
+        .block_index_at(start_height)
+        .ok_or("Could not find starting block index")?;
+
     info!(
-        "🚀 Starting multithreaded block analysis from height: {}",
+        "Starting multithreaded block analysis (forward) from height: {}",
         start_index.height()
     );
 
-    let num_blocks = 100;
-
-    parallel_chain_analysis(start_index.clone(), num_blocks)?;
+    parallel_chain_analysis(start_index.clone(), num_blocks as usize)?;
 
     info!("\n");
-    sequential_chain_analysis(start_index, num_blocks)?;
+    sequential_chain_analysis(start_index, num_blocks as usize)?;
 
-    info!("✅ Multithreaded analysis complete!");
+    info!("Multithreaded analysis complete!");
 
     Ok(())
 }

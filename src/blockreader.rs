@@ -314,7 +314,7 @@ impl BlockRef {
     pub fn hash(&self) -> Hash {
         let hash = unsafe { kernel_block_pointer_get_hash(self.inner) };
         let res = Hash {
-            hash: unsafe { (&*hash).hash },
+            hash: unsafe { (*hash).hash },
         };
         unsafe { kernel_block_hash_destroy(hash) };
         res
@@ -371,11 +371,7 @@ impl BlockUndoRef {
         Ok(height)
     }
 
-    pub fn prevout_by_index(
-        &self,
-        transaction_index: u64,
-        prevout_index: u64,
-    ) -> Result<TxOutRef, BlockReaderError> {
+    pub fn prevout_by_index(&self, transaction_index: u64, prevout_index: u64) -> Option<TxOutRef> {
         let prev_out = unsafe {
             kernel_block_undo_copy_transaction_output_by_index(
                 // TODO: implement non copy version
@@ -387,14 +383,13 @@ impl BlockUndoRef {
         };
 
         if prev_out.is_null() {
-            return Err(BlockReaderError::OutOfBounds);
+            None
+        } else {
+            Some(TxOutRef {
+                inner: prev_out,
+                marker: PhantomData,
+            })
         }
-
-        let res = TxOutRef {
-            inner: prev_out,
-            marker: PhantomData,
-        };
-        Ok(res)
     }
 }
 
@@ -479,6 +474,10 @@ impl BlockReaderIndex {
         }
     }
 
+    pub fn is_on_best_chain(&self) -> bool {
+        unsafe { kernel_block_index_is_on_best_chain(self.reader.inner, self.inner) }
+    }
+
     pub fn height(&self) -> i32 {
         unsafe { kernel_block_index_get_height(self.inner) }
     }
@@ -487,7 +486,7 @@ impl BlockReaderIndex {
         unsafe {
             let hash_ptr = kernel_block_index_get_block_hash(self.inner);
             let result = Hash {
-                hash: (&*hash_ptr).hash,
+                hash: (*hash_ptr).hash,
             };
             kernel_block_hash_destroy(hash_ptr);
             result
@@ -584,17 +583,29 @@ impl BlockReaderIndex {
     pub fn block_undo(&self) -> Result<BlockUndoRef, BlockReaderError> {
         unsafe {
             let block_undo = kernel_blockreader_get_undo_data(self.reader.inner, self.inner);
-
             Ok(BlockUndoRef { inner: block_undo })
         }
     }
 
-    pub fn previous(&self) -> Result<BlockReaderIndex, BlockReaderError> {
+    pub fn previous(&self) -> Option<BlockReaderIndex> {
         let inner = unsafe { kernel_block_index_get_previous(self.inner) };
         if inner.is_null() {
-            return Err(BlockReaderError::BlockNotFound(self.height().to_string()));
+            return None;
         }
-        Ok(BlockReaderIndex {
+        Some(BlockReaderIndex {
+            inner,
+            reader: self.reader.clone(),
+        })
+    }
+
+    pub fn next(&self) -> Option<BlockReaderIndex> {
+        let inner = unsafe {
+            kernel_blockreader_get_block_index_by_height(self.reader.inner, self.height() + 1)
+        };
+        if inner.is_null() {
+            return None;
+        }
+        Some(BlockReaderIndex {
             inner,
             reader: self.reader.clone(),
         })
@@ -604,6 +615,13 @@ impl BlockReaderIndex {
         BlockIndexIterator {
             current: Some(self),
             direction: IterDirection::Backwards,
+        }
+    }
+
+    pub fn iter_forwards(self) -> BlockIndexIterator {
+        BlockIndexIterator {
+            current: Some(self),
+            direction: IterDirection::Forwards,
         }
     }
 
@@ -621,7 +639,7 @@ impl BlockReaderIndex {
 #[derive(Debug, Clone, Copy)]
 enum IterDirection {
     Backwards,
-    // Future: TODO: implement next() for forward iteration
+    Forwards,
 }
 
 pub struct BlockIndexIterator {
@@ -636,7 +654,11 @@ impl Iterator for BlockIndexIterator {
         match self.current.take() {
             Some(current_index) => match self.direction {
                 IterDirection::Backwards => {
-                    self.current = current_index.previous().ok();
+                    self.current = current_index.previous();
+                    Some(current_index)
+                }
+                IterDirection::Forwards => {
+                    self.current = current_index.next();
                     Some(current_index)
                 }
             },

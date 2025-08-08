@@ -9,6 +9,10 @@ name = "silentpaymentscanner"
 path = "src/silentpaymentscanner.rs"
 
 [[bin]]
+name = "silentpaymentscanner_blockreader"
+path = "src/silentpaymentscanner_blockreader.rs"
+
+[[bin]]
 name = "simple_blockreader"
 path = "src/simple_blockreader.rs"
 

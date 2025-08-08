@@ -1,3 +1,5 @@
+use std::{env, process};
+
 use bitcoinkernel::{
     BlockReader, BlockReaderError, BlockReaderIndex, BlockRef, BlockUndoRef, ChainType,
 };
@@ -41,7 +43,13 @@ fn analyze_chain(start_index: BlockReaderIndex) -> Result<(), BlockReaderError> 
             info!("Contains large transaction (>10 BTC)");
         }
 
-        current = current.previous()?;
+        match current.previous() {
+            Some(prev) => current = prev,
+            None => {
+                info!("Reached genesis block, stopping analysis");
+                break;
+            }
+        }
         blocks_analyzed += 1;
     }
 
@@ -52,7 +60,15 @@ fn compare_adjacent_blocks(index: &BlockReaderIndex) -> Result<(), BlockReaderEr
     info!("=== Comparing Adjacent Blocks ===");
 
     let current_block = index.block()?;
-    let prev_index = index.previous()?;
+
+    let prev_index = match index.previous() {
+        Some(prev) => prev,
+        None => {
+            info!("No previous block to compare (genesis block?)");
+            return Ok(());
+        }
+    };
+
     let prev_block = prev_index.block()?;
 
     let current_fees = calculate_block_fees(&current_block, &index.block_undo()?)?;
@@ -104,7 +120,7 @@ fn calculate_block_fees(block: &BlockRef, undo: &BlockUndoRef) -> Result<i64, Bl
 
             let mut inputs_value = 0i64;
             for prevout_idx in 0..undo_size {
-                if let Ok(prevout) = undo.prevout_by_index(undo_tx_idx, prevout_idx) {
+                if let Some(prevout) = undo.prevout_by_index(undo_tx_idx, prevout_idx) {
                     inputs_value += prevout.value();
                 }
             }
@@ -136,11 +152,16 @@ fn satoshis_to_btc(sats: i64) -> f64 {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logger();
+    let args: Vec<String> = env::args().collect();
 
-    let reader = BlockReader::new(
-        "/Users/xyz/Library/Application Support/Bitcoin/signet",
-        ChainType::SIGNET,
-    )?;
+    if args.len() < 2 {
+        eprintln!("Usage: {} <path_to_data_dir>", args[0]);
+        process::exit(1);
+    }
+
+    let data_dir = args[1].clone();
+
+    let reader = BlockReader::new(&data_dir, ChainType::SIGNET).unwrap();
 
     let start_index = reader
         .best_validated_block_index()
