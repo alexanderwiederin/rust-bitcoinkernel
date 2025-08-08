@@ -10,6 +10,7 @@ include(GNUInstallDirs)
 #       which are absolutely necessary.
 add_library(bitcoinkernel
   bitcoinkernel.cpp
+  blocktreestorage.cpp
   chain.cpp
   checks.cpp
   chainparams.cpp
@@ -146,3 +147,37 @@ install(TARGETS bitcoinkernel
 )
 
 install(FILES bitcoinkernel.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT libbitcoinkernel)
+
+add_library(blockreader
+  blockreader.cpp
+  reader_impl.h
+  reader_impl.cpp
+)
+
+target_link_libraries(blockreader
+  PRIVATE
+    bitcoinkernel
+)
+
+add_custom_target(libblockreader)
+add_dependencies(libblockreader blockreader)
+
+get_target_property(blockreader_type blockreader TYPE)
+if(blockreader_type STREQUAL "STATIC_LIBRARY")
+  target_compile_definitions(blockreader PUBLIC BLOCKREADER_STATIC)
+endif()
+
+install(TARGETS blockreader
+  RUNTIME
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT blockreader
+  LIBRARY
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT blockreader
+  ARCHIVE
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT blockreader
+)
+
+install(FILES blockreader.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT blockreader)
+
