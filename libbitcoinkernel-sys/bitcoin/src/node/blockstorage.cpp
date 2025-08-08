@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <kernel/blocktreestorage.h>
+#include <memory>
 #include <node/blockstorage.h>
 
 #include <arith_uint256.h>
@@ -23,6 +25,7 @@
 #include <serialize.h>
 #include <signet.h>
 #include <span.h>
+#include <stdexcept>
 #include <streams.h>
 #include <sync.h>
 #include <tinyformat.h>
@@ -31,6 +34,7 @@
 #include <util/batchpriority.h>
 #include <util/check.h>
 #include <util/fs.h>
+#include <util/obfuscation.h>
 #include <util/signalinterrupt.h>
 #include <util/strencodings.h>
 #include <util/syserror.h>
@@ -58,15 +62,6 @@ bool BlockTreeDB::ReadBlockFileInfo(int nFile, CBlockFileInfo& info)
     return Read(std::make_pair(DB_BLOCK_FILES, nFile), info);
 }
 
-bool BlockTreeDB::WriteReindexing(bool fReindexing)
-{
-    if (fReindexing) {
-        return Write(DB_REINDEX_FLAG, uint8_t{'1'});
-    } else {
-        return Erase(DB_REINDEX_FLAG);
-    }
-}
-
 void BlockTreeDB::ReadReindexing(bool& fReindexing)
 {
     fReindexing = Exists(DB_REINDEX_FLAG);
@@ -75,24 +70,6 @@ void BlockTreeDB::ReadReindexing(bool& fReindexing)
 bool BlockTreeDB::ReadLastBlockFile(int& nFile)
 {
     return Read(DB_LAST_BLOCK, nFile);
-}
-
-bool BlockTreeDB::WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*>>& fileInfo, int nLastFile, const std::vector<const CBlockIndex*>& blockinfo)
-{
-    CDBBatch batch(*this);
-    for (const auto& [file, info] : fileInfo) {
-        batch.Write(std::make_pair(DB_BLOCK_FILES, file), *info);
-    }
-    batch.Write(DB_LAST_BLOCK, nLastFile);
-    for (const CBlockIndex* bi : blockinfo) {
-        batch.Write(std::make_pair(DB_BLOCK_INDEX, bi->GetBlockHash()), CDiskBlockIndex{bi});
-    }
-    return WriteBatch(batch, true);
-}
-
-bool BlockTreeDB::WriteFlag(const std::string& name, bool fValue)
-{
-    return Write(std::make_pair(DB_FLAG, name), fValue ? uint8_t{'1'} : uint8_t{'0'});
 }
 
 bool BlockTreeDB::ReadFlag(const std::string& name, bool& fValue)
@@ -297,7 +274,7 @@ void BlockManager::FindFilesToPruneManual(
         setFilesToPrune.insert(fileNumber);
         count++;
     }
-    LogPrintf("[%s] Prune (Manual): prune_height=%d removed %d blk/rev pairs\n",
+    LogInfo("[%s] Prune (Manual): prune_height=%d removed %d blk/rev pairs",
         chain.GetRole(), last_block_can_prune, count);
 }
 
@@ -417,7 +394,7 @@ bool BlockManager::LoadBlockIndex(const std::optional<uint256>& snapshot_blockha
         // to disk, we must bootstrap the value for assumedvalid chainstates
         // from the hardcoded assumeutxo chainparams.
         base->m_chain_tx_count = au_data.m_chain_tx_count;
-        LogPrintf("[snapshot] set m_chain_tx_count=%d for %s\n", au_data.m_chain_tx_count, snapshot_blockhash->ToString());
+        LogInfo("[snapshot] set m_chain_tx_count=%d for %s", au_data.m_chain_tx_count, snapshot_blockhash->ToString());
     } else {
         // If this isn't called with a snapshot blockhash, make sure the cached snapshot height
         // is null. This is relevant during snapshot completion, when the blockman may be loaded
@@ -478,13 +455,13 @@ bool BlockManager::LoadBlockIndex(const std::optional<uint256>& snapshot_blockha
 bool BlockManager::WriteBlockIndexDB()
 {
     AssertLockHeld(::cs_main);
-    std::vector<std::pair<int, const CBlockFileInfo*>> vFiles;
+    std::vector<std::pair<int, CBlockFileInfo*>> vFiles;
     vFiles.reserve(m_dirty_fileinfo.size());
     for (std::set<int>::iterator it = m_dirty_fileinfo.begin(); it != m_dirty_fileinfo.end();) {
         vFiles.emplace_back(*it, &m_blockfile_info[*it]);
         m_dirty_fileinfo.erase(it++);
     }
-    std::vector<const CBlockIndex*> vBlocks;
+    std::vector<CBlockIndex*> vBlocks;
     vBlocks.reserve(m_dirty_blockindex.size());
     for (std::set<CBlockIndex*>::iterator it = m_dirty_blockindex.begin(); it != m_dirty_blockindex.end();) {
         vBlocks.push_back(*it);
@@ -507,11 +484,11 @@ bool BlockManager::LoadBlockIndexDB(const std::optional<uint256>& snapshot_block
     // Load block file info
     m_block_tree_db->ReadLastBlockFile(max_blockfile_num);
     m_blockfile_info.resize(max_blockfile_num + 1);
-    LogPrintf("%s: last block file = %i\n", __func__, max_blockfile_num);
+    LogInfo("Loading block index db: last block file = %i", max_blockfile_num);
     for (int nFile = 0; nFile <= max_blockfile_num; nFile++) {
-        m_block_tree_db->ReadBlockFileInfo(nFile, m_blockfile_info[nFile]);
+        (void)m_block_tree_db->ReadBlockFileInfo(nFile, m_blockfile_info[nFile]);
     }
-    LogPrintf("%s: last block file info: %s\n", __func__, m_blockfile_info[max_blockfile_num].ToString());
+    LogInfo("Loading block index db: last block file info: %s", m_blockfile_info[max_blockfile_num].ToString());
     for (int nFile = max_blockfile_num + 1; true; nFile++) {
         CBlockFileInfo info;
         if (m_block_tree_db->ReadBlockFileInfo(nFile, info)) {
@@ -522,7 +499,7 @@ bool BlockManager::LoadBlockIndexDB(const std::optional<uint256>& snapshot_block
     }
 
     // Check presence of blk files
-    LogPrintf("Checking all blk files are present...\n");
+    LogInfo("Checking all blk files are present...");
     std::set<int> setBlkDataFiles;
     for (const auto& [_, block_index] : m_block_index) {
         if (block_index.nStatus & BLOCK_HAVE_DATA) {
@@ -546,9 +523,9 @@ bool BlockManager::LoadBlockIndexDB(const std::optional<uint256>& snapshot_block
     }
 
     // Check whether we have ever pruned block & undo files
-    m_block_tree_db->ReadFlag("prunedblockfiles", m_have_pruned);
+    m_block_tree_db->ReadPruned(m_have_pruned);
     if (m_have_pruned) {
-        LogPrintf("LoadBlockIndexDB(): Block files have previously been pruned\n");
+        LogInfo("Loading block index db: Block files have previously been pruned");
     }
 
     // Check whether we need to continue reindexing
@@ -621,7 +598,7 @@ void BlockManager::CleanupBlockRevFiles() const
     // Glob all blk?????.dat and rev?????.dat files from the blocks directory.
     // Remove the rev files immediately and insert the blk file paths into an
     // ordered map keyed by block file index.
-    LogPrintf("Removing unusable blk?????.dat and rev?????.dat files for -reindex with -prune\n");
+    LogInfo("Removing unusable blk?????.dat and rev?????.dat files for -reindex with -prune");
     for (fs::directory_iterator it(m_opts.blocks_dir); it != fs::directory_iterator(); it++) {
         const std::string path = fs::PathToString(it->path().filename());
         if (fs::is_regular_file(*it) &&
@@ -779,13 +756,13 @@ void BlockManager::UnlinkPrunedFiles(const std::set<int>& setFilesToPrune) const
 
 AutoFile BlockManager::OpenBlockFile(const FlatFilePos& pos, bool fReadOnly) const
 {
-    return AutoFile{m_block_file_seq.Open(pos, fReadOnly), m_xor_key};
+    return AutoFile{m_block_file_seq.Open(pos, fReadOnly), m_obfuscation};
 }
 
 /** Open an undo file (rev?????.dat) */
 AutoFile BlockManager::OpenUndoFile(const FlatFilePos& pos, bool fReadOnly) const
 {
-    return AutoFile{m_undo_file_seq.Open(pos, fReadOnly), m_xor_key};
+    return AutoFile{m_undo_file_seq.Open(pos, fReadOnly), m_obfuscation};
 }
 
 fs::path BlockManager::GetBlockPosFilename(const FlatFilePos& pos) const
@@ -1123,7 +1100,7 @@ static auto InitBlocksdirXorKey(const BlockManager::Options& opts)
 {
     // Bytes are serialized without length indicator, so this is also the exact
     // size of the XOR-key file.
-    std::array<std::byte, 8> xor_key{};
+    std::array<std::byte, Obfuscation::KEY_SIZE> obfuscation{};
 
     // Consider this to be the first run if the blocksdir contains only hidden
     // files (those which start with a .). Checking for a fully-empty dir would
@@ -1140,14 +1117,14 @@ static auto InitBlocksdirXorKey(const BlockManager::Options& opts)
     if (opts.use_xor && first_run) {
         // Only use random fresh key when the boolean option is set and on the
         // very first start of the program.
-        FastRandomContext{}.fillrand(xor_key);
+        FastRandomContext{}.fillrand(obfuscation);
     }
 
     const fs::path xor_key_path{opts.blocks_dir / "xor.dat"};
     if (fs::exists(xor_key_path)) {
         // A pre-existing xor key file has priority.
         AutoFile xor_key_file{fsbridge::fopen(xor_key_path, "rb")};
-        xor_key_file >> xor_key;
+        xor_key_file >> obfuscation;
     } else {
         // Create initial or missing xor key file
         AutoFile xor_key_file{fsbridge::fopen(xor_key_path,
@@ -1157,7 +1134,7 @@ static auto InitBlocksdirXorKey(const BlockManager::Options& opts)
             "wbx"
 #endif
         )};
-        xor_key_file << xor_key;
+        xor_key_file << obfuscation;
         if (xor_key_file.fclose() != 0) {
             throw std::runtime_error{strprintf("Error closing XOR key file %s: %s",
                                                fs::PathToString(xor_key_path),
@@ -1165,33 +1142,121 @@ static auto InitBlocksdirXorKey(const BlockManager::Options& opts)
         }
     }
     // If the user disabled the key, it must be zero.
-    if (!opts.use_xor && xor_key != decltype(xor_key){}) {
+    if (!opts.use_xor && obfuscation != decltype(obfuscation){}) {
         throw std::runtime_error{
             strprintf("The blocksdir XOR-key can not be disabled when a random key was already stored! "
                       "Stored key: '%s', stored path: '%s'.",
-                      HexStr(xor_key), fs::PathToString(xor_key_path)),
+                      HexStr(obfuscation), fs::PathToString(xor_key_path)),
         };
     }
-    LogInfo("Using obfuscation key for blocksdir *.dat files (%s): '%s'\n", fs::PathToString(opts.blocks_dir), HexStr(xor_key));
-    return std::vector<std::byte>{xor_key.begin(), xor_key.end()};
+    LogInfo("Using obfuscation key for blocksdir *.dat files (%s): '%s'\n", fs::PathToString(opts.blocks_dir), HexStr(obfuscation));
+    return Obfuscation{obfuscation};
+}
+
+std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateAndMigrateBlockTree()
+{
+    LOCK(::cs_main);
+    if (!fs::exists(m_opts.block_tree_dir / "CURRENT")) {
+        return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, m_opts.wipe_block_tree_data);
+    }
+
+    if (m_opts.wipe_block_tree_data) {
+        fs::remove_all(m_opts.block_tree_dir);
+        return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, m_opts.wipe_block_tree_data);
+    }
+
+    LogInfo("Migrating leveldb block tree db to new flat file block tree store.");
+    DBParams db_params{};
+    db_params.path = m_opts.block_tree_dir;
+    auto block_tree_db{std::make_unique<BlockTreeDB>(db_params)};
+
+    std::vector<std::pair<int, CBlockFileInfo>> files;
+    int max_blockfile_num{0};
+    bool reindexing{false};
+    bool pruned_block_files{false};
+
+    {
+        LogInfo("   Reading data from existing leveldb block tree db...");
+        block_tree_db->ReadLastBlockFile(max_blockfile_num);
+        files.reserve(max_blockfile_num);
+        for (int i = 0; i < max_blockfile_num; i++) {
+            CBlockFileInfo info;
+            block_tree_db->ReadBlockFileInfo(i, info);
+            files.emplace_back(i, info);
+        }
+
+        if (!block_tree_db->LoadBlockIndexGuts(
+                GetConsensus(), [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); }, m_interrupt)) {
+            throw std::runtime_error("Failed to load block index guts");
+        }
+        block_tree_db->ReadReindexing(reindexing);
+        block_tree_db->ReadFlag("prunedblockfiles", pruned_block_files);
+    }
+
+    auto migration_dir{m_opts.block_tree_dir.parent_path() / "migration"};
+
+    {
+        // Cleanup a potentially previously failed migration
+        fs::remove_all(migration_dir);
+        LogInfo("    Writing data back to migration directory, reindexing: %b, pruned: %b", reindexing, pruned_block_files);
+        auto block_tree_store{std::make_unique<kernel::BlockTreeStore>(migration_dir, m_opts.chainparams, m_opts.wipe_block_tree_data)};
+        block_tree_store->WritePruned(pruned_block_files);
+        block_tree_store->WriteReindexing(reindexing);
+
+        std::vector<std::pair<int, CBlockFileInfo*>> dump_files;
+        dump_files.reserve(files.size());
+        for (auto& file : files) {
+            dump_files.emplace_back(file.first, &file.second);
+        }
+        std::vector<CBlockIndex*> dump_blockindexes;
+        dump_blockindexes.reserve(m_block_index.size());
+        for (auto& pair : m_block_index) {
+            dump_blockindexes.push_back(&pair.second);
+        }
+
+        if (!block_tree_store->WriteBatchSync(dump_files, max_blockfile_num, dump_blockindexes)) {
+            throw std::runtime_error("Failed to write back data during block tree store migration");
+        }
+    }
+
+    fs::remove_all(m_opts.block_tree_dir);
+    fs::rename(migration_dir, m_opts.block_tree_dir);
+    LogInfo("   Successfully migrated the leveldb block tree db to new flat file block tree store.");
+    m_block_index.clear();
+
+    return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, m_opts.wipe_block_tree_data);
+}
+
+std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateReadOnlyBlockTree()
+{
+    if (fs::exists(m_opts.block_tree_dir / "headers.dat") &&
+        fs::exists(m_opts.block_tree_dir / "blockfiles.dat")) {
+        return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, false, true);
+    }
+
+    throw std::runtime_error("Cannot open in read-only mode: required files not found");
 }
 
 BlockManager::BlockManager(const util::SignalInterrupt& interrupt, Options opts)
     : m_prune_mode{opts.prune_target > 0},
-      m_xor_key{InitBlocksdirXorKey(opts)},
+      m_obfuscation{InitBlocksdirXorKey(opts)},
       m_opts{std::move(opts)},
       m_block_file_seq{FlatFileSeq{m_opts.blocks_dir, "blk", m_opts.fast_prune ? 0x4000 /* 16kB */ : BLOCKFILE_CHUNK_SIZE}},
       m_undo_file_seq{FlatFileSeq{m_opts.blocks_dir, "rev", UNDOFILE_CHUNK_SIZE}},
       m_interrupt{interrupt}
 {
-    m_block_tree_db = std::make_unique<BlockTreeDB>(m_opts.block_tree_db_params);
+    if (m_opts.read_only) {
+        m_block_tree_db = CreateReadOnlyBlockTree();
+    } else {
+        m_block_tree_db = CreateAndMigrateBlockTree();
 
-    if (m_opts.block_tree_db_params.wipe_data) {
-        m_block_tree_db->WriteReindexing(true);
-        m_blockfiles_indexed = false;
-        // If we're reindexing in prune mode, wipe away unusable block files and all undo data files
-        if (m_prune_mode) {
-            CleanupBlockRevFiles();
+        if (m_opts.wipe_block_tree_data) {
+            m_block_tree_db->WriteReindexing(true);
+            m_blockfiles_indexed = false;
+            // If we're reindexing in prune mode, wipe away unusable block files and all undo data files
+            if (m_prune_mode) {
+                CleanupBlockRevFiles();
+            }
         }
     }
 }
@@ -1232,17 +1297,17 @@ void ImportBlocks(ChainstateManager& chainman, std::span<const fs::path> import_
             if (file.IsNull()) {
                 break; // This error is logged in OpenBlockFile
             }
-            LogPrintf("Reindexing block file blk%05u.dat...\n", (unsigned int)nFile);
+            LogInfo("Reindexing block file blk%05u.dat...", (unsigned int)nFile);
             chainman.LoadExternalBlockFile(file, &pos, &blocks_with_unknown_parent);
             if (chainman.m_interrupt) {
-                LogPrintf("Interrupt requested. Exit %s\n", __func__);
+                LogInfo("Interrupt requested. Exit reindexing.");
                 return;
             }
             nFile++;
         }
         WITH_LOCK(::cs_main, chainman.m_blockman.m_block_tree_db->WriteReindexing(false));
         chainman.m_blockman.m_blockfiles_indexed = true;
-        LogPrintf("Reindexing finished\n");
+        LogInfo("Reindexing finished");
         // To avoid ending up in a situation without genesis block, re-try initializing (no-op if reindexing worked):
         chainman.ActiveChainstate().LoadGenesisBlock();
     }
@@ -1251,10 +1316,10 @@ void ImportBlocks(ChainstateManager& chainman, std::span<const fs::path> import_
     for (const fs::path& path : import_paths) {
         AutoFile file{fsbridge::fopen(path, "rb")};
         if (!file.IsNull()) {
-            LogPrintf("Importing blocks file %s...\n", fs::PathToString(path));
+            LogInfo("Importing blocks file %s...", fs::PathToString(path));
             chainman.LoadExternalBlockFile(file);
             if (chainman.m_interrupt) {
-                LogPrintf("Interrupt requested. Exit %s\n", __func__);
+                LogInfo("Interrupt requested. Exit block importing.");
                 return;
             }
         } else {
