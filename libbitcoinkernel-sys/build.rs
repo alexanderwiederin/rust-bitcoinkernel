@@ -92,10 +92,12 @@ fn main() {
     // Header path for bindgen
     let include_path = install_dir.join("include");
     let header = include_path.join("bitcoinkernel.h");
+    let blockreader_header = include_path.join("blockreader.h");
 
     #[allow(deprecated)]
     let bindings = bindgen::Builder::default()
         .header(header.to_str().unwrap())
+        .header(blockreader_header.to_str().unwrap())
         .clang_arg("-DBITCOINKERNEL_STATIC")
         .rust_target(bindgen::RustTarget::Stable_1_71)
         .rust_edition(RustEdition::Edition2021)

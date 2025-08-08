@@ -8,6 +8,22 @@ publish = false
 name = "silentpaymentscanner"
 path = "src/silentpaymentscanner.rs"
 
+[[bin]]
+name = "simple_blockreader"
+path = "src/simple_blockreader.rs"
+
+[[bin]]
+name = "chain_analysis_blockreader"
+path = "src/chain_analysis_blockreader.rs"
+
+[[bin]]
+name = "parallel_blockreader"
+path = "src/parallel_blockreader.rs"
+
+[[bin]]
+name = "blockreader"
+path = "src/blockreader.rs"
+
 [dependencies]
 silentpayments = "0.1"
 bitcoin = "0.31"
