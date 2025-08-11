@@ -162,21 +162,27 @@ fn scan_tx(receiver: &Receiver, secret_scan_key: &SecretKey, scan_tx_helper: Sca
 
 fn scan_txs(chainman: &ChainstateManager) {
     let (receiver, secret_scan_key) = parse_keys();
-    let mut block_index = chainman.get_block_index_tip();
+    let mut block_index = chainman.block_index_tip();
     loop {
         if block_index.height() <= 1 {
             break;
         }
-        let undo = chainman.read_undo_data(&block_index).unwrap();
+        let spent_outputs = chainman.read_spent_outputs(&block_index).unwrap();
         let raw_block: Vec<u8> = chainman.read_block_data(&block_index).unwrap().into();
         let block: bitcoin::Block = deserialize(&raw_block).unwrap();
         // Should be the same size minus the coinbase transaction
-        assert_eq!(block.txdata.len() - 1, undo.n_tx_undo);
+        assert_eq!(
+            block.txdata.len() - 1,
+            spent_outputs.size().try_into().unwrap()
+        );
 
         for i in 0..(block.txdata.len() - 1) {
-            let transaction_undo_size: u64 = undo.get_transaction_undo_size(i.try_into().unwrap());
+            let tx_spent_outputs = spent_outputs
+                .transaction_spent_outputs(i.try_into().unwrap())
+                .unwrap();
+            let coins_spent_count = tx_spent_outputs.size();
             let transaction_input_size: u64 = block.txdata[i + 1].input.len().try_into().unwrap();
-            assert_eq!(transaction_input_size, transaction_undo_size);
+            assert_eq!(transaction_input_size, coins_spent_count);
             let mut scan_tx_helper = ScanTxHelper {
                 ins: vec![],
                 outs: block.txdata[i + 1]
@@ -186,12 +192,9 @@ fn scan_txs(chainman: &ChainstateManager) {
                     .collect(),
             };
             for j in 0..transaction_input_size {
+                let coin = tx_spent_outputs.coin(j).unwrap();
                 scan_tx_helper.ins.push(Input {
-                    prevout: undo
-                        .get_prevout_by_index(i as u64, j)
-                        .unwrap()
-                        .get_script_pubkey()
-                        .get(),
+                    prevout: coin.output().unwrap().script_pubkey().to_bytes(),
                     script_sig: block.txdata[i + 1].input[j as usize].script_sig.to_bytes(),
                     witness: block.txdata[i + 1].input[j as usize].witness.to_vec(),
                     prevout_data: (
@@ -229,7 +232,6 @@ fn main() {
     let blocks_dir = data_dir.clone() + "/blocks";
     let chainman = ChainstateManager::new(
         ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
-        Arc::clone(&context),
     )
     .unwrap();
     chainman.import_blocks().unwrap();

@@ -2,10 +2,10 @@
 mod tests {
     use bitcoin::consensus::deserialize;
     use bitcoinkernel::{
-        verify, Block, BlockHash, BlockUndo, ChainParams, ChainType, ChainstateManager,
-        ChainstateManagerOptions, Context, ContextBuilder, KernelError,
-        KernelNotificationInterfaceCallbacks, Log, Logger, ScriptPubkey, Transaction, TxOut,
-        ValidationInterfaceCallbacks, VERIFY_ALL_PRE_TAPROOT,
+        verify, Block, BlockHash, BlockSpentOutputs, ChainParams, ChainType, ChainstateManager,
+        ChainstateManagerOptions, Coin, Context, ContextBuilder, KernelError,
+        KernelNotificationInterfaceCallbacks, Log, Logger, ScriptPubkey, Transaction,
+        TransactionSpentOutputs, TxOut, ValidationInterfaceCallbacks, VERIFY_ALL_PRE_TAPROOT,
     };
     use std::fs::File;
     use std::io::{BufRead, BufReader};
@@ -101,7 +101,6 @@ mod tests {
 
             let chainman = ChainstateManager::new(
                 ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
-                Arc::clone(&context),
             )
             .unwrap();
             for raw_block in block_data.iter() {
@@ -116,7 +115,7 @@ mod tests {
             .unwrap()
             .set_wipe_db(false, true);
 
-        let chainman = ChainstateManager::new(chainman_opts, Arc::clone(&context)).unwrap();
+        let chainman = ChainstateManager::new(chainman_opts).unwrap();
         chainman.import_blocks().unwrap();
         drop(chainman);
     }
@@ -128,7 +127,6 @@ mod tests {
         for _ in 0..10 {
             let chainman = ChainstateManager::new(
                 ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
-                Arc::clone(&context),
             )
             .unwrap();
 
@@ -176,7 +174,6 @@ mod tests {
         let block_data = read_block_data();
         let chainman = ChainstateManager::new(
             ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
-            Arc::clone(&context),
         )
         .unwrap();
 
@@ -186,34 +183,44 @@ mod tests {
             assert!(accepted);
             assert!(new_block);
         }
-        let block_index_genesis = chainman.get_block_index_genesis();
+        let block_index_genesis = chainman.block_index_genesis();
         let height = block_index_genesis.height();
         assert_eq!(height, 0);
-        let block_index_1 = chainman.get_next_block_index(block_index_genesis).unwrap();
+        let block_index_1 = chainman.next_block_index(block_index_genesis).unwrap();
         let height = block_index_1.height();
         assert_eq!(height, 1);
 
-        let block_index_tip = chainman.get_block_index_tip();
+        let block_index_tip = chainman.block_index_tip();
         let raw_block_tip: Vec<u8> = chainman.read_block_data(&block_index_tip).unwrap().into();
-        let undo_tip = chainman.read_undo_data(&block_index_tip).unwrap();
+        let spent_outputs_tip = chainman.read_spent_outputs(&block_index_tip).unwrap();
         let block_tip: bitcoin::Block = deserialize(&raw_block_tip).unwrap();
         // Should be the same size minus the coinbase transaction
-        assert_eq!(block_tip.txdata.len() - 1, undo_tip.n_tx_undo);
+        assert_eq!(
+            block_tip.txdata.len() - 1,
+            spent_outputs_tip.size() as usize
+        );
 
         let block_index_tip_prev = block_index_tip.prev().unwrap();
         let raw_block: Vec<u8> = chainman
             .read_block_data(&block_index_tip_prev)
             .unwrap()
             .into();
-        let undo = chainman.read_undo_data(&block_index_tip_prev).unwrap();
+        let spent_outputs = chainman.read_spent_outputs(&block_index_tip_prev).unwrap();
         let block: bitcoin::Block = deserialize(&raw_block).unwrap();
         // Should be the same size minus the coinbase transaction
-        assert_eq!(block.txdata.len() - 1, undo.n_tx_undo);
+        assert_eq!(
+            block.txdata.len() - 1,
+            spent_outputs.size().try_into().unwrap()
+        );
 
         for i in 0..(block.txdata.len() - 1) {
-            let transaction_undo_size: u64 = undo.get_transaction_undo_size(i.try_into().unwrap());
+            let tx_spent_outputs = spent_outputs
+                .transaction_spent_outputs(i.try_into().unwrap())
+                .unwrap();
+            let coins_spent_count: u64 = tx_spent_outputs.size();
             let transaction_input_size: u64 = block.txdata[i + 1].input.len().try_into().unwrap();
-            assert_eq!(transaction_input_size, transaction_undo_size);
+
+            assert_eq!(transaction_input_size, coins_spent_count);
             let mut helper = ScanTxHelper {
                 ins: vec![],
                 outs: block.txdata[i + 1]
@@ -223,13 +230,10 @@ mod tests {
                     .collect(),
             };
             for j in 0..transaction_input_size {
+                let coin = tx_spent_outputs.coin(j).unwrap();
                 helper.ins.push(Input {
-                    height: undo.get_prevout_height_by_index(i as u64, j).unwrap(),
-                    prevout: undo
-                        .get_prevout_by_index(i as u64, j)
-                        .unwrap()
-                        .get_script_pubkey()
-                        .get(),
+                    height: coin.confirmation_height(),
+                    prevout: coin.output().unwrap().script_pubkey().to_bytes(),
                     script_sig: block.txdata[i + 1].input[j as usize].script_sig.to_bytes(),
                     witness: block.txdata[i + 1].input[j as usize].witness.to_vec(),
                 });
@@ -245,7 +249,6 @@ mod tests {
         let block_data = read_block_data();
         let chainman = ChainstateManager::new(
             ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
-            Arc::clone(&context),
         )
         .unwrap();
 
@@ -264,7 +267,6 @@ mod tests {
         let block_data = read_block_data();
         let chainman = ChainstateManager::new(
             ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
-            Arc::clone(&context),
         )
         .unwrap();
 
@@ -370,8 +372,12 @@ mod tests {
         is_send::<Context>();
         is_sync::<Block>();
         is_send::<Block>();
-        is_sync::<BlockUndo>();
-        is_send::<BlockUndo>();
+        is_sync::<BlockSpentOutputs>();
+        is_send::<BlockSpentOutputs>();
+        is_sync::<TransactionSpentOutputs>();
+        is_send::<TransactionSpentOutputs>();
+        is_sync::<Coin>();
+        is_send::<Coin>();
         is_sync::<ChainstateManager>();
         is_send::<ChainstateManager>();
         is_sync::<BlockHash>();
