@@ -1373,6 +1373,19 @@ BITCOINKERNEL_API void btck_block_hash_destroy(btck_BlockHash* block_hash);
 
 ///@}
 
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_have_coin(const btck_ChainstateManager* chainman, const btck_Transaction* transaction, uint32_t output_index) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_process_new_block_headers(
+    btck_ChainstateManager* chainman,
+    const unsigned char* block_headers,
+    size_t block_headers_len,
+    bool min_pow_checked,
+    btck_BlockIndex** last_accepted) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API btck_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_get_best_header(const btck_ChainstateManager* chainman) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_accept_block(btck_ChainstateManager* chainman, btck_Block* block) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus
