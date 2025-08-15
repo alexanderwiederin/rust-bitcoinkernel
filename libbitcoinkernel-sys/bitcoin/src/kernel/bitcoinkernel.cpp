@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "util/transaction_identifier.h"
+#include <cstdint>
 #define BITCOINKERNEL_BUILD
 
 #include <kernel/bitcoinkernel.h>
@@ -1171,4 +1173,90 @@ bool btck_chainstate_manager_process_block(
     bool* new_block)
 {
     return chainman->m_chainman->ProcessNewBlock(block->m_block, /*force_processing=*/true, /*min_pow_checked=*/true, /*new_block=*/new_block);
+}
+
+bool btck_chainstate_manager_have_coin(const btck_ChainstateManager* chainman, const btck_Transaction* transaction, uint32_t output_index)
+{
+    Txid txid{transaction->m_tx->GetHash()};
+    LOCK(chainman->m_chainman->GetMutex());
+    return chainman->m_chainman->ActiveChainstate().CoinsDB().HaveCoin(COutPoint(txid, output_index));
+}
+
+bool btck_chainstate_manager_process_new_block_headers(
+    btck_ChainstateManager* chainman,
+    const unsigned char* block_headers,
+    size_t block_headers_len,
+    bool min_pow_checked,
+    btck_BlockIndex** last_accepted)
+{
+    try {
+        std::vector<CBlockHeader> headers;
+        headers.reserve(block_headers_len);
+
+        for (size_t i = 0; i < block_headers_len; ++i) {
+            const unsigned char* header_data = block_headers + (i * 80);
+            DataStream stream{std::span{header_data, 80}};
+
+            CBlockHeader header;
+            try {
+                stream >> header;
+                headers.push_back(header);
+            } catch (const std::exception&) {
+                LogDebug(BCLog::KERNEL, "Failed to parse block header at index %zu", i);
+                return false;
+            }
+        }
+
+        BlockValidationState state;
+        const CBlockIndex* ppindex = nullptr;
+
+        bool success = chainman->m_chainman->ProcessNewBlockHeaders(headers, min_pow_checked, state, &ppindex);
+
+        if (success && last_accepted && ppindex) {
+            *last_accepted = reinterpret_cast<btck_BlockIndex*>(const_cast<CBlockIndex*>(ppindex));
+        }
+
+        if (!success) {
+            LogDebug(BCLog::KERNEL, "ProcessNewBlockHeaders failed: %s", state.ToString());
+        }
+
+        return success;
+    } catch (const std::exception& e) {
+        LogError("Failed to process block headers: %s", e.what());
+        return false;
+    }
+}
+
+btck_BlockIndex* btck_chainstate_manager_get_best_header(const btck_ChainstateManager* chainman)
+{
+    return reinterpret_cast<btck_BlockIndex*>(WITH_LOCK(chainman->m_chainman->GetMutex(), return chainman->m_chainman->m_best_header));
+}
+
+bool btck_chainstate_manager_accept_block(btck_ChainstateManager* chainman, btck_Block* block)
+{
+    try {
+        CBlockIndex* pindex = nullptr;
+        BlockValidationState state;
+        bool fNewBlock = false;
+
+        LOCK(chainman->m_chainman->GetMutex());
+        bool success = chainman->m_chainman->AcceptBlock(
+                block->m_block,
+                state,
+                &pindex,
+                true,
+                nullptr,
+                &fNewBlock,
+                true
+        );
+
+        if (!success) {
+            LogDebug(BCLog::KERNEL, "AcceptBlock failed: %s", state.ToString());
+        }
+
+        return success;
+    } catch (const std::exception& e) {
+        LogError("Failed to accept block: %s", e.what());
+        return false;
+    }
 }
