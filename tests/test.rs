@@ -457,6 +457,40 @@ mod tests {
     }
 
     #[test]
+    fn test_process_new_block_headers() {
+        let (context, data_dir) = testing_setup();
+        let blocks_dir = data_dir.clone() + "/blocks";
+        let chainman = ChainstateManager::new(
+            ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
+        )
+        .unwrap();
+
+        let invalid_headers = vec![0u8; 79];
+        let result = chainman.process_new_block_headers(&invalid_headers, true);
+        assert!(result.is_err());
+
+        let empty_headers = vec![];
+        let result = chainman.process_new_block_headers(&empty_headers, true);
+        assert!(result.is_err());
+
+        let block_data = read_block_data();
+        let block = Block::try_from(block_data[0].as_slice()).unwrap();
+        let block_bytes: Vec<u8> = block.into();
+        let parsed_block: bitcoin::Block = deserialize(&block_bytes).unwrap();
+
+        let header_bytes = bitcoin::consensus::serialize(&parsed_block.header);
+        assert_eq!(header_bytes.len(), 80);
+
+        let result = chainman.process_new_block_headers(&header_bytes, true);
+        assert!(result.is_ok());
+
+        let last_accepted = result.unwrap();
+        assert!(last_accepted.is_some());
+        assert_eq!(last_accepted.unwrap().height(), 1);
+        assert_eq!(chainman.best_header().height(), 1);
+    }
+
+    #[test]
     fn test_traits() {
         fn is_sync<T: Sync>() {}
         fn is_send<T: Send>() {}

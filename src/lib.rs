@@ -1378,6 +1378,67 @@ impl ChainstateManager {
         }
         Ok(BlockSpentOutputs { inner })
     }
+
+    pub fn have_coin(&self, tx: &Transaction, output_index: usize) -> bool {
+        unsafe { btck_chainstate_manager_have_coin(self.inner, tx.inner, output_index as u32) }
+    }
+
+    pub fn best_header(&self) -> BlockIndex {
+        BlockIndex {
+            inner: unsafe { btck_chainstate_manager_get_best_header(self.inner) },
+            marker: PhantomData,
+        }
+    }
+
+    pub fn process_new_block_headers(
+        &self,
+        headers: &[u8],
+        min_pow_checked: bool,
+    ) -> Result<Option<BlockIndex>, KernelError> {
+        if headers.len() % 80 != 0 {
+            return Err(KernelError::Internal(
+                "Headers length must be multiple of 80 bytes".to_string(),
+            ));
+        }
+
+        let header_count = headers.len() / 80;
+        if header_count == 0 {
+            return Err(KernelError::Internal(
+                "Must provide at least one header".to_string(),
+            ));
+        }
+
+        let mut last_accepted: *mut btck_BlockIndex = std::ptr::null_mut();
+
+        let success = unsafe {
+            btck_chainstate_manager_process_new_block_headers(
+                self.inner,
+                headers.as_ptr(),
+                header_count,
+                min_pow_checked,
+                &mut last_accepted,
+            )
+        };
+
+        if !success {
+            return Err(KernelError::Internal(
+                "Failed to process block headers".to_string(),
+            ));
+        }
+
+        if last_accepted.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(BlockIndex {
+                inner: last_accepted,
+                marker: PhantomData,
+            }))
+        }
+    }
+
+    pub fn accept_block(&self, block: &Block) -> bool {
+        unsafe { btck_chainstate_manager_accept_block(self.inner, block.inner) }
+    }
 }
 
 impl Drop for ChainstateManager {
