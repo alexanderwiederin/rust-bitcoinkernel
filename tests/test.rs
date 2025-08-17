@@ -436,6 +436,83 @@ mod tests {
         assert!(matches!(result, Err(KernelError::OutOfBounds)));
     }
 
+    #[test]
+    fn test_chain_operations() {
+        let (context, data_dir) = testing_setup();
+        let blocks_dir = data_dir.clone() + "/blocks";
+        let block_data = read_block_data();
+
+        let chainman = ChainstateManager::new(
+            ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
+        )
+        .unwrap();
+
+        // Process some blocks first
+        for raw_block in block_data.iter() {
+            let block = Block::try_from(raw_block.as_slice()).unwrap();
+            let (accepted, new_block) = chainman.process_block(&block);
+            assert!(accepted);
+            assert!(new_block);
+        }
+
+        // Get the active chain
+        let chain = chainman.active_chain();
+
+        // Test genesis block
+        let genesis = chain.genesis();
+        assert_eq!(genesis.height(), 0);
+        let genesis_hash = genesis.block_hash();
+
+        // Test tip
+        let tip = chain.tip();
+        let tip_height = tip.height();
+        let tip_hash = tip.block_hash();
+
+        // Tip should be at a higher height than genesis
+        assert!(tip_height > 0);
+        assert_ne!(genesis_hash.hash, tip_hash.hash);
+
+        // Test at_height functionality
+        let genesis_via_height = chain.at_height(0).unwrap();
+        assert_eq!(genesis_via_height.height(), 0);
+        assert_eq!(genesis_via_height.block_hash().hash, genesis_hash.hash);
+
+        // Test at_height with tip height
+        let tip_via_height = chain.at_height(tip_height as usize).unwrap();
+        assert_eq!(tip_via_height.height(), tip_height);
+        assert_eq!(tip_via_height.block_hash().hash, tip_hash.hash);
+
+        // Test at_height with invalid height (should return None)
+        let invalid_entry = chain.at_height(9999);
+        assert!(invalid_entry.is_none());
+
+        // Test contains functionality
+        assert!(chain.contains(&genesis));
+        assert!(chain.contains(&tip));
+
+        // Test next functionality - walk from genesis to tip
+        let mut current = genesis;
+        let mut height_counter = 0;
+
+        loop {
+            assert_eq!(current.height(), height_counter);
+            assert!(chain.contains(&current));
+
+            if let Some(next_entry) = chain.next(&current) {
+                assert_eq!(next_entry.height(), height_counter + 1);
+                current = next_entry;
+                height_counter += 1;
+            } else {
+                // We've reached the tip
+                break;
+            }
+        }
+
+        // Final current should be at tip height
+        assert_eq!(height_counter, tip_height);
+        assert_eq!(current.block_hash().hash, tip_hash.hash);
+    }
+
     fn verify_test(
         spent: &str,
         spending: &str,
