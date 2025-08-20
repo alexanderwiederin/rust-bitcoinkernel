@@ -37,7 +37,7 @@ fn setup_logging() -> Result<Logger<MainLog>, KernelError> {
 fn create_context() -> Arc<Context> {
     Arc::new(
         ContextBuilder::new()
-            .chain_type(ChainType::REGTEST)
+            .chain_type(ChainType::Regtest)
             .build()
             .unwrap(),
     )
