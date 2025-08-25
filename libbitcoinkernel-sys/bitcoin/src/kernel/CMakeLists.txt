@@ -88,7 +88,7 @@ target_link_libraries(bitcoinkernel
   PRIVATE
     core_interface
     secp256k1_objs
-    $<$<PLATFORM_ID:Windows>:bcrypt>
+    $<$<PLATFORM_ID:Windows>:bcrypt;shell32>
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
   PUBLIC
     Boost::headers
