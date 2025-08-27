@@ -87,10 +87,8 @@ jobs:
   windows-build:
     name: Build and Test on Windows
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v3
-
     - name: Install Rust toolchain
       uses: actions-rs/toolchain@v1
       with:
@@ -98,10 +96,8 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt
-
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
-
     - name: Install Boost library
       run: |
         git clone https://github.com/microsoft/vcpkg.git
@@ -110,12 +106,60 @@ jobs:
         .\vcpkg install boost-multi-index:x64-windows-static boost-headers:x64-windows-static
         echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static\lib" | Out-File -FilePath $env:GITHUB_PATH -Append
-
     - name: Set environment variables for static linking
       run: |
         echo "BOOST_ROOT=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "BOOST_INCLUDEDIR=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static\include" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "BOOST_LIBRARYDIR=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: Build project
+      run: cargo build -vv
+    - name: Analyze Windows library dependencies
+      run: |
+        # Set up Visual Studio environment to get access to dumpbin
+        $vsPath = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise"
+        if (-not (Test-Path $vsPath)) {
+          $vsPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise"
+        }
+        
+        # Try to find and run vcvars64.bat to set up the environment
+        $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+        if (Test-Path $vcvarsPath) {
+          Write-Output "Setting up VS environment..."
+          cmd /c "`"$vcvarsPath`" && where dumpbin"
+        } else {
+          Write-Output "Visual Studio tools not found, trying alternative approach"
+        }
+        
+        # Alternative: Look for dumpbin in common locations
+        $possiblePaths = @(
+          "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe",
+          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe",
+          "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe"
+        )
+        
+        $dumpbinPath = $null
+        foreach ($path in $possiblePaths) {
+          $found = Get-ChildItem -Path $path -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($found) {
+            $dumpbinPath = $found.FullName
+            Write-Output "Found dumpbin at: $dumpbinPath"
+            break
+          }
+        }
+        
+        if ($dumpbinPath) {
+          # Analyze the main bitcoinkernel library
+          $libFile = Get-ChildItem -Path "target\debug\build\libbitcoinkernel-sys-*\out\install\lib\bitcoinkernel.lib" | Select-Object -First 1
+          if ($libFile) {
+            Write-Output "=== Analyzing $($libFile.FullName) ==="
+            & $dumpbinPath /symbols $libFile.FullName | Select-String -Pattern "SH[A-Z]|CommandLineToArgv|LocalFree|BCrypt|RtlGenRandom" | Out-String
+          }
+        } else {
+          Write-Output "Could not locate dumpbin.exe"
+          Write-Output "Available Visual Studio installations:"
+          Get-ChildItem -Path "${env:ProgramFiles}\Microsoft Visual Studio" -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "${env:ProgramFiles(x86)}\Microsoft Visual Studio" -ErrorAction SilentlyContinue
+        }
 
     - name: Run tests
       run: cargo test -vv
