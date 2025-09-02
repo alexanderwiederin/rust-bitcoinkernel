@@ -70,7 +70,24 @@ fn main() {
     };
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
-    println!("cargo:rustc-link-lib=static=bitcoinkernel");
+    // Link all static libraries found in the install directory
+    for entry in std::fs::read_dir(&lib_dir).expect("Library directory has to be readable") {
+        let path = entry.unwrap().path();
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "a" || extension == "lib")
+        {
+            if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                // Special case for libsecp256k1 on Windows
+                let lib_name = if name == "libsecp256k1" && cfg!(target_env = "msvc") {
+                    "libsecp256k1" // Use full name
+                } else {
+                    name.strip_prefix("lib").unwrap_or(name) // Strip lib prefix for others
+                };
+                println!("cargo:rustc-link-lib=static={lib_name}");
+            }
+        }
+    }
 
     // Header path for bindgen
     let include_path = install_dir.join("include");
@@ -94,11 +111,6 @@ fn main() {
 
     let compiler = cc::Build::new().get_compiler();
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-
-    if target_os == "windows" {
-        println!("cargo:rustc-link-lib=bcrypt");
-        println!("cargo:rustc-link-lib=shell32");
-    }
 
     if compiler.is_like_clang() {
         if target_os == "macos" {
