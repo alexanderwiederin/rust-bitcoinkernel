@@ -1439,6 +1439,22 @@ impl ChainstateManager {
     pub fn accept_block(&self, block: &Block) -> bool {
         unsafe { btck_chainstate_manager_accept_block(self.inner, block.inner) }
     }
+
+    pub fn add_coin(
+        &self,
+        transaction: &Transaction,
+        output_index: usize,
+        block_height: usize,
+    ) -> bool {
+        unsafe {
+            btck_chainstate_manager_add_coin_at_height(
+                self.inner,
+                transaction.inner,
+                output_index.try_into().unwrap(),
+                block_height.try_into().unwrap(),
+            )
+        }
+    }
 }
 
 impl Drop for ChainstateManager {

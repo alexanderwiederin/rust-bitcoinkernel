@@ -519,4 +519,27 @@ mod tests {
         // is_sync::<Rc<u8>>(); // won't compile, kept as a failure case.
         // is_send::<Rc<u8>>(); // won't compile, kept as a failure case.
     }
+
+    #[test]
+    fn test_add_coin_with_real_tx() {
+        let (context, data_dir) = testing_setup();
+        let blocks_dir = data_dir.clone() + "/blocks";
+        let chainman = ChainstateManager::new(
+            ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir).unwrap(),
+        )
+        .unwrap();
+
+        let block_data = read_block_data();
+        let block = Block::try_from(block_data[0].as_slice()).unwrap();
+        let (accepted, new_block) = chainman.process_block(&block);
+        assert!(accepted && new_block);
+
+        let real_tx_hex = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000";
+        let transaction =
+            Transaction::try_from(hex::decode(real_tx_hex).unwrap().as_slice()).unwrap();
+
+        assert!(!chainman.have_coin(&transaction, 0));
+        assert!(chainman.add_coin(&transaction, 0, 100));
+        assert!(chainman.have_coin(&transaction, 0));
+    }
 }
