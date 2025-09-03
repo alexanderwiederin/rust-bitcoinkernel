@@ -333,6 +333,21 @@ mod tests {
     }
 
     #[test]
+    fn test_context_builder_chain_types() {
+        let builders = vec![
+            ContextBuilder::new().chain_type(ChainType::Mainnet),
+            ContextBuilder::new().chain_type(ChainType::Testnet),
+            ContextBuilder::new().chain_type(ChainType::Testnet4),
+            ContextBuilder::new().chain_type(ChainType::Signet),
+            ContextBuilder::new().chain_type(ChainType::Regtest),
+        ];
+
+        for builder in builders {
+            assert!(!builder.inner.is_null());
+        }
+    }
+
+    #[test]
     #[should_panic(expected = "Unknown chain type")]
     fn test_chain_type_from_invalid_value() {
         let _invalid = ChainType::from(255);

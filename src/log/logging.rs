@@ -185,7 +185,18 @@ impl From<btck_LogLevel> for LogLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, OnceLock};
+
+    static TEST_LOGGER_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn with_logger_lock<F, R>(f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let mutex = TEST_LOGGER_MUTEX.get_or_init(|| Mutex::new(()));
+        let _guard = mutex.lock().unwrap();
+        f()
+    }
 
     #[derive(Debug, Clone)]
     struct TestLogger {
@@ -451,32 +462,38 @@ mod tests {
 
     #[test]
     fn test_simple_logger_creation() {
-        let logger = Logger::new(SimpleLogger);
-        assert!(logger.is_ok());
+        with_logger_lock(|| {
+            let logger = Logger::new(SimpleLogger);
+            assert!(logger.is_ok());
+        });
     }
 
     #[test]
     fn test_test_logger_creation() {
-        let test_logger = TestLogger::new();
-        let logger = Logger::new(test_logger);
-        assert!(logger.is_ok());
+        with_logger_lock(|| {
+            let test_logger = TestLogger::new();
+            let logger = Logger::new(test_logger);
+            assert!(logger.is_ok());
+        });
     }
 
     #[test]
     fn test_test_logger_functionality() {
-        let test_logger = TestLogger::new();
+        with_logger_lock(|| {
+            let test_logger = TestLogger::new();
 
-        test_logger.log("test message 1");
-        test_logger.log("test message 2");
+            test_logger.log("test message 1");
+            test_logger.log("test message 2");
 
-        let messages = test_logger.get_messages();
-        assert_eq!(messages.len(), 2);
-        assert_eq!(messages[0], "test message 1");
-        assert_eq!(messages[1], "test message 2");
+            let messages = test_logger.get_messages();
+            assert_eq!(messages.len(), 2);
+            assert_eq!(messages[0], "test message 1");
+            assert_eq!(messages[1], "test message 2");
 
-        test_logger.clear();
-        let messages = test_logger.get_messages();
-        assert_eq!(messages.len(), 0);
+            test_logger.clear();
+            let messages = test_logger.get_messages();
+            assert_eq!(messages.len(), 0);
+        });
     }
 
     struct CountingLogger {
@@ -503,21 +520,25 @@ mod tests {
 
     #[test]
     fn test_counting_logger() {
-        let counting_logger = CountingLogger::new();
-        assert_eq!(counting_logger.get_count(), 0);
+        with_logger_lock(|| {
+            let counting_logger = CountingLogger::new();
+            assert_eq!(counting_logger.get_count(), 0);
 
-        counting_logger.log("message 1");
-        assert_eq!(counting_logger.get_count(), 1);
+            counting_logger.log("message 1");
+            assert_eq!(counting_logger.get_count(), 1);
 
-        counting_logger.log("message 2");
-        counting_logger.log("message 3");
-        assert_eq!(counting_logger.get_count(), 3);
+            counting_logger.log("message 2");
+            counting_logger.log("message 3");
+            assert_eq!(counting_logger.get_count(), 3);
+        });
     }
 
     #[test]
     fn test_logger_with_counting_logger() {
-        let counting_logger = CountingLogger::new();
-        let logger = Logger::new(counting_logger);
-        assert!(logger.is_ok());
+        with_logger_lock(|| {
+            let counting_logger = CountingLogger::new();
+            let logger = Logger::new(counting_logger);
+            assert!(logger.is_ok());
+        });
     }
 }
