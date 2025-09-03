@@ -1179,7 +1179,7 @@ bool btck_chainstate_manager_have_coin(const btck_ChainstateManager* chainman, c
 {
     Txid txid{transaction->m_tx->GetHash()};
     LOCK(chainman->m_chainman->GetMutex());
-    return chainman->m_chainman->ActiveChainstate().CoinsDB().HaveCoin(COutPoint(txid, output_index));
+    return chainman->m_chainman->ActiveChainstate().CoinsTip().HaveCoin(COutPoint(txid, output_index));
 }
 
 bool btck_chainstate_manager_process_new_block_headers(
@@ -1259,4 +1259,26 @@ bool btck_chainstate_manager_accept_block(btck_ChainstateManager* chainman, btck
         LogError("Failed to accept block: %s", e.what());
         return false;
     }
+}
+
+bool btck_chainstate_manager_add_coin_at_height(btck_ChainstateManager* chainman, const btck_Transaction* transaction, uint32_t output_index, int block_height)
+{
+    if (!transaction || !transaction->m_tx || output_index >= transaction->m_tx->vout.size()) {
+        return false;
+    }
+
+    Txid txid{transaction->m_tx->GetHash()};
+    LOCK(chainman->m_chainman->GetMutex());
+
+    const CTxOut& output = transaction->m_tx->vout[output_index];
+    bool is_coinbase = transaction->m_tx->IsCoinBase();
+    CCoinsViewCache& coins_cache = chainman->m_chainman->ActiveChainstate().CoinsTip();
+
+    try {
+        coins_cache.AddCoin(COutPoint(txid, output_index), Coin(output, block_height, is_coinbase), false);
+    } catch (const std::exception& e) {
+        return false;
+    }
+
+    return true;
 }

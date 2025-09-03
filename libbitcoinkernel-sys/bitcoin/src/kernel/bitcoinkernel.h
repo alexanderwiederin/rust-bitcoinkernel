@@ -1386,6 +1386,8 @@ BITCOINKERNEL_API btck_BlockIndex* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainst
 
 BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_accept_block(btck_ChainstateManager* chainman, btck_Block* block) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_add_coin_at_height(btck_ChainstateManager* chainman, const btck_Transaction* transaction, uint32_t output_index, int block_index) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus
