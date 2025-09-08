@@ -614,7 +614,7 @@ public:
 class BlockTreeEntry : public View<btck_BlockTreeEntry>
 {
 public:
-    BlockTreeEntry(btck_BlockTreeEntry* entry)
+    BlockTreeEntry(const btck_BlockTreeEntry* entry)
         : View{check(entry)}
     {
     }
@@ -724,7 +724,7 @@ public:
             btck_NotificationInterfaceCallbacks{
                 .user_data = heap_notifications.release(),
                 .user_data_destroy = +[](void* user_data) { delete static_cast<user_type>(user_data); },
-                .block_tip = +[](void* user_data, btck_SynchronizationState state, btck_BlockTreeEntry* entry, double verification_progress) { (*static_cast<user_type>(user_data))->BlockTipHandler(static_cast<SynchronizationState>(state), BlockTreeEntry{entry}, verification_progress); },
+                .block_tip = +[](void* user_data, btck_SynchronizationState state, const btck_BlockTreeEntry* entry, double verification_progress) { (*static_cast<user_type>(user_data))->BlockTipHandler(static_cast<SynchronizationState>(state), BlockTreeEntry{entry}, verification_progress); },
                 .header_tip = +[](void* user_data, btck_SynchronizationState state, int64_t height, int64_t timestamp, int presync) { (*static_cast<user_type>(user_data))->HeaderTipHandler(static_cast<SynchronizationState>(state), height, timestamp, presync == 1); },
                 .progress = +[](void* user_data, const char* title, size_t title_len, int progress_percent, int resume_possible) { (*static_cast<user_type>(user_data))->ProgressHandler({title, title_len}, progress_percent, resume_possible == 1); },
                 .warning_set = +[](void* user_data, btck_Warning warning, const char* message, size_t message_len) { (*static_cast<user_type>(user_data))->WarningSetHandler(static_cast<Warning>(warning), {message, message_len}); },

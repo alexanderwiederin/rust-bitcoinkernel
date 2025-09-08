@@ -93,16 +93,12 @@ extern "C" {
  * lifetime. Once the function returns the user can safely de-allocate the
  * passed in arguments.
  *
- * Pointers passed by callbacks are not owned by the user and are only valid
- * for the duration of the callback. They are always marked as `const` and must
- * not be de-allocated by the user.
- *
- * Some pointers returned by functions also give access to non-owned resources.
- * These pointers are also marked as const and must not be de-allocated by the
- * user. Ownership of these resources may be taken by copying. They are
- * typically used for iteration with minimal overhead and require some care by
- * the programmer that their lifetime is not extended beyond that of the
- * original object.
+ * Const pointers represent views, and do not transfer ownership. Lifetime
+ * guarantees of these objects are described in the respective documentation.
+ * Ownership of these resources may be taken by copying. They are typically
+ * used for iteration with minimal overhead and require some care by the
+ * programmer that their lifetime is not extended beyond that of the original
+ * object.
  *
  * Array lengths follow the pointer argument they describe.
  */
@@ -280,7 +276,7 @@ typedef void (*btck_DestroyCallback)(void* user_data);
 /**
  * Function signatures for the kernel notifications.
  */
-typedef void (*btck_NotifyBlockTip)(void* user_data, btck_SynchronizationState state, btck_BlockTreeEntry* entry, double verification_progress);
+typedef void (*btck_NotifyBlockTip)(void* user_data, btck_SynchronizationState state, const btck_BlockTreeEntry* entry, double verification_progress);
 typedef void (*btck_NotifyHeaderTip)(void* user_data, btck_SynchronizationState state, int64_t height, int64_t timestamp, int presync);
 typedef void (*btck_NotifyProgress)(void* user_data, const char* title, size_t title_len, int progress_percent, int resume_possible);
 typedef void (*btck_NotifyWarningSet)(void* user_data, btck_Warning warning, const char* message, size_t message_len);
@@ -848,7 +844,7 @@ BITCOINKERNEL_API void btck_context_destroy(btck_Context* context);
  * @param[in] block_tree_entry Non-null.
  * @return                     The previous block tree entry, or null on error or if the current block tree entry is the genesis block.
  */
-BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_block_tree_entry_get_previous(
+BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_block_tree_entry_get_previous(
     const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
@@ -859,11 +855,6 @@ BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blo
  */
 BITCOINKERNEL_API int32_t BITCOINKERNEL_WARN_UNUSED_RESULT btck_block_tree_entry_get_height(
     const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
- * @brief Destroy the block tree entry.
- */
-BITCOINKERNEL_API void btck_block_tree_entry_destroy(btck_BlockTreeEntry* block_tree_entry);
 
 ///@}
 
@@ -961,9 +952,8 @@ BITCOINKERNEL_API btck_ChainstateManager* BITCOINKERNEL_WARN_UNUSED_RESULT btck_
     const btck_ChainstateManagerOptions* chainstate_manager_options) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief May be called once the btck_ChainstateManager is instantiated.
- * Triggers the start of a reindex if the option was previously set for the
- * chainstate and block manager. Can also import an array of existing block
+ * @brief Triggers the start of a reindex if the option was previously set for
+ * the chainstate and block manager. Can also import an array of existing block
  * files selected by the user.
  *
  * @param[in] chainstate_manager   Non-null.
@@ -1015,7 +1005,7 @@ BITCOINKERNEL_API const btck_Chain* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chains
  * @return                       The block tree entry of the block with the passed in hash, or null if
  *                               the block hash is not found.
  */
-BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_get_block_tree_entry_by_hash(
+BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_get_block_tree_entry_by_hash(
     const btck_ChainstateManager* chainstate_manager,
     const btck_BlockHash* block_hash) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
@@ -1145,7 +1135,7 @@ BITCOINKERNEL_API btck_BlockValidationResult btck_block_validation_state_get_blo
  * @param[in] chain Non-null.
  * @return          The block tree entry of the current tip, or null if the chain is empty.
  */
-BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_get_tip(
+BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_get_tip(
     const btck_Chain* chain) BITCOINKERNEL_ARG_NONNULL(1);
 
 /*
@@ -1154,7 +1144,7 @@ BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_cha
  * @param[in] chain Non-null.
  * @return          The block tree entry of the genesis block, or null if the chain is empty.
  */
-BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_get_genesis(
+BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_get_genesis(
     const btck_Chain* chain) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
@@ -1165,7 +1155,7 @@ BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_cha
  * @param[in] block_height Height in the chain of the to be retrieved block tree entry.
  * @return                 The block tree entry at a certain height in the currently active chain.
  */
-BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_get_by_height(
+BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_get_by_height(
     const btck_Chain* chain,
     int block_height) BITCOINKERNEL_ARG_NONNULL(1);
 
@@ -1180,11 +1170,6 @@ BITCOINKERNEL_API btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_cha
 BITCOINKERNEL_API int btck_chain_contains(
     const btck_Chain* chain,
     const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
-
-/**
- * @brief Destroy the chain.
- */
-BITCOINKERNEL_API void btck_chain_destroy(btck_Chain* chain);
 
 ///@}
 
