@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod tests {
     use bitcoin::consensus::deserialize;
+    use bitcoinkernel::core::transaction::TxOutRef;
     use bitcoinkernel::{
         prelude::*, verify, Block, BlockHash, BlockSpentOutputs, BlockTreeEntry, ChainParams,
         ChainType, ChainstateManager, ChainstateManagerOptions, Coin, Context, ContextBuilder,
         KernelError, KernelNotificationInterfaceCallbacks, Log, Logger, ScriptPubkey,
-        ScriptVerifyError, Transaction, TransactionSpentOutputs, TxOut, TxOutRef,
+        ScriptVerifyError, Transaction, TransactionSpentOutputs, TxOut,
         ValidationInterfaceCallbacks, VERIFY_ALL_PRE_TAPROOT,
     };
     use std::fs::File;
