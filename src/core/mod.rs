@@ -4,7 +4,10 @@
 //! scripts, and their associated operations.
 
 pub mod block;
+pub mod transaction;
 
 pub use block::{Block, BlockHash, BlockSpentOutputs, BlockTreeEntry, TransactionSpentOutputs};
+pub use transaction::{Transaction, TxOut};
 
 pub use block::{BlockSpentOutputsExt, CoinExt, TransactionSpentOutputsExt};
+pub use transaction::{TransactionExt, TxOutExt};
