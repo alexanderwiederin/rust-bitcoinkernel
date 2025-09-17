@@ -782,11 +782,6 @@ public:
         return btck_chainstate_manager_options_set_wipe_dbs(get(), wipe_block_tree, wipe_chainstate) == 0;
     }
 
-    void SetBlockTreeDbInMemory(bool block_tree_db_in_memory)
-    {
-        btck_chainstate_manager_options_set_block_tree_db_in_memory(get(), block_tree_db_in_memory);
-    }
-
     void SetChainstateDbInMemory(bool chainstate_db_in_memory)
     {
         btck_chainstate_manager_options_set_chainstate_db_in_memory(get(), chainstate_db_in_memory);
@@ -800,25 +795,24 @@ class ChainView : public View<btck_Chain>
 public:
     explicit ChainView(const btck_Chain* ptr) : View{ptr} {}
 
-    BlockTreeEntry Tip() const
+    BlockTreeEntry GetTip() const
     {
         return btck_chain_get_tip(get());
     }
 
-    int Height() const
-    {
-        return btck_chain_get_height(get());
-    }
-
-    BlockTreeEntry Genesis() const
+    BlockTreeEntry GetGenesis() const
     {
         return btck_chain_get_genesis(get());
+    }
+
+    size_t CurrentHeight() const
+    {
+        return GetTip().GetHeight();
     }
 
     BlockTreeEntry GetByHeight(int height) const
     {
         auto index{btck_chain_get_by_height(get(), height)};
-        if (!index) throw std::runtime_error("No entry in the chain at the provided height");
         return index;
     }
 
@@ -829,7 +823,7 @@ public:
 
     auto Entries() const
     {
-        return Range<ChainView, &ChainView::Height, &ChainView::GetByHeight>{*this};
+        return Range<ChainView, &ChainView::CurrentHeight, &ChainView::GetByHeight>{*this};
     }
 };
 
