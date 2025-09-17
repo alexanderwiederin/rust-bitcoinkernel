@@ -6,7 +6,6 @@ use libbitcoinkernel_sys::{
     btck_chainstate_manager_get_active_chain, btck_chainstate_manager_get_block_tree_entry_by_hash,
     btck_chainstate_manager_import_blocks, btck_chainstate_manager_options_create,
     btck_chainstate_manager_options_destroy,
-    btck_chainstate_manager_options_set_block_tree_db_in_memory,
     btck_chainstate_manager_options_set_chainstate_db_in_memory,
     btck_chainstate_manager_options_set_wipe_dbs,
     btck_chainstate_manager_options_set_worker_threads_num, btck_chainstate_manager_process_block,
@@ -175,17 +174,6 @@ impl ChainstateManagerOptions {
                 self.inner,
                 c_helpers::to_c_bool(wipe_block_tree),
                 c_helpers::to_c_bool(wipe_chainstate),
-            );
-        }
-        self
-    }
-
-    /// Run the block tree db in-memory only. No database files will be written to disk.
-    pub fn set_block_tree_db_in_memory(self, block_tree_db_in_memory: bool) -> Self {
-        unsafe {
-            btck_chainstate_manager_options_set_block_tree_db_in_memory(
-                self.inner,
-                c_helpers::to_c_bool(block_tree_db_in_memory),
             );
         }
         self

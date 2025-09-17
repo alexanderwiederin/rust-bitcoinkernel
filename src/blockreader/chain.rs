@@ -5,18 +5,18 @@ use libbitcoinkernel_sys::{
     btck_chain_get_tip,
 };
 
-use crate::{ffi::c_helpers, BlockTreeEntry};
+use crate::ffi::c_helpers;
 
-use super::ChainstateManager;
+use super::{BlockReader, ReaderBlockTreeEntry};
 
 /// Iterator for traversing blocks sequentially from genesis to tip.
-pub struct ChainIterator<'a> {
-    chain: Chain<'a>,
+pub struct BlockReaderChainIterator<'a> {
+    chain: BlockReaderChain<'a>,
     current_height: usize,
 }
 
-impl<'a> ChainIterator<'a> {
-    fn new(chain: Chain<'a>) -> Self {
+impl<'a> BlockReaderChainIterator<'a> {
+    fn new(chain: BlockReaderChain<'a>) -> Self {
         Self {
             chain,
             current_height: 0,
@@ -24,8 +24,8 @@ impl<'a> ChainIterator<'a> {
     }
 }
 
-impl<'a> Iterator for ChainIterator<'a> {
-    type Item = BlockTreeEntry<'a>;
+impl<'a> Iterator for BlockReaderChainIterator<'a> {
+    type Item = ReaderBlockTreeEntry<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let height = self.current_height;
@@ -35,33 +35,33 @@ impl<'a> Iterator for ChainIterator<'a> {
 }
 
 /// Represents a chain instance for querying and traversal.
-pub struct Chain<'a> {
+pub struct BlockReaderChain<'a> {
     inner: *const btck_Chain,
-    marker: PhantomData<&'a ChainstateManager>,
+    marker: PhantomData<&'a BlockReader>,
 }
 
-impl<'a> Chain<'a> {
+impl<'a> BlockReaderChain<'a> {
     pub unsafe fn from_ptr(ptr: *const btck_Chain) -> Self {
-        Chain {
+        BlockReaderChain {
             inner: ptr,
             marker: PhantomData,
         }
     }
 
     /// Returns the tip (highest block) of the active chain.
-    pub fn tip(&self) -> BlockTreeEntry<'a> {
+    pub fn tip(&self) -> ReaderBlockTreeEntry<'a> {
         let ptr = unsafe { btck_chain_get_tip(self.inner) };
-        unsafe { BlockTreeEntry::from_ptr(ptr) }
+        unsafe { ReaderBlockTreeEntry::from_ptr(ptr) }
     }
 
     /// Returns the genesis block (height 0) of the chain.
-    pub fn genesis(&self) -> BlockTreeEntry<'a> {
+    pub fn genesis(&self) -> ReaderBlockTreeEntry<'a> {
         let ptr = unsafe { btck_chain_get_genesis(self.inner) };
-        unsafe { BlockTreeEntry::from_ptr(ptr) }
+        unsafe { ReaderBlockTreeEntry::from_ptr(ptr) }
     }
 
     /// Returns the block at the specified height, if it exists.
-    pub fn at_height(&self, height: usize) -> Option<BlockTreeEntry<'a>> {
+    pub fn at_height(&self, height: usize) -> Option<ReaderBlockTreeEntry<'a>> {
         let tip_height = self.height();
         if height > tip_height as usize {
             return None;
@@ -72,18 +72,18 @@ impl<'a> Chain<'a> {
             return None;
         }
 
-        Some(unsafe { BlockTreeEntry::from_ptr(ptr) })
+        Some(unsafe { ReaderBlockTreeEntry::from_ptr(ptr) })
     }
 
     /// Checks if the given block entry is part of the active chain.
-    pub fn contains(&self, entry: &BlockTreeEntry<'a>) -> bool {
+    pub fn contains(&self, entry: &ReaderBlockTreeEntry<'a>) -> bool {
         let result = unsafe { btck_chain_contains(self.inner, entry.as_ptr()) };
         c_helpers::present(result)
     }
 
     /// Returns an iterator over all blocks from genesis to tip.
-    pub fn iter(&self) -> ChainIterator<'a> {
-        ChainIterator::new(*self)
+    pub fn iter(&self) -> BlockReaderChainIterator<'a> {
+        BlockReaderChainIterator::new(*self)
     }
 
     pub fn height(&self) -> i32 {
@@ -91,10 +91,10 @@ impl<'a> Chain<'a> {
     }
 }
 
-impl<'a> Clone for Chain<'a> {
+impl<'a> Clone for BlockReaderChain<'a> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<'a> Copy for Chain<'a> {}
+impl<'a> Copy for BlockReaderChain<'a> {}

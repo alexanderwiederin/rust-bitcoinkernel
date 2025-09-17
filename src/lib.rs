@@ -20,6 +20,7 @@ use ffi::{
 };
 use libbitcoinkernel_sys::*;
 
+pub mod blockreader;
 pub mod core;
 pub mod ffi;
 pub mod log;
@@ -92,6 +93,10 @@ impl fmt::Display for KernelError {
         }
     }
 }
+
+pub use crate::blockreader::{
+    BlockReader, BlockReaderChain, BlockReaderChainIterator, ReaderBlockTreeEntry,
+};
 
 pub use crate::core::{
     verify, Block, BlockHash, BlockSpentOutputs, BlockSpentOutputsRef, BlockTreeEntry, Coin,
