@@ -474,7 +474,6 @@ BOOST_AUTO_TEST_CASE(btck_chainman_tests)
 std::unique_ptr<ChainMan> create_chainman(TestDirectory& test_directory,
                                           bool reindex,
                                           bool wipe_chainstate,
-                                          bool block_tree_db_in_memory,
                                           bool chainstate_db_in_memory,
                                           Context& context)
 {
@@ -487,9 +486,6 @@ std::unique_ptr<ChainMan> create_chainman(TestDirectory& test_directory,
     }
     if (wipe_chainstate) {
         chainman_opts.SetWipeDbs(/*wipe_block_tree=*/false, /*wipe_chainstate=*/wipe_chainstate);
-    }
-    if (block_tree_db_in_memory) {
-        chainman_opts.SetBlockTreeDbInMemory(block_tree_db_in_memory);
     }
     if (chainstate_db_in_memory) {
         chainman_opts.SetChainstateDbInMemory(chainstate_db_in_memory);
@@ -514,15 +510,14 @@ void chainman_reindex_test(TestDirectory& test_directory)
 
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto context{create_context(notifications, ChainType::MAINNET)};
-    auto chainman{create_chainman(test_directory, true, false, false, false, context)};
+    auto chainman{create_chainman(test_directory, true, false, false, context)};
 
     std::vector<std::string> import_files;
     BOOST_CHECK(chainman->ImportBlocks(import_files));
 
     // Sanity check some block retrievals
     auto chain{chainman->GetChain()};
-    BOOST_CHECK_THROW(chain.GetByHeight(1000), std::runtime_error);
-    auto genesis_index{chain.Genesis()};
+    auto genesis_index{chain.GetGenesis()};
     auto genesis_block_raw{chainman->ReadBlock(genesis_index).value().ToBytes()};
     auto first_index{chain.GetByHeight(0)};
     auto first_block_raw{chainman->ReadBlock(genesis_index).value().ToBytes()};
@@ -533,7 +528,7 @@ void chainman_reindex_test(TestDirectory& test_directory)
     auto next_index{chain.GetByHeight(first_index.GetHeight() + 1)};
     BOOST_CHECK(chain.Contains(next_index));
     auto next_block_data{chainman->ReadBlock(next_index).value().ToBytes()};
-    auto tip_index{chain.Tip()};
+    auto tip_index{chain.GetTip()};
     auto tip_block_data{chainman->ReadBlock(tip_index).value().ToBytes()};
     auto second_index{chain.GetByHeight(1)};
     auto second_block{chainman->ReadBlock(second_index).value()};
@@ -555,7 +550,7 @@ void chainman_reindex_chainstate_test(TestDirectory& test_directory)
 {
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto context{create_context(notifications, ChainType::MAINNET)};
-    auto chainman{create_chainman(test_directory, false, true, false, false, context)};
+    auto chainman{create_chainman(test_directory, false, true, false, context)};
 
     std::vector<std::string> import_files;
     import_files.push_back((test_directory.m_directory / "blocks" / "blk00000.dat").string());
@@ -567,7 +562,7 @@ void chainman_mainnet_validation_test(TestDirectory& test_directory)
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto validation_interface{std::make_shared<TestValidationInterface>()};
     auto context{create_context(notifications, ChainType::MAINNET, validation_interface)};
-    auto chainman{create_chainman(test_directory, false, false, false, false, context)};
+    auto chainman{create_chainman(test_directory, false, false, false, context)};
 
     {
         // Process an invalid block
@@ -600,8 +595,7 @@ void chainman_mainnet_validation_test(TestDirectory& test_directory)
     BOOST_CHECK(new_block);
 
     auto chain{chainman->GetChain()};
-    BOOST_CHECK_EQUAL(chain.Height(), 1);
-    auto tip{chain.Tip()};
+    auto tip{chain.GetTip()};
     auto read_block{chainman->ReadBlock(tip)};
     BOOST_REQUIRE(read_block);
     check_equal(read_block.value().ToBytes(), raw_block);
@@ -635,25 +629,6 @@ BOOST_AUTO_TEST_CASE(btck_chainman_mainnet_tests)
     chainman_reindex_chainstate_test(test_directory);
 }
 
-BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
-{
-    auto in_memory_test_directory{TestDirectory{"in-memory_test_bitcoin_kernel"}};
-
-    auto notifications{std::make_shared<TestKernelNotifications>()};
-    auto context{create_context(notifications, ChainType::REGTEST)};
-    auto chainman{create_chainman(in_memory_test_directory, false, false, true, true, context)};
-
-    for (auto& raw_block : REGTEST_BLOCK_DATA) {
-        Block block{as_bytes(raw_block)};
-        bool new_block{false};
-        chainman->ProcessBlock(block, &new_block);
-        BOOST_CHECK(new_block);
-    }
-
-    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "blocks" / "index"));
-    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "chainstate"));
-}
-
 BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
 {
     auto test_directory{TestDirectory{"regtest_test_bitcoin_kernel"}};
@@ -667,7 +642,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     const size_t mid{REGTEST_BLOCK_DATA.size() / 2};
 
     {
-        auto chainman{create_chainman(test_directory, false, false, false, false, context)};
+        auto chainman{create_chainman(test_directory, false, false, false, context)};
         for (size_t i{0}; i < mid; i++) {
             Block block{as_bytes(REGTEST_BLOCK_DATA[i])};
             bool new_block{false};
@@ -676,7 +651,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
         }
     }
 
-    auto chainman{create_chainman(test_directory, false, false, false, false, context)};
+    auto chainman{create_chainman(test_directory, false, false, false, context)};
 
     for (size_t i{mid}; i < REGTEST_BLOCK_DATA.size(); i++) {
         Block block{as_bytes(REGTEST_BLOCK_DATA[i])};
@@ -686,7 +661,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     }
 
     auto chain = chainman->GetChain();
-    auto tip = chain.Tip();
+    auto tip = chain.GetTip();
     auto read_block = chainman->ReadBlock(tip).value();
     check_equal(read_block.ToBytes(), as_bytes(REGTEST_BLOCK_DATA[REGTEST_BLOCK_DATA.size() - 1]));
 
@@ -719,7 +694,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
         BOOST_CHECK_EQUAL(entry.GetHeight(), count);
         ++count;
     }
-    BOOST_CHECK_EQUAL(count, chain.Height());
+    BOOST_CHECK_EQUAL(count, chain.CurrentHeight());
 
     // Test that reading past the size returns null data
     // BOOST_CHECK_THROW(block_spent_outputs.GetTxSpentOutputs(block_spent_outputs.m_size), std::runtime_error);

@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "kernel/reader_impl.h"
 #define BITCOINKERNEL_BUILD
 
 #include <kernel/bitcoinkernel.h>
@@ -438,10 +439,7 @@ struct ChainstateManagerOptions {
               .chainparams = *context->m_chainparams,
               .blocks_dir = blocks_dir,
               .notifications = *context->m_notifications,
-              .block_tree_db_params = DBParams{
-                  .path = data_dir / "blocks" / "index",
-                  .cache_bytes = kernel::CacheSizes{DEFAULT_KERNEL_CACHE}.block_tree_db,
-              }}},
+              .block_tree_dir = blocks_dir / "index" }},
           m_context{context}, m_chainstate_load_options{node::ChainstateLoadOptions{}}
     {
     }
@@ -628,6 +626,7 @@ void btck_logging_set_level_category(btck_LogCategory category, btck_LogLevel le
 
 void btck_logging_enable_category(btck_LogCategory category)
 {
+    LOCK(cs_main);
     LogInstance().EnableCategory(get_bclog_flag(category));
 }
 
@@ -821,18 +820,9 @@ int btck_chainstate_manager_options_set_wipe_dbs(btck_ChainstateManagerOptions* 
     }
     auto& opts{btck_ChainstateManagerOptions::get(chainman_opts)};
     LOCK(opts.m_mutex);
-    opts.m_blockman_options.block_tree_db_params.wipe_data = wipe_block_tree_db == 1;
+    opts.m_blockman_options.wipe_block_tree_data = wipe_block_tree_db == 1;
     opts.m_chainstate_load_options.wipe_chainstate_db = wipe_chainstate_db == 1;
     return 0;
-}
-
-void btck_chainstate_manager_options_set_block_tree_db_in_memory(
-    btck_ChainstateManagerOptions* chainman_opts,
-    int block_tree_db_in_memory)
-{
-    auto& opts{btck_ChainstateManagerOptions::get(chainman_opts)};
-    LOCK(opts.m_mutex);
-    opts.m_blockman_options.block_tree_db_params.memory_only = block_tree_db_in_memory == 1;
 }
 
 void btck_chainstate_manager_options_set_chainstate_db_in_memory(
@@ -1125,11 +1115,6 @@ const btck_BlockTreeEntry* btck_chain_get_tip(const btck_Chain* chain)
     return btck_BlockTreeEntry::ref(btck_Chain::get(chain).Tip());
 }
 
-int btck_chain_get_height(const btck_Chain* chain)
-{
-    return btck_Chain::get(chain).Height();
-}
-
 const btck_BlockTreeEntry* btck_chain_get_genesis(const btck_Chain* chain)
 {
     return btck_BlockTreeEntry::ref(btck_Chain::get(chain).Genesis());
@@ -1138,6 +1123,7 @@ const btck_BlockTreeEntry* btck_chain_get_genesis(const btck_Chain* chain)
 const btck_BlockTreeEntry* btck_chain_get_by_height(const btck_Chain* chain, int height)
 {
     LOCK(::cs_main);
+    assert(height >= 0 && height <= btck_Chain::get(chain).Height());
     return btck_BlockTreeEntry::ref(btck_Chain::get(chain)[height]);
 }
 
@@ -1146,3 +1132,115 @@ int btck_chain_contains(const btck_Chain* chain, const btck_BlockTreeEntry* entr
     LOCK(::cs_main);
     return btck_Chain::get(chain).Contains(&btck_BlockTreeEntry::get(entry)) ? 1 : 0;
 }
+
+struct BlockReaderOptions {
+    mutable Mutex m_mutex;
+    std::shared_ptr<const Context> m_context;
+    blockreader::BlockReader::Options m_blockreader_options GUARDED_BY(m_mutex);
+
+    BlockReaderOptions(const std::shared_ptr<const Context>& context, const fs::path& data_dir, const fs::path& blocks_dir)
+        : m_context{context},
+          m_blockreader_options{blockreader::BlockReader::Options{
+              .chainparams = *context->m_chainparams,
+              .blocks_dir = blocks_dir,
+              .data_dir = data_dir}}
+    {
+    }
+};
+
+struct BlockReaderWrapper {
+    std::unique_ptr<blockreader::BlockReader> m_reader;
+    std::shared_ptr<const Context> m_context;
+
+    BlockReaderWrapper(std::unique_ptr<blockreader::BlockReader> reader, std::shared_ptr<const Context> context)
+        : m_reader(std::move(reader)), m_context(std::move(context)) {}
+};
+
+struct btck_BlockReaderOptions : Handle<btck_BlockReaderOptions, BlockReaderOptions> {
+};
+struct btck_BlockReader : Handle<btck_BlockReader, BlockReaderWrapper> {
+};
+
+btck_BlockReaderOptions* btck_blockreader_options_create(
+    const btck_Context* context,
+    const char* data_directory,
+    size_t data_directory_len,
+    const char* blocks_directory,
+    size_t blocks_directory_len)
+{
+    try {
+        fs::path abs_data_dir{fs::absolute(fs::PathFromString({data_directory, data_directory_len}))};
+        fs::create_directories(abs_data_dir);
+        fs::path abs_blocks_dir{fs::absolute(fs::PathFromString({blocks_directory, blocks_directory_len}))};
+        fs::create_directories(abs_blocks_dir);
+
+        return btck_BlockReaderOptions::create(btck_Context::get(context), abs_data_dir, abs_blocks_dir);
+    } catch (const std::exception& e) {
+        LogError("Failed to create block reader options: %s", e.what());
+        return nullptr;
+    }
+}
+
+void btck_blockreader_options_destroy(btck_BlockReaderOptions* blockreader_options)
+{
+    delete blockreader_options;
+}
+
+btck_BlockReader* btck_blockreader_create(const btck_BlockReaderOptions* blockreader_options)
+{
+    const auto& opts{btck_BlockReaderOptions::get(blockreader_options)};
+    std::unique_ptr<blockreader::BlockReader> reader;
+
+    try {
+        LOCK(opts.m_mutex);
+        reader = std::make_unique<blockreader::BlockReader>(opts.m_blockreader_options, *opts.m_context->m_interrupt);
+    } catch (const std::exception& e) {
+        LogError("Failed to create block reader: %s", e.what());
+        return nullptr;
+    }
+
+    return btck_BlockReader::create(std::move(reader), opts.m_context);
+}
+
+void btck_blockreader_destroy(btck_BlockReader* blockreader)
+{
+    delete blockreader;
+}
+
+const btck_Chain* btck_blockreader_get_validated_chain(const btck_BlockReader* blockreader)
+{
+    const auto& wrapper = btck_BlockReader::get(blockreader);
+    return btck_Chain::ref(&wrapper.m_reader->GetValidatedChain());
+}
+
+btck_Block* btck_blockreader_read_block(
+    const btck_BlockReader* blockreader,
+    const btck_BlockTreeEntry* block_tree_entry)
+{
+    const auto& wrapper = btck_BlockReader::get(blockreader);
+    const auto& block_index = btck_BlockTreeEntry::get(block_tree_entry);
+
+    auto block = std::make_shared<CBlock>();
+    if (!wrapper.m_reader->GetBlockManager().ReadBlock(*block, block_index)) {
+        LogError("BlockReader: Failed to read block");
+        return nullptr;
+    }
+
+    return btck_Block::create(block);
+}
+
+btck_BlockSpentOutputs* btck_blockreader_block_spent_outputs_read(const btck_BlockReader* blockreader, const btck_BlockTreeEntry* entry)
+{
+    if (btck_BlockTreeEntry::get(entry).nHeight < 1) {
+        LogDebug(BCLog::KERNEL, "The genesis block does not have any spent outputs.");
+        return nullptr;
+    }
+    auto block_undo{std::make_shared<CBlockUndo>()};
+    if (!btck_BlockReader::get(blockreader).m_reader->GetBlockManager().ReadBlockUndo(*block_undo, btck_BlockTreeEntry::get(entry))) {
+        LogError("Failed to read block spent outputs data.");
+        return nullptr;
+    }
+    return btck_BlockSpentOutputs::create(block_undo);
+}
+
+
