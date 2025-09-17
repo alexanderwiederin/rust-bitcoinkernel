@@ -34,6 +34,7 @@
 #include <interfaces/mining.h>
 #include <interfaces/node.h>
 #include <ipc/exception.h>
+#include <kernel/blocktreestorage.h>
 #include <kernel/caches.h>
 #include <kernel/context.h>
 #include <key.h>
@@ -904,7 +905,7 @@ bool AppInitParameterInteraction(const ArgsManager& args)
     }
 
     if (args.IsArgSet("-datacarriersize") || args.IsArgSet("-datacarrier")) {
-        InitWarning(_("Options '-datacarrier' or '-datacarriersize' are set but are marked as deprecated. They will be removed in a future version."));
+        InitWarning(_("Options '-datacarrier' or '-datacarriersize' are set but are marked as deprecated and are expected to be removed in a future version."));
     }
 
     // We no longer limit the orphanage based on number of transactions but keep the option to warn users who still have it in their config.
@@ -1108,11 +1109,8 @@ bool AppInitParameterInteraction(const ArgsManager& args)
         BlockManager::Options blockman_opts_dummy{
             .chainparams = chainman_opts_dummy.chainparams,
             .blocks_dir = args.GetBlocksDirPath(),
+            .block_tree_dir = args.GetDataDirNet() / "blocks" / "index",
             .notifications = chainman_opts_dummy.notifications,
-            .block_tree_db_params = DBParams{
-                .path = args.GetDataDirNet() / "blocks" / "index",
-                .cache_bytes = 0,
-            },
         };
         auto blockman_result{ApplyArgsManOptions(args, blockman_opts_dummy)};
         if (!blockman_result) {
@@ -1233,6 +1231,40 @@ bool CheckHostPortOptions(const ArgsManager& args) {
     return true;
 }
 
+/**
+ * @brief Checks for duplicate bindings across all binding configurations.
+ *
+ * @param[in] conn_options Connection options containing the binding vectors to check
+ * @return std::optional<CService> containing the first duplicate found, or std::nullopt if no duplicates
+ */
+static std::optional<CService> CheckBindingConflicts(const CConnman::Options& conn_options)
+{
+    std::set<CService> seen;
+
+    // Check all whitelisted bindings
+    for (const auto& wb : conn_options.vWhiteBinds) {
+        if (!seen.insert(wb.m_service).second) {
+            return wb.m_service;
+        }
+    }
+
+    // Check regular bindings
+    for (const auto& bind : conn_options.vBinds) {
+        if (!seen.insert(bind).second) {
+            return bind;
+        }
+    }
+
+    // Check onion bindings
+    for (const auto& onion_bind : conn_options.onion_binds) {
+        if (!seen.insert(onion_bind).second) {
+            return onion_bind;
+        }
+    }
+
+    return std::nullopt;
+}
+
 // A GUI user may opt to retry once with do_reindex set if there is a failure during chainstate initialization.
 // The function therefore has to support re-entry.
 static ChainstateLoadResult InitAndLoadChainstate(
@@ -1278,12 +1310,9 @@ static ChainstateLoadResult InitAndLoadChainstate(
     BlockManager::Options blockman_opts{
         .chainparams = chainman_opts.chainparams,
         .blocks_dir = args.GetBlocksDirPath(),
+        .block_tree_dir = args.GetDataDirNet() / "blocks" / "index",
+        .wipe_block_tree_data = do_reindex,
         .notifications = chainman_opts.notifications,
-        .block_tree_db_params = DBParams{
-            .path = args.GetDataDirNet() / "blocks" / "index",
-            .cache_bytes = cache_sizes.block_tree_db,
-            .wipe_data = do_reindex,
-        },
     };
     Assert(ApplyArgsManOptions(args, blockman_opts)); // no error can happen, already checked in AppInitParameterInteraction
 
@@ -1293,7 +1322,7 @@ static ChainstateLoadResult InitAndLoadChainstate(
     Assert(!node.chainman); // Was reset above
     try {
         node.chainman = std::make_unique<ChainstateManager>(*Assert(node.shutdown_signal), chainman_opts, blockman_opts);
-    } catch (dbwrapper_error& e) {
+    } catch (kernel::BlockTreeStoreError& e) {
         LogError("%s", e.what());
         return {ChainstateLoadStatus::FAILURE, _("Error opening block database")};
     } catch (std::exception& e) {
@@ -1736,7 +1765,6 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     const auto [index_cache_sizes, kernel_cache_sizes] = CalculateCacheSizes(args, g_enabled_filter_types.size());
 
     LogInfo("Cache configuration:");
-    LogInfo("* Using %.1f MiB for block index database", kernel_cache_sizes.block_tree_db * (1.0 / 1024 / 1024));
     if (args.GetBoolArg("-txindex", DEFAULT_TXINDEX)) {
         LogInfo("* Using %.1f MiB for transaction index database", index_cache_sizes.tx_index * (1.0 / 1024 / 1024));
     }
@@ -2141,6 +2169,13 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     }
 
     connOptions.m_i2p_accept_incoming = args.GetBoolArg("-i2pacceptincoming", DEFAULT_I2P_ACCEPT_INCOMING);
+
+    if (auto conflict = CheckBindingConflicts(connOptions)) {
+        return InitError(strprintf(
+            _("Duplicate binding configuration for address %s. "
+                "Please check your -bind, -bind=...=onion and -whitebind settings."),
+                    conflict->ToStringAddrPort()));
+    }
 
     if (!node.connman->Start(scheduler, connOptions)) {
         return false;
