@@ -909,16 +909,6 @@ BITCOINKERNEL_API int btck_chainstate_manager_options_set_wipe_dbs(
     int wipe_chainstate_db) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
- * @brief Sets block tree db in memory in the options.
- *
- * @param[in] chainstate_manager_options   Non-null, created by @ref btck_chainstate_manager_options_create.
- * @param[in] block_tree_db_in_memory      Set block tree db in memory.
- */
-BITCOINKERNEL_API void btck_chainstate_manager_options_set_block_tree_db_in_memory(
-    btck_ChainstateManagerOptions* chainstate_manager_options,
-    int block_tree_db_in_memory) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
  * @brief Sets chainstate db in memory in the options.
  *
  * @param[in] chainstate_manager_options Non-null, created by @ref btck_chainstate_manager_options_create.
@@ -1343,6 +1333,36 @@ BITCOINKERNEL_API btck_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT btck_block_tr
 BITCOINKERNEL_API void btck_block_hash_destroy(btck_BlockHash* block_hash);
 
 ///@}
+
+typedef struct btck_BlockReaderOptions btck_BlockReaderOptions;
+
+typedef struct btck_BlockReader btck_BlockReader;
+
+BITCOINKERNEL_API btck_BlockReaderOptions* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_options_create(
+    const btck_Context* context,
+    const char* blocks_directory,
+    size_t blocks_directory_len,
+    const char* data_directory,
+    size_t data_directory_len) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API void btck_blockreader_options_destroy(btck_BlockReaderOptions* blockreader_options);
+
+BITCOINKERNEL_API btck_BlockReader* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_create(
+    const btck_BlockReaderOptions* blockreader_options) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API void btck_blockreader_destroy(btck_BlockReader* blockreader);
+
+BITCOINKERNEL_API const btck_Chain* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_get_validated_chain(const btck_BlockReader* blockreader) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API btck_Block* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_read_block(
+    const btck_BlockReader* blockreader,
+    const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+BITCOINKERNEL_API btck_BlockSpentOutputs* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_block_spent_outputs_read(
+    const btck_BlockReader* blockreader,
+    const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+
 
 #ifdef __cplusplus
 } // extern "C"
