@@ -29,6 +29,7 @@ mod tests {
     fn setup_logging() {
         let mut builder = env_logger::Builder::from_default_env();
         builder.filter(None, log::LevelFilter::Debug).init();
+        assert_eq!(true, false);
 
         unsafe { GLOBAL_LOG_CALLBACK_HOLDER = Some(Logger::new(TestLog {}).unwrap()) };
     }
