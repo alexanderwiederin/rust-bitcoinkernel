@@ -72,8 +72,38 @@ jobs:
     - name: Check formatting
       run: cargo fmt -- --check
 
-    - name: Run tests
-      run: cargo test -vv
+    - name: Install llvm-tools for coverage
+      run: rustup component add llvm-tools-preview
+
+    - name: Install cargo-llvm-cov
+      run: cargo install cargo-llvm-cov --locked --version 0.6.19
+
+    - name: Run tests with coverage
+      run: cargo llvm-cov --all-features --workspace --html --verbose
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: target/llvm-cov/html/
+
+    - name: Comment PR with coverage
+      if: github.event_name == 'pull_request'
+      run: |
+        COVERAGE=$(cargo llvm-cov --all-features --workspace --summary-only)
+        gh pr comment ${{ github.event.pull_request.number }} --body "### Coverage Report
+
+        \`\`\`
+        $COVERAGE
+        \`\`\`
+
+        <details>
+        <summary>View full HTML report</summary>
+
+        Download the coverage report artifact from the [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+        </details>"
+      env:
+        GH_TOKEN: ${{ github.token }}
 
     - name: Install Valgrind
       run: |
