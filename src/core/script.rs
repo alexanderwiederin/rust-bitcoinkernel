@@ -154,3 +154,20 @@ impl<'a> Clone for ScriptPubkeyRef<'a> {
 }
 
 impl<'a> Copy for ScriptPubkeyRef<'a> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::test_utils::{test_owned_ffi_traits, test_ref_ffi_traits};
+
+    test_owned_ffi_traits!(
+        test_scriptpubkey_implementations,
+        ScriptPubkey,
+        btck_ScriptPubkey
+    );
+    test_ref_ffi_traits!(
+        test_scriptpubkey_ref_implementations,
+        ScriptPubkeyRef<'static>,
+        btck_ScriptPubkey
+    );
+}

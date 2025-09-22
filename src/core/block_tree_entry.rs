@@ -72,3 +72,15 @@ impl<'a> Clone for BlockTreeEntry<'a> {
 }
 
 impl<'a> Copy for BlockTreeEntry<'a> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::test_utils::test_ref_ffi_traits;
+
+    test_ref_ffi_traits!(
+        test_blocktreeentry_implementations,
+        BlockTreeEntry<'static>,
+        btck_BlockTreeEntry
+    );
+}
