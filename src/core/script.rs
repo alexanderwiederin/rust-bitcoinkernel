@@ -170,4 +170,188 @@ mod tests {
         ScriptPubkeyRef<'static>,
         btck_ScriptPubkey
     );
+
+    fn create_test_script_bytes() -> Vec<u8> {
+        // P2WPKH script: OP_0 <20-byte-hash>
+        hex::decode("0014751e76e8199196d454941c45d1b3a323f1433bd6").unwrap()
+    }
+
+    fn create_p2pkh_script_bytes() -> Vec<u8> {
+        // P2PKH script: OP_DUP OP_HASH160 <20-byte-hash> OP_EQUALVERIFY OP_CHECKSIG
+        hex::decode("76a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac").unwrap()
+    }
+
+    #[test]
+    fn test_script_pubkey_new() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes);
+        assert!(script.is_ok());
+    }
+
+    #[test]
+    fn test_script_pubkey_new_empty() {
+        let script = ScriptPubkey::new(&[]);
+        assert!(script.is_ok());
+    }
+
+    #[test]
+    fn test_script_pubkey_to_bytes() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+
+        let retrieved_bytes = script.to_bytes();
+        assert_eq!(script_bytes, retrieved_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_try_from_slice() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::try_from(script_bytes.as_slice());
+        assert!(script.is_ok());
+    }
+
+    #[test]
+    fn test_script_pubkey_into_vec() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+
+        let vec: Vec<u8> = script.into();
+        assert_eq!(vec, script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_into_vec() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+
+        let vec: Vec<u8> = (&script).into();
+        assert_eq!(vec, script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_clone() {
+        let script_bytes = create_test_script_bytes();
+        let script1 = ScriptPubkey::new(&script_bytes).unwrap();
+        let script2 = script1.clone();
+
+        assert_eq!(script1.to_bytes(), script2.to_bytes());
+    }
+
+    #[test]
+    fn test_script_pubkey_as_ref() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+
+        let script_ref = script.as_ref();
+        assert_eq!(script_ref.to_bytes(), script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_to_owned() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+        let script_ref = script.as_ref();
+
+        let owned = script_ref.to_owned();
+        assert_eq!(owned.to_bytes(), script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_copy() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+        let ref1 = script.as_ref();
+        let ref2 = ref1;
+
+        assert_eq!(ref1.to_bytes(), ref2.to_bytes());
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_clone() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+        let ref1 = script.as_ref();
+        let ref2 = ref1.clone();
+
+        assert_eq!(ref1.to_bytes(), ref2.to_bytes());
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_into_vec_owned() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+        let script_ref = script.as_ref();
+
+        let vec: Vec<u8> = script_ref.into();
+        assert_eq!(vec, script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_into_vec_borrowed() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+        let script_ref = script.as_ref();
+
+        let vec: Vec<u8> = (&script_ref).into();
+        assert_eq!(vec, script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_different_scripts() {
+        let p2wpkh_bytes = create_test_script_bytes();
+        let p2pkh_bytes = create_p2pkh_script_bytes();
+
+        let p2wpkh = ScriptPubkey::new(&p2wpkh_bytes).unwrap();
+        let p2pkh = ScriptPubkey::new(&p2pkh_bytes).unwrap();
+
+        assert_eq!(p2wpkh.to_bytes(), p2wpkh_bytes);
+        assert_eq!(p2pkh.to_bytes(), p2pkh_bytes);
+        assert_ne!(p2wpkh.to_bytes(), p2pkh.to_bytes());
+    }
+
+    #[test]
+    fn test_script_pubkey_from_mut_ptr() {
+        let script_bytes = create_test_script_bytes();
+        let script1 = ScriptPubkey::new(&script_bytes).unwrap();
+
+        let ptr = unsafe { btck_script_pubkey_copy(script1.as_ptr()) };
+        let script2 = unsafe { ScriptPubkey::from_ptr(ptr) };
+
+        assert_eq!(script1.to_bytes(), script2.to_bytes());
+    }
+
+    #[test]
+    fn test_script_pubkey_ref_from_ptr() {
+        let script_bytes = create_test_script_bytes();
+        let script = ScriptPubkey::new(&script_bytes).unwrap();
+
+        let script_ref = unsafe { ScriptPubkeyRef::from_ptr(script.as_ptr()) };
+
+        assert_eq!(script.to_bytes(), script_ref.to_bytes());
+    }
+
+    #[test]
+    fn test_script_pubkey_ext_trait() {
+        fn get_bytes_generic(script: &impl ScriptPubkeyExt) -> Vec<u8> {
+            script.to_bytes()
+        }
+
+        let script_bytes = create_test_script_bytes();
+        let owned_script = ScriptPubkey::new(&script_bytes).unwrap();
+        let script_ref = owned_script.as_ref();
+
+        assert_eq!(get_bytes_generic(&owned_script), script_bytes);
+        assert_eq!(get_bytes_generic(&script_ref), script_bytes);
+    }
+
+    #[test]
+    fn test_script_pubkey_large_script() {
+        // Test with a larger script (e.g., a multisig script)
+        let large_script = vec![0x51; 200];
+        let script = ScriptPubkey::new(&large_script);
+        assert!(script.is_ok());
+
+        let retrieved = script.unwrap().to_bytes();
+        assert_eq!(retrieved, large_script);
+    }
 }
