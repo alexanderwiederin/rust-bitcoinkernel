@@ -620,4 +620,215 @@ mod tests {
 
     test_owned_ffi_traits!(test_coin_implementations, Coin, btck_Coin);
     test_ref_ffi_traits!(test_coin_ref_implementations, CoinRef<'static>, btck_Coin);
+
+    fn create_test_block_bytes() -> Vec<u8> {
+        hex::decode(
+        "000000203956d8b72a0b1c7c1d4368095f6c1db60573c50827830b648ad2d6741d41947c48e9d057ff732602042bb46933568292bd57e76761273b7af178baf926cebe60aa242d66ffff7f200000000001020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff025e00ffffffff0200f2052a010000001600141409745405c4e8310a875bcd602db6b9b3dc0cf90000000000000000266a24aa21a9ede2f61c3f71d1defd3fa999dfa36953755c690689799962b48bebd836974e8cf90120000000000000000000000000000000000000000000000000000000000000000000000000"
+    ).unwrap()
+    }
+
+    fn create_test_block_hash_bytes() -> Vec<u8> {
+        hex::decode("0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206").unwrap()
+    }
+
+    #[test]
+    fn test_block_hash_new() {
+        let hash_bytes = [0u8; 32];
+        let hash = BlockHash::new(&hash_bytes);
+        assert!(hash.is_ok());
+    }
+
+    #[test]
+    fn test_block_hash_new_invalid_length() {
+        let hash_bytes = vec![0u8; 16];
+        let hash = BlockHash::new(&hash_bytes);
+
+        assert!(matches!(hash, Err(KernelError::InvalidLength { .. })));
+    }
+
+    #[test]
+    fn test_block_hash_to_bytes() {
+        let original_bytes = [42u8; 32];
+        let hash = BlockHash::new(&original_bytes).unwrap();
+        let retrieved_bytes: [u8; 32] = (&hash).into();
+
+        assert_eq!(original_bytes, retrieved_bytes);
+    }
+
+    #[test]
+    fn test_block_hash_from_array() {
+        let hash_bytes = [1u8; 32];
+        let hash = BlockHash::from(hash_bytes);
+        let retrieved: [u8; 32] = hash.into();
+
+        assert_eq!(hash_bytes, retrieved);
+    }
+
+    #[test]
+    fn test_block_hash_try_from_slice() {
+        let hash_bytes = [2u8; 32];
+        let hash = BlockHash::try_from(hash_bytes.as_slice());
+        assert!(hash.is_ok());
+    }
+
+    #[test]
+    fn test_block_hash_clone() {
+        let hash_bytes = create_test_block_hash_bytes();
+        let hash1 = BlockHash::new(&hash_bytes).unwrap();
+        let hash2 = hash1.clone();
+
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_block_hash_equality() {
+        let bytes = [5u8; 32];
+        let hash1 = BlockHash::from(&bytes);
+        let hash2 = BlockHash::from(&bytes);
+
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_block_hash_debug() {
+        let hash_bytes = create_test_block_hash_bytes();
+        let hash = BlockHash::new(&hash_bytes).unwrap();
+        let debug_str = format!("{:?}", hash);
+        assert!(debug_str.contains("BlockHash"));
+    }
+
+    #[test]
+    fn test_block_hash_from_mut_ptr() {
+        let hash_bytes = create_test_block_hash_bytes();
+        let hash1 = BlockHash::new(&hash_bytes).unwrap();
+
+        let ptr = unsafe { btck_block_hash_copy(hash1.as_ptr()) };
+        let hash2 = unsafe { BlockHash::from_ptr(ptr) };
+
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_block_new() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes);
+        assert!(block.is_ok());
+    }
+
+    #[test]
+    fn test_block_new_invalid_bytes() {
+        let invalid_bytes = vec![0x00, 0x01, 0x02];
+        let block = Block::new(&invalid_bytes);
+
+        assert!(matches!(block, Err(KernelError::Internal(_))));
+    }
+
+    #[test]
+    fn test_block_hash() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let hash = block.hash();
+        let hash_bytes: [u8; 32] = hash.into();
+
+        assert_eq!(hash_bytes.len(), 32);
+    }
+
+    #[test]
+    fn test_block_transaction_count() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let count = block.transaction_count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_block_get_transaction() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let tx = block.transaction(0);
+        assert!(tx.is_ok());
+    }
+
+    #[test]
+    fn test_block_get_transaction_out_of_bounds() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let tx = block.transaction(999);
+
+        assert!(matches!(tx, Err(KernelError::OutOfBounds)));
+    }
+
+    #[test]
+    fn test_block_consensus_encode() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let encoded = block.consensus_encode();
+        assert!(encoded.is_ok());
+
+        let encoded_bytes = encoded.unwrap();
+        assert_eq!(encoded_bytes, block_bytes);
+    }
+
+    #[test]
+    fn test_block_clone() {
+        let block_bytes = create_test_block_bytes();
+        let block1 = Block::new(&block_bytes).unwrap();
+        let block2 = block1.clone();
+
+        assert_eq!(block1.transaction_count(), block2.transaction_count());
+    }
+
+    #[test]
+    fn test_block_try_from_bytes() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::try_from(block_bytes.as_slice());
+        assert!(block.is_ok());
+    }
+
+    #[test]
+    fn test_block_to_vec() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let vec_result = Vec::<u8>::try_from(block);
+        assert!(vec_result.is_ok());
+        assert_eq!(vec_result.unwrap(), block_bytes);
+    }
+
+    #[test]
+    fn test_block_ref_to_vec() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let vec_result = Vec::<u8>::try_from(&block);
+        assert!(vec_result.is_ok());
+        assert_eq!(vec_result.unwrap(), block_bytes);
+    }
+
+    #[test]
+    fn test_block_from_mut_ptr() {
+        let block_bytes = create_test_block_bytes();
+        let block1 = Block::new(&block_bytes).unwrap();
+
+        let ptr = unsafe { btck_block_copy(block1.as_ptr()) };
+        let block2 = unsafe { Block::from_ptr(ptr) };
+
+        assert_eq!(block1.transaction_count(), block2.transaction_count());
+    }
+
+    #[test]
+    fn test_block_multiple_transactions() {
+        let block_bytes = create_test_block_bytes();
+        let block = Block::new(&block_bytes).unwrap();
+
+        let tx_count = block.transaction_count();
+        for i in 0..tx_count {
+            let _tx = block.transaction(i).unwrap();
+        }
+    }
 }
