@@ -88,6 +88,12 @@ impl From<[u8; 32]> for BlockHash {
     }
 }
 
+impl From<&[u8; 32]> for BlockHash {
+    fn from(hash: &[u8; 32]) -> Self {
+        BlockHash::new(hash.as_slice()).expect("32-byte array should always be valid")
+    }
+}
+
 impl TryFrom<&[u8]> for BlockHash {
     type Error = KernelError;
 
