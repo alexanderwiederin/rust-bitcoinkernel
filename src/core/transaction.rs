@@ -296,6 +296,7 @@ impl<'a> Copy for TxOutRef<'a> {}
 mod tests {
     use super::*;
     use crate::core::test_utils::{test_owned_ffi_traits, test_ref_ffi_traits};
+    use crate::core::ScriptPubkey;
 
     test_owned_ffi_traits!(
         test_transaction_implementations,
@@ -314,4 +315,280 @@ mod tests {
         TxOutRef<'static>,
         btck_TransactionOutput
     );
+
+    // Helper function to create valid transaction bytes
+    fn create_test_transaction_bytes() -> Vec<u8> {
+        // A simple valid Bitcoin transaction in hex format
+        // This is a minimal transaction with 2 inputs and 3 outputs
+        hex::decode(
+            "0200000002f4f1c5c8e8d8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a1b2c3d4e5f6a7b80000000000fefffffffedc\
+            ba9876543210fedcba9876543210fedcba9876543210fedcba98765432100000000000feffffff0300e1f50500000000160014\
+            751e76e8199196d454941c45d1b3a323f1433bd600ca9a3b00000000160014ab68025513c3dbd2f7b92a94e0581f5d50f654e7\
+            cd1d00000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00000000"
+        ).unwrap()
+    }
+
+    // Helper to create a test script pubkey
+    fn create_test_script_pubkey() -> ScriptPubkey {
+        // P2WPKH script: OP_0 <20-byte-hash>
+        let script_bytes = hex::decode("0014751e76e8199196d454941c45d1b3a323f1433bd6").unwrap();
+        ScriptPubkey::new(&script_bytes).unwrap()
+    }
+
+    #[test]
+    fn test_transaction_new() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes);
+        assert!(tx.is_ok());
+    }
+
+    #[test]
+    fn test_transaction_new_invalid_bytes() {
+        let invalid_bytes = vec![0x00, 0x01, 0x02];
+        let tx = Transaction::new(&invalid_bytes);
+
+        assert!(matches!(tx, Err(KernelError::Internal(_))));
+    }
+
+    #[test]
+    fn test_transaction_output_count() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let count = tx.output_count();
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_transaction_input_count() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let count = tx.input_count();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_transaction_get_output() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let output = tx.output(0);
+        assert!(output.is_ok());
+
+        let tx_out = output.unwrap();
+        assert_eq!(tx_out.value(), 100_000_000);
+    }
+
+    #[test]
+    fn test_transaction_get_output_out_of_bounds() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let output = tx.output(999);
+
+        assert!(matches!(output, Err(KernelError::OutOfBounds)));
+    }
+
+    #[test]
+    fn test_transaction_consensus_encode() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let encoded = tx.consensus_encode();
+        assert!(encoded.is_ok());
+
+        let encoded_bytes = encoded.unwrap();
+        assert_eq!(encoded_bytes, tx_bytes);
+    }
+
+    #[test]
+    fn test_transaction_clone() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx1 = Transaction::new(&tx_bytes).unwrap();
+        let tx2 = tx1.clone();
+
+        assert_eq!(tx1.output_count(), tx2.output_count());
+        assert_eq!(tx1.input_count(), tx2.input_count());
+    }
+
+    #[test]
+    fn test_transaction_try_from_bytes() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::try_from(tx_bytes.as_slice());
+        assert!(tx.is_ok());
+    }
+
+    #[test]
+    fn test_transaction_to_vec() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let vec_result = Vec::<u8>::try_from(tx);
+        assert!(vec_result.is_ok());
+        assert_eq!(vec_result.unwrap(), tx_bytes);
+    }
+
+    #[test]
+    fn test_transaction_ref_to_vec() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let vec_result = Vec::<u8>::try_from(&tx);
+        assert!(vec_result.is_ok());
+        assert_eq!(vec_result.unwrap(), tx_bytes);
+    }
+
+    #[test]
+    fn test_transaction_ref_to_owned() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+        let tx_ref = tx.as_ref();
+
+        let owned = tx_ref.to_owned();
+        assert_eq!(owned.output_count(), tx.output_count());
+    }
+
+    #[test]
+    fn test_transaction_ref_copy() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+        let tx_ref1 = tx.as_ref();
+        let tx_ref2 = tx_ref1;
+
+        assert_eq!(tx_ref1.output_count(), tx_ref2.output_count());
+    }
+
+    #[test]
+    fn test_txout_new() {
+        let script = create_test_script_pubkey();
+        let amount = 100_000_000;
+
+        let tx_out = TxOut::new(&script, amount);
+        assert_eq!(tx_out.value(), amount);
+    }
+
+    #[test]
+    fn test_txout_value() {
+        let script = create_test_script_pubkey();
+        let amount = 50_000_000;
+
+        let tx_out = TxOut::new(&script, amount);
+        assert_eq!(tx_out.value(), amount);
+    }
+
+    #[test]
+    fn test_txout_clone() {
+        let script = create_test_script_pubkey();
+        let amount = 25_000_000;
+
+        let tx_out1 = TxOut::new(&script, amount);
+        let tx_out2 = tx_out1.clone();
+
+        assert_eq!(tx_out1.value(), tx_out2.value());
+    }
+
+    #[test]
+    fn test_txout_ref_to_owned() {
+        let script = create_test_script_pubkey();
+        let amount = 75_000_000;
+
+        let tx_out = TxOut::new(&script, amount);
+        let tx_out_ref = tx_out.as_ref();
+
+        let owned = tx_out_ref.to_owned();
+        assert_eq!(owned.value(), amount);
+    }
+
+    #[test]
+    fn test_txout_ref_copy() {
+        let script = create_test_script_pubkey();
+        let amount = 10_000;
+
+        let tx_out = TxOut::new(&script, amount);
+        let ref1 = tx_out.as_ref();
+        let ref2 = ref1;
+
+        assert_eq!(ref1.value(), ref2.value());
+    }
+
+    #[test]
+    fn test_transaction_multiple_outputs() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let output_count = tx.output_count();
+        for i in 0..output_count {
+            let _output = tx.output(i).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_transaction_from_mut_ptr() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx1 = Transaction::new(&tx_bytes).unwrap();
+
+        let ptr = unsafe { btck_transaction_copy(tx1.as_ptr()) };
+
+        let tx2 = unsafe { Transaction::from_ptr(ptr) };
+
+        assert_eq!(tx1.output_count(), tx2.output_count());
+        assert_eq!(tx1.input_count(), tx2.input_count());
+    }
+
+    #[test]
+    fn test_transaction_ref_from_ptr() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+
+        let tx_ref = unsafe { TransactionRef::from_ptr(tx.as_ptr()) };
+
+        assert_eq!(tx.output_count(), tx_ref.output_count());
+        assert_eq!(tx.input_count(), tx_ref.input_count());
+    }
+
+    #[test]
+    fn test_txout_from_mut_ptr() {
+        let script = create_test_script_pubkey();
+        let amount = 100_000_000;
+        let txout1 = TxOut::new(&script, amount);
+
+        let ptr = unsafe { btck_transaction_output_copy(txout1.as_ptr()) };
+
+        let txout2 = unsafe { TxOut::from_ptr(ptr) };
+
+        assert_eq!(txout1.value(), txout2.value());
+    }
+
+    #[test]
+    fn test_txout_ref_from_ptr() {
+        let script = create_test_script_pubkey();
+        let amount = 50_000_000;
+        let txout = TxOut::new(&script, amount);
+
+        let txout_ref = unsafe { TxOutRef::from_ptr(txout.as_ptr()) };
+
+        assert_eq!(txout.value(), txout_ref.value());
+    }
+
+    #[test]
+    fn test_transaction_ref_clone() {
+        let tx_bytes = create_test_transaction_bytes();
+        let tx = Transaction::new(&tx_bytes).unwrap();
+        let tx_ref1 = tx.as_ref();
+        let tx_ref2 = tx_ref1.clone(); // Explicit clone call
+
+        assert_eq!(tx_ref1.output_count(), tx_ref2.output_count());
+    }
+
+    #[test]
+    fn test_txout_ref_clone() {
+        let script = create_test_script_pubkey();
+        let amount = 50_000_000;
+        let tx_out = TxOut::new(&script, amount);
+        let ref1 = tx_out.as_ref();
+        let ref2 = ref1.clone(); // Explicit clone call
+
+        assert_eq!(ref1.value(), ref2.value());
+    }
 }
