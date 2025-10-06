@@ -54,6 +54,8 @@ pub(crate) unsafe extern "C" fn validation_block_checked_wrapper(
     block: *mut btck_Block,
     stateIn: *const btck_BlockValidationState,
 ) {
+    eprintln!("block_checked called");
+
     let registry = &*(user_data as *mut ValidationCallbackRegistry);
 
     if let Some(ref handler) = registry.block_checked_handler {
