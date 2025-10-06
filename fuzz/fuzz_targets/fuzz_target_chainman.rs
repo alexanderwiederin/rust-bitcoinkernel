@@ -22,7 +22,6 @@ fn create_context(chain_type: ChainType) -> Arc<Context> {
             .with_warning_unset_notification(|_warning| {})
             .with_flush_error_notification(|_message| {})
             .with_fatal_error_notification(|_message| {})
-            .with_block_checked_validation(|_block, _mode, _result| {})
             .build()
             .unwrap(),
     )
