@@ -10,7 +10,7 @@
 //!
 //! ## Key Features
 //!
-//! - **Block Processing**: Process and validate blocks against consensus rules
+//! - **Block Processing**: Process and validate blocks and block headers against consensus rules
 //! - **Script Verification**: Validate transaction scripts
 //! - **Chain Queries**: Traverse the chain and read block data
 //! - **Event Notifications**: Subscribe to block validation, tip updates, and error events
@@ -294,8 +294,8 @@ impl std::error::Error for KernelError {
 }
 
 pub use crate::core::{
-    verify, Block, BlockHash, BlockSpentOutputs, BlockSpentOutputsRef, BlockTreeEntry, Coin,
-    CoinRef, PrecomputedTransactionData, ScriptPubkey, ScriptPubkeyRef, ScriptVerifyError,
+    verify, Block, BlockHash, BlockHeader, BlockSpentOutputs, BlockSpentOutputsRef, BlockTreeEntry,
+    Coin, CoinRef, PrecomputedTransactionData, ScriptPubkey, ScriptPubkeyRef, ScriptVerifyError,
     Transaction, TransactionRef, TransactionSpentOutputs, TransactionSpentOutputsRef, TxIn,
     TxInRef, TxOut, TxOutPoint, TxOutPointRef, TxOutRef, Txid, TxidRef,
 };
@@ -311,7 +311,7 @@ pub use crate::notifications::{
 
 pub use crate::state::{
     Chain, ChainParams, ChainType, ChainstateManager, ChainstateManagerBuilder, Context,
-    ContextBuilder, ProcessBlockResult,
+    ContextBuilder, ProcessBlockHeaderResult, ProcessBlockResult,
 };
 
 pub use crate::core::verify_flags::{
@@ -321,8 +321,8 @@ pub use crate::core::verify_flags::{
 
 pub mod prelude {
     pub use crate::core::{
-        BlockHashExt, BlockSpentOutputsExt, CoinExt, ScriptPubkeyExt, TransactionExt,
-        TransactionSpentOutputsExt, TxInExt, TxOutExt, TxOutPointExt, TxidExt,
+        BlockHashExt, BlockHeaderExt, BlockSpentOutputsExt, CoinExt, ScriptPubkeyExt,
+        TransactionExt, TransactionSpentOutputsExt, TxInExt, TxOutExt, TxOutPointExt, TxidExt,
     };
     pub use crate::notifications::BlockValidationStateExt;
 }
