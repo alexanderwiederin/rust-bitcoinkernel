@@ -22,7 +22,10 @@ use crate::{
     KernelError,
 };
 
-use super::transaction::{TransactionRef, TxOutRef};
+use super::{
+    transaction::{TransactionRef, TxOutRef},
+    Iter,
+};
 
 /// A type for a Block hash.
 pub struct BlockHash {
@@ -185,6 +188,16 @@ impl Block {
             btck_block_to_bytes(self.inner, Some(callback), user_data)
         })
     }
+
+    pub fn transactions(
+        &self,
+    ) -> impl Iterator<Item = TransactionRef<'_>> + ExactSizeIterator + '_ {
+        Iter::new(
+            self,
+            |block| block.transaction_count(),
+            |block, i| block.transaction(i).ok(),
+        )
+    }
 }
 
 impl AsPtr<btck_Block> for Block {
@@ -271,6 +284,26 @@ pub trait BlockSpentOutputsExt: AsPtr<btck_BlockSpentOutputs> {
             return Err(KernelError::OutOfBounds);
         }
         Ok(unsafe { TransactionSpentOutputsRef::from_ptr(tx_out_ptr) })
+    }
+
+    fn iter(&self) -> BlockSpentOutputsIter<'_> {
+        Iter::new(
+            unsafe { BlockSpentOutputsRef::from_ptr(self.as_ptr()) },
+            |parent| parent.count(),
+            |parent, idx| {
+                if idx >= parent.count() {
+                    return None;
+                }
+                let tx_out_ptr = unsafe {
+                    btck_block_spent_outputs_get_transaction_spent_outputs_at(parent.as_ptr(), idx)
+                };
+                if tx_out_ptr.is_null() {
+                    None
+                } else {
+                    Some(unsafe { TransactionSpentOutputsRef::from_ptr(tx_out_ptr) })
+                }
+            },
+        )
     }
 }
 
@@ -361,6 +394,14 @@ impl<'a> Clone for BlockSpentOutputsRef<'a> {
 
 impl<'a> Copy for BlockSpentOutputsRef<'a> {}
 
+pub type BlockSpentOutputsIter<'a> = Iter<
+    'a,
+    TransactionSpentOutputsRef<'a>,
+    BlockSpentOutputsRef<'a>,
+    fn(&BlockSpentOutputsRef<'a>) -> usize,
+    fn(&BlockSpentOutputsRef<'a>, usize) -> Option<TransactionSpentOutputsRef<'a>>,
+>;
+
 /// Common operations for transaction spent outputs, implemented by both owned and borrowed types.
 pub trait TransactionSpentOutputsExt: AsPtr<btck_TransactionSpentOutputs> {
     /// Returns the number of coins spent by this transaction
@@ -383,6 +424,21 @@ pub trait TransactionSpentOutputsExt: AsPtr<btck_TransactionSpentOutputs> {
         let coin_ptr =
             unsafe { btck_transaction_spent_outputs_get_coin_at(self.as_ptr(), coin_index) };
         Ok(unsafe { CoinRef::from_ptr(coin_ptr) })
+    }
+
+    fn coins(&self) -> TransactionSpentOutputsIter<'_> {
+        Iter::new(
+            unsafe { TransactionSpentOutputsRef::from_ptr(self.as_ptr()) },
+            |parent| parent.count(),
+            |parent, idx| {
+                if idx >= parent.count() {
+                    return None;
+                }
+                let coin_ptr =
+                    unsafe { btck_transaction_spent_outputs_get_coin_at(parent.as_ptr(), idx) };
+                Some(unsafe { CoinRef::from_ptr(coin_ptr) })
+            },
+        )
     }
 }
 
@@ -472,6 +528,14 @@ impl<'a> Clone for TransactionSpentOutputsRef<'a> {
 }
 
 impl<'a> Copy for TransactionSpentOutputsRef<'a> {}
+
+pub type TransactionSpentOutputsIter<'a> = Iter<
+    'a,
+    CoinRef<'a>,
+    TransactionSpentOutputsRef<'a>,
+    fn(&TransactionSpentOutputsRef<'a>) -> usize,
+    fn(&TransactionSpentOutputsRef<'a>, usize) -> Option<CoinRef<'a>>,
+>;
 
 /// Common operations for coins, implemented by both owned and borrowed types.
 pub trait CoinExt: AsPtr<btck_Coin> {
