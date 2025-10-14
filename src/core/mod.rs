@@ -1,5 +1,6 @@
 pub mod block;
 pub mod block_tree_entry;
+pub mod iterator;
 pub mod script;
 pub mod transaction;
 pub mod verify;
@@ -9,6 +10,7 @@ pub use block::{
     TransactionSpentOutputs, TransactionSpentOutputsRef,
 };
 pub use block_tree_entry::BlockTreeEntry;
+pub use iterator::{Iter, IterableCollection};
 pub use script::{ScriptPubkey, ScriptPubkeyRef};
 pub use transaction::{Transaction, TransactionRef, TxOut, TxOutRef};
 

@@ -22,7 +22,10 @@ use crate::{
     KernelError,
 };
 
-use super::transaction::{TransactionRef, TxOutRef};
+use super::{
+    transaction::{TransactionRef, TxOutRef},
+    Iter, IterableCollection,
+};
 
 /// A type for a Block hash.
 pub struct BlockHash {
@@ -185,6 +188,10 @@ impl Block {
             btck_block_to_bytes(self.inner, Some(callback), user_data)
         })
     }
+
+    pub fn transactions(&self) -> BlockTransactionIter<'_> {
+        Iter::new(self)
+    }
 }
 
 impl AsPtr<btck_Block> for Block {
@@ -237,6 +244,26 @@ impl TryFrom<&Block> for Vec<u8> {
     }
 }
 
+impl<'a> IterableCollection for &'a Block {
+    type Item<'b>
+        = TransactionRef<'b>
+    where
+        Self: 'b;
+
+    fn len(&self) -> usize {
+        self.transaction_count()
+    }
+
+    fn get<'b>(self, index: usize) -> Option<Self::Item<'b>>
+    where
+        Self: 'b,
+    {
+        self.transaction(index).ok()
+    }
+}
+
+pub type BlockTransactionIter<'a> = Iter<'a, &'a Block>;
+
 /// Common operations for block spent outputs, implemented by both owned and borrowed types.
 pub trait BlockSpentOutputsExt: AsPtr<btck_BlockSpentOutputs> {
     /// Returns the number of transactions that have spent output data.
@@ -271,6 +298,10 @@ pub trait BlockSpentOutputsExt: AsPtr<btck_BlockSpentOutputs> {
             return Err(KernelError::OutOfBounds);
         }
         Ok(unsafe { TransactionSpentOutputsRef::from_ptr(tx_out_ptr) })
+    }
+
+    fn iter(&self) -> BlockSpentOutputsIter<'_> {
+        Iter::new(unsafe { BlockSpentOutputsRef::from_ptr(self.as_ptr()) })
     }
 }
 
@@ -361,6 +392,36 @@ impl<'a> Clone for BlockSpentOutputsRef<'a> {
 
 impl<'a> Copy for BlockSpentOutputsRef<'a> {}
 
+impl<'a> IterableCollection for BlockSpentOutputsRef<'a> {
+    type Item<'b>
+        = TransactionSpentOutputsRef<'b>
+    where
+        Self: 'b;
+
+    fn len(&self) -> usize {
+        BlockSpentOutputsExt::count(self)
+    }
+
+    fn get<'b>(self, index: usize) -> Option<Self::Item<'b>>
+    where
+        Self: 'b,
+    {
+        if index >= self.len() {
+            return None;
+        }
+        let tx_out_ptr = unsafe {
+            btck_block_spent_outputs_get_transaction_spent_outputs_at(self.as_ptr(), index)
+        };
+        if tx_out_ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { TransactionSpentOutputsRef::from_ptr(tx_out_ptr) })
+        }
+    }
+}
+
+pub type BlockSpentOutputsIter<'a> = Iter<'a, BlockSpentOutputsRef<'a>>;
+
 /// Common operations for transaction spent outputs, implemented by both owned and borrowed types.
 pub trait TransactionSpentOutputsExt: AsPtr<btck_TransactionSpentOutputs> {
     /// Returns the number of coins spent by this transaction
@@ -383,6 +444,10 @@ pub trait TransactionSpentOutputsExt: AsPtr<btck_TransactionSpentOutputs> {
         let coin_ptr =
             unsafe { btck_transaction_spent_outputs_get_coin_at(self.as_ptr(), coin_index) };
         Ok(unsafe { CoinRef::from_ptr(coin_ptr) })
+    }
+
+    fn coins(&self) -> TransactionSpentOutputsIter<'_> {
+        Iter::new(unsafe { TransactionSpentOutputsRef::from_ptr(self.as_ptr()) })
     }
 }
 
@@ -472,6 +537,30 @@ impl<'a> Clone for TransactionSpentOutputsRef<'a> {
 }
 
 impl<'a> Copy for TransactionSpentOutputsRef<'a> {}
+
+impl<'a> IterableCollection for TransactionSpentOutputsRef<'a> {
+    type Item<'b>
+        = CoinRef<'b>
+    where
+        Self: 'b;
+
+    fn len(&self) -> usize {
+        TransactionSpentOutputsExt::count(self)
+    }
+
+    fn get<'b>(self, index: usize) -> Option<Self::Item<'b>>
+    where
+        Self: 'b,
+    {
+        if index >= self.len() {
+            return None;
+        }
+        let coin_ptr = unsafe { btck_transaction_spent_outputs_get_coin_at(self.as_ptr(), index) };
+        Some(unsafe { CoinRef::from_ptr(coin_ptr) })
+    }
+}
+
+pub type TransactionSpentOutputsIter<'a> = Iter<'a, TransactionSpentOutputsRef<'a>>;
 
 /// Common operations for coins, implemented by both owned and borrowed types.
 pub trait CoinExt: AsPtr<btck_Coin> {
