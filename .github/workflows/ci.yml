@@ -18,7 +18,7 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         # Set this to your MSRV as specified in Cargo.toml
-        toolchain: 1.71.0
+        toolchain: 1.75.0
 
     - name: Install Boost library
       run: |
