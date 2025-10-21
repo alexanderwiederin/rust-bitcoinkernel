@@ -1,0 +1,4 @@
+[submodule "libbitcoinkernel-sys/bitcoin"]
+	path = libbitcoinkernel-sys/bitcoin
+	url = https://github.com/TheCharlatan/bitcoin
+	branch = kernelApi
