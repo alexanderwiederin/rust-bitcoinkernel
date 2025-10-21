@@ -13,14 +13,31 @@ The library statically compiles the Bitcoin Core libbitcoinkernel library as
 part of its build system. Currently it targets the kernelApi branch on the
 following fork: https://github.com/TheCharlatan/bitcoin/tree/kernelApi.
 
-Bitcoin Core is vendored as a `git subtree` in this project. The subtree can
-be updated, or made to point at a different commit or branch in Bitcoin Core's
-history with:
+Bitcoin Core is vendored as a `git submodule` in this project.
 
-```
- git subtree pull --prefix libbitcoinkernel-sys/bitcoin https://github.com/TheCharlatan/bitcoin kernelApiNode --squash
+### Cloning the repository
+When cloning this repository, make sure to initialize the submodules:
+```bash
+git clone --recurse-submodules https://github.com/TheCharlatan/rust-bitcoinkernel
 ```
 
+Or if you've already cloned the repository:
+```bash
+git submodule update --init --recursive
+```
+
+### Updating the Bitcoin Core submodule
+To update the submodule to the latest commit on the tracked branch:
+```bash
+git submodule update --remote libbitcoinkernel-sys/bitcoin
+cd libbitcoinkernel-sys/bitcoin
+git checkout   # Optional: pin to specific commit
+cd ../..
+git add libbitcoinkernel-sys/bitcoin
+git commit -m "Update bitcoin submodule to "
+```
+
+### Build requirements
 To build this library, the usual Bitcoin Core build requirements, such as
 `cmake` and a working C and C++ compiler are required. An installation of boost
 is required as well. Consult the Bitcoin Core documentation for the required
