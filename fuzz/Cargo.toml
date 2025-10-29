@@ -26,6 +26,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "fuzz_target_chainman_setup"
+path = "fuzz_targets/fuzz_target_chainman_setup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "fuzz_target_verify"
 path = "fuzz_targets/fuzz_target_verify.rs"
 test = false
@@ -38,3 +45,4 @@ path = "fuzz_targets/fuzz_target_block.rs"
 test = false
 doc = false
 bench = false
+
