@@ -19,8 +19,8 @@ name = "fuzz_common"
 path = "common/lib.rs"
 
 [[bin]]
-name = "fuzz_target_chainman"
-path = "fuzz_targets/fuzz_target_chainman.rs"
+name = "fuzz_target_chainman_process_blocks"
+path = "fuzz_targets/fuzz_target_chainman_process_blocks.rs"
 test = false
 doc = false
 bench = false
