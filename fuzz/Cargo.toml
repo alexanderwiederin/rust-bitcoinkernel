@@ -29,8 +29,8 @@ doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_target_block"
-path = "fuzz_targets/fuzz_target_block.rs"
+name = "fuzz_target_block_deserialize"
+path = "fuzz_targets/fuzz_target_block_deserialize.rs"
 test = false
 doc = false
 bench = false

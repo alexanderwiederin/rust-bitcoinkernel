@@ -227,9 +227,9 @@ jobs:
         # First compile the main crate with sanitizer flags
         cargo build --verbose
         # Now build and run the fuzzing targets with the same sanitizer flags
-        cargo fuzz build fuzz_target_block
+        cargo fuzz build fuzz_target_block_deserialize
         cargo fuzz build fuzz_target_chainman
         cargo fuzz build fuzz_target_verify
         cargo fuzz run fuzz_target_verify -- -max_total_time=20
         cargo fuzz run fuzz_target_chainman -- -max_total_time=20
-        cargo fuzz run fuzz_target_block -- -max_total_time=20
+        cargo fuzz run fuzz_target_block_deserialize -- -max_total_time=20
