@@ -214,6 +214,11 @@ jobs:
     - name: Install cargo-fuzz
       run: cargo install cargo-fuzz
 
+    - name: Clone fuzzing corpus
+      run: |
+        git clone --depth=1 https://github.com/bitcoin-core/qa-assets /tmp/qa-assets
+        echo "QA_ASSETS_DIR=/tmp/qa-assets" >> $GITHUB_ENV
+
     - name: Set up fuzzing directories
       run: |
         mkdir -p /tmp/rust_kernel_fuzz
@@ -226,10 +231,27 @@ jobs:
       run: |
         # First compile the main crate with sanitizer flags
         cargo build --verbose
-        # Now build and run the fuzzing targets with the same sanitizer flags
+
+        # Now build all fuzz targets
         cargo fuzz build fuzz_target_block_deserialize
         cargo fuzz build fuzz_target_chainman
         cargo fuzz build fuzz_target_verify
-        cargo fuzz run fuzz_target_verify -- -max_total_time=20
-        cargo fuzz run fuzz_target_chainman -- -max_total_time=20
-        cargo fuzz run fuzz_target_block_deserialize -- -max_total_time=20
+
+        # Define target to corpus mapping
+        declare -A CORPUS_MAP=(
+          ["fuzz_target_block_deserialize"]="block_deserialize"
+          ["fuzz_target_verify"]=""
+          ["fuzz_target_chainman"]=""
+        )
+
+        # Run each target with its corpus if available
+        for target in "${!CORPUS_MAP[@]}"; do
+          corpus="${CORPUS_MAP[$target]}"
+          if [ -n "$corpus" ] && [ -d "$QA_ASSETS_DIR/fuzz_corpora/$corpus" ]; then
+            echo "Running $target with corpus $corpus"
+            cargo fuzz run $target "$QA_ASSETS_DIR/fuzz_corpora/$corpus" -- -max_total_time=20
+          else
+            echo "Running $target without corpus"
+            cargo fuzz run $target -- -max_total_time=20
+          fi
+        done
