@@ -34,3 +34,10 @@ path = "fuzz_targets/fuzz_target_block_deserialize.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_target_block_hash"
+path = "fuzz_targets/fuzz_target_block_hash.rs"
+test = false
+doc = false
+bench = false
