@@ -241,6 +241,7 @@ jobs:
         declare -A CORPUS_MAP=(
           ["fuzz_target_block_deserialize"]="block_deserialize"
           ["fuzz_target_block_hash"]="block_deserialize"
+          ["fuzz_target_block_transactions"]="block_deserialize"
           ["fuzz_target_verify"]=""
           ["fuzz_target_chainman"]=""
         )
