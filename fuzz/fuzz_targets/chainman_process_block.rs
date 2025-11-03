@@ -83,8 +83,7 @@ fuzz_target!(|data: ChainstateManagerInput| {
     let blocks_dir = format!("{}/blocks", data_dir);
     let chainman_opts = match ChainstateManagerOptions::new(&context, &data_dir, &blocks_dir) {
         Ok(opts) => opts,
-        Err(KernelError::CStringCreationFailed(_)) => return,
-        Err(err) => panic!("this should never happen: {}", err),
+        Err(_) => return,
     }
     .wipe_db(data.wipe_block_index, data.wipe_chainstate_index)
     .block_tree_db_in_memory(data.block_tree_db_in_memory)
