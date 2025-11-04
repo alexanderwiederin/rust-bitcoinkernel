@@ -34,3 +34,17 @@ path = "fuzz_targets/block_roundtrip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "tx_out"
+path = "fuzz_targets/tx_out.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "scriptpubkey_roundtrip"
+path = "fuzz_targets/scriptpubkey_roundtrip.rs"
+test = false
+doc = false
+bench = false
