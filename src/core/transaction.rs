@@ -1,3 +1,126 @@
+//! Transaction data structures.
+//!
+//! This module provides types for working with Bitcoin transactions, including
+//! transaction inputs, outputs, outpoints, and transaction IDs. All types include
+//! both owned and borrowed variants for efficient memory management.
+//!
+//! # Core Types
+//!
+//! - `Transaction` - A transaction with inputs and outputs
+//! - `Txid` - A 32-byte hash uniquely identifying a transaction
+//! - `TxIn` - A transaction input spending a previous output
+//! - `TxOut` - A transaction output containing value and spending conditions
+//! - `TxOutPoint` - A reference to a specific output in a previous transaction
+//!
+//! # Common Patterns
+//!
+//! ## Creating and Working with Transactions
+//!
+//! Transactions can be created from raw serialized data:
+//!
+//! ```no_run
+//! use bitcoinkernel::{prelude::*, Transaction};
+//!
+//! # fn example() -> Result<(), bitcoinkernel::KernelError> {
+//! let tx_data = vec![0u8; 100]; // placeholder
+//! let tx = Transaction::new(&tx_data)?;
+//!
+//! // Get transaction ID
+//! let txid = tx.txid();
+//! println!("Transaction ID: {}", txid);
+//!
+//! // Iterate over inputs and outputs
+//! for input in tx.inputs() {
+//!     println!("Spending: {}:{}", input.outpoint().txid(), input.outpoint().index());
+//! }
+//!
+//! for output in tx.outputs() {
+//!     println!("Output value: {} satoshis", output.value());
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Working with Transaction IDs
+//!
+//! Transaction IDs can be obtained from transactions and inspected as raw bytes
+//! or as a hexadecimal string:
+//!
+//! ```no_run
+//! use bitcoinkernel::{prelude::*, Transaction};
+//!
+//! # fn example() -> Result<(), bitcoinkernel::KernelError> {
+//! # let tx_data = vec![0u8; 100]; // placeholder
+//! # let tx = Transaction::new(&tx_data)?;
+//! let txid = tx.txid();
+//!
+//! // Display as hex string (reversed byte order)
+//! println!("Txid: {}", txid);
+//!
+//! // Get raw bytes (internal byte order)
+//! let raw_bytes = txid.to_bytes();
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Creating Transaction Outputs
+//!
+//! Transaction outputs can be created with a script and value:
+//!
+//! ```no_run
+//! use bitcoinkernel::{prelude::*, TxOut, ScriptPubkey};
+//!
+//! # fn example() -> Result<(), bitcoinkernel::KernelError> {
+//! let script = ScriptPubkey::new(&[0x76, 0xa9, 0x14])?;
+//! let output = TxOut::new(&script, 50_000); // 50,000 satoshis
+//!
+//! println!("Output value: {}", output.value());
+//! println!("Script length: {}", output.script_pubkey().to_bytes().len());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Examining Transaction Inputs
+//!
+//! Each input references a previous output via an outpoint:
+//!
+//! ```no_run
+//! # use bitcoinkernel::{prelude::*, Transaction, KernelError};
+//! # fn example(tx: &Transaction) -> Result<(), KernelError> {
+//! for input in tx.inputs() {
+//!     let outpoint = input.outpoint();
+//!     println!("Spending output {} from transaction {}",
+//!              outpoint.index(),
+//!              outpoint.txid());
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Extension Traits
+//!
+//! The module defines extension traits that provide common functionality for
+//! both owned and borrowed types:
+//!
+//! - [`TransactionExt`] - Operations on transactions
+//! - [`TxidExt`] - Operations on transaction IDs
+//! - [`TxInExt`] - Operations on transaction inputs
+//! - [`TxOutExt`] - Operations on transaction outputs
+//! - [`TxOutPointExt`] - Operations on transaction outpoints
+//!
+//! These traits allow writing generic code that works with either owned or
+//! borrowed types.
+//!
+//! # Iterators
+//!
+//! Several iterator types are provided for ergonomic traversal:
+//!
+//! - [`TxInIter`] - Iterates over inputs in a transaction
+//! - [`TxOutIter`] - Iterates over outputs in a transaction
+//!
+//! All iterators implement [`ExactSizeIterator`], allowing you to query the
+//! remaining item count at any point.
+
 use std::{
     ffi::c_void,
     fmt::{self, Debug, Display, Formatter},
@@ -31,8 +154,34 @@ use crate::{
 use super::script::ScriptPubkeyRef;
 
 /// Common operations for transactions, implemented by both owned and borrowed types.
+///
+/// This trait provides shared functionality for [`Transaction`] and [`TransactionRef`],
+/// allowing code to work with either owned or borrowed transactions.
+///
+/// # Examples
+///
+/// ```no_run
+/// use bitcoinkernel::{prelude::*, Transaction};
+///
+/// fn count_outputs<T: TransactionExt>(tx: &T) -> usize {
+///     tx.output_count()
+/// }
+///
+/// # let tx_data = vec![0u8; 100]; // placeholder
+/// # let tx = Transaction::new(&tx_data).unwrap();
+/// let count = count_outputs(&tx);
+/// ```
 pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// Returns the number of outputs in this transaction.
+    ///
+    /// Every transaction has at least one output.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction};
+    /// # let tx: Transaction = unimplemented!();
+    /// println!("Transaction has {} outputs", tx.output_count());
+    /// ```
     fn output_count(&self) -> usize {
         unsafe { btck_transaction_count_outputs(self.as_ptr()) as usize }
     }
@@ -43,8 +192,24 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// * `index` - The zero-based index of the output to retrieve
     ///
     /// # Returns
-    /// * `Ok(RefType<TxOut, Transaction>)` - A reference to the output
-    /// * `Err(KernelError::OutOfBounds)` - If the index is invalid
+    /// A [`TxOutRef`] borrowing the output data from this transaction.
+    ///
+    /// # Errors
+    /// Returns [`KernelError::OutOfBounds`] if the index is greater than or
+    /// equal to [`output_count`](Self::output_count).
+    ///
+    /// # Lifetime
+    /// The returned reference is valid only as long as this transaction exists.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction, KernelError};
+    /// # fn example(tx: &Transaction) -> Result<(), KernelError> {
+    /// let first_output = tx.output(0)?;
+    /// println!("First output value: {}", first_output.value());
+    /// # Ok(())
+    /// # }
+    /// ```
     fn output(&self, index: usize) -> Result<TxOutRef<'_>, KernelError> {
         if index >= self.output_count() {
             return Err(KernelError::OutOfBounds);
@@ -56,6 +221,17 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
         Ok(tx_out_ref)
     }
 
+    /// Returns the number of inputs in this transaction.
+    ///
+    /// Every transaction has at least one input. Coinbase transactions have
+    /// exactly one input with a null outpoint.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction};
+    /// # let tx: Transaction = unimplemented!();
+    /// println!("Transaction has {} inputs", tx.input_count());
+    /// ```
     fn input_count(&self) -> usize {
         unsafe { btck_transaction_count_inputs(self.as_ptr()) as usize }
     }
