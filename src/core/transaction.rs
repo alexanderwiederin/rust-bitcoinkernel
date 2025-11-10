@@ -1,4 +1,4 @@
-use std::{ffi::c_void, marker::PhantomData};
+use std::{ffi::c_void, fmt, marker::PhantomData};
 
 use libbitcoinkernel_sys::{
     btck_Transaction, btck_TransactionInput, btck_TransactionOutPoint, btck_TransactionOutput,
@@ -708,6 +708,22 @@ impl PartialEq<TxidRef<'_>> for Txid {
 }
 
 impl Eq for Txid {}
+
+impl fmt::Debug for Txid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Txid({:?})", self.to_bytes())
+    }
+}
+
+impl fmt::Display for Txid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_bytes();
+        for byte in bytes.iter().rev() {
+            write!(f, "{:02x}", byte)?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub struct TxidRef<'a> {
