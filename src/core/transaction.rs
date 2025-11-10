@@ -553,6 +553,11 @@ pub trait TxOutPointExt: AsPtr<btck_TransactionOutPoint> {
         let ptr = unsafe { btck_transaction_out_point_get_txid(self.as_ptr()) };
         unsafe { TxidRef::from_ptr(ptr) }
     }
+
+    /// Returns true if this OutPoint is the "null" coinbase OutPoint.
+    fn is_null(&self) -> bool {
+        self.index() == u32::MAX && self.txid().is_all_zeros()
+    }
 }
 
 /// A reference to a specific output in a previous transaction.
@@ -654,6 +659,10 @@ pub trait TxidExt: AsPtr<btck_Txid> {
             btck_txid_to_bytes(self.as_ptr(), bytes.as_mut_ptr());
         }
         bytes
+    }
+
+    fn is_all_zeros(&self) -> bool {
+        self.to_bytes().iter().all(|&b| b == 0)
     }
 }
 
@@ -822,14 +831,14 @@ mod tests {
 
     fn get_test_transactions() -> (Transaction, Transaction) {
         let block_data = read_block_data();
-        let tx1 = Block::new(&block_data[1])
+        let tx1 = Block::new(&block_data[204])
             .unwrap()
-            .transaction(0)
+            .transaction(1)
             .unwrap()
             .to_owned();
-        let tx2 = Block::new(&block_data[2])
+        let tx2 = Block::new(&block_data[205])
             .unwrap()
-            .transaction(0)
+            .transaction(1)
             .unwrap()
             .to_owned();
         (tx1, tx2)
@@ -1219,6 +1228,17 @@ mod tests {
         assert_eq!(outpoint.index(), owned_outpoint.index());
     }
 
+    // #[test]
+    // fn test_txoutpoint_ref_to_owned_test() {
+    //     let (_, tx) = get_test_transactions();
+    //     let txin = tx.input(1).unwrap();
+    //     let outpoint_ref = txin.outpoint();
+    //     let outpoint = txin.outpoint().to_owned();
+    //
+    //     assert!(!outpoint_ref.is_null());
+    //     assert!(!outpoint.is_null())
+    // }
+
     // Txid tests
     #[test]
     fn test_txid_equality() {
@@ -1279,6 +1299,16 @@ mod tests {
         let owned_txid = txid_ref.to_owned();
 
         assert_eq!(txid.to_bytes(), owned_txid.to_bytes());
+    }
+
+    #[test]
+    fn test_txid_is_all_zeros() {
+        let (tx, _) = get_test_transactions();
+        let txid = tx.txid().to_owned();
+        assert!(!txid.is_all_zeros());
+
+        let txid_ref = tx.txid();
+        assert!(!txid_ref.is_all_zeros());
     }
 
     // Polymorphism tests
@@ -1381,5 +1411,29 @@ mod tests {
             display,
             "f3ac0618ad042336fbec1f88a4e965481b46cd3381a807591c78c75fdbae7d67"
         );
+    }
+
+    #[test]
+    fn test_txoutpoint_is_null() {
+        // Test coinbase input (should have null outpoint)
+        let (tx, _) = get_test_transactions();
+        let txin = tx.input(0).unwrap();
+        let outpoint = txin.outpoint().to_owned();
+
+        assert!(outpoint.is_null());
+        assert_eq!(outpoint.index(), u32::MAX);
+        assert!(outpoint.txid().is_all_zeros());
+    }
+
+    #[test]
+    fn test_txoutpoint_is_null_ref() {
+        // Test coinbase input (should have null outpoint)
+        let (tx, _) = get_test_transactions();
+        let txin = tx.input(0).unwrap();
+        let outpoint = txin.outpoint();
+
+        assert!(outpoint.is_null());
+        assert_eq!(outpoint.index(), u32::MAX);
+        assert!(outpoint.txid().is_all_zeros());
     }
 }
