@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2015-2022 The Bitcoin Core developers
+# Copyright (c) 2015-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test block processing."""
@@ -7,6 +7,7 @@ import copy
 import time
 
 from test_framework.blocktools import (
+    add_witness_commitment,
     create_block,
     create_coinbase,
     create_tx_with_script,
@@ -1416,6 +1417,9 @@ class FullBlockTest(BitcoinTestFramework):
         if nTime is not None:
             block.nTime = nTime
         block.hashMerkleRoot = block.calc_merkle_root()
+        has_witness_tx = any(not tx.wit.is_null() for tx in block.vtx)
+        if has_witness_tx:
+            add_witness_commitment(block)
         block.solve()
         # Update the internal state just like in next_block
         self.tip = block

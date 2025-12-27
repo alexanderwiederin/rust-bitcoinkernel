@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Bitcoin Core developers
+// Copyright (c) 2022-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,7 +30,7 @@ std::vector<size_t> FindInPackageParents(const Package& package, const CTransact
         // We assume the package is sorted, so that we don't need to continue
         // looking past the transaction itself.
         if (&(*tx) == &(*ptx)) break;
-        if (possible_parents.count(tx->GetHash())) {
+        if (possible_parents.contains(tx->GetHash())) {
             in_package_parents.push_back(i);
         }
     }
@@ -59,6 +59,7 @@ std::optional<std::string> PackageTRUCChecks(const CTxMemPool& pool, const CTran
                                            const Package& package,
                                            const std::vector<CTxMemPoolEntry::CTxMemPoolEntryRef>& mempool_parents)
 {
+    AssertLockHeld(pool.cs);
     // This function is specialized for these limits, and must be reimplemented if they ever change.
     static_assert(TRUC_ANCESTOR_LIMIT == 2);
     static_assert(TRUC_DESCENDANT_LIMIT == 2);
@@ -173,7 +174,7 @@ std::optional<std::pair<std::string, CTransactionRef>> SingleTRUCChecks(const CT
                                           const std::set<Txid>& direct_conflicts,
                                           int64_t vsize)
 {
-    LOCK(pool.cs);
+    AssertLockHeld(pool.cs);
     // Check TRUC and non-TRUC inheritance.
     for (const auto& entry_ref : mempool_parents) {
         const auto& entry = &entry_ref.get();
@@ -239,7 +240,7 @@ std::optional<std::pair<std::string, CTransactionRef>> SingleTRUCChecks(const CT
         // TRUC transaction can only have 1 descendant.
         const bool child_will_be_replaced = !descendants.empty() &&
             std::any_of(descendants.cbegin(), descendants.cend(),
-                [&direct_conflicts](const CTxMemPool::txiter& child){return direct_conflicts.count(child->GetTx().GetHash()) > 0;});
+                [&direct_conflicts](const CTxMemPool::txiter& child){return direct_conflicts.contains(child->GetTx().GetHash());});
         if (pool.GetDescendantCount(parent_entry) + 1 > TRUC_DESCENDANT_LIMIT && !child_will_be_replaced) {
             // Allow sibling eviction for TRUC transaction: if another child already exists, even if
             // we don't conflict inputs with it, consider evicting it under RBF rules. We rely on TRUC rules
