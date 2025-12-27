@@ -43,7 +43,7 @@ add_custom_target(generate_build_info
   COMMENT "Generating bitcoin-build-info.h"
   VERBATIM
 )
-add_library(bitcoin_clientversion STATIC EXCLUDE_FROM_ALL
+add_library(bitcoin_clientversion STATIC
   clientversion.cpp
 )
 target_link_libraries(bitcoin_clientversion
@@ -323,22 +323,6 @@ if(ENABLE_IPC AND BUILD_DAEMON)
     $<TARGET_NAME_IF_EXISTS:bitcoin_wallet>
   )
   install_binary_component(bitcoin-node INTERNAL)
-endif()
-
-if(ENABLE_IPC AND BUILD_TESTS)
-    # bitcoin_ipc_test library target is defined here in src/CMakeLists.txt
-    # instead of src/test/CMakeLists.txt so capnp files in src/test/ are able to
-    # reference capnp files in src/ipc/capnp/ by relative path. The Cap'n Proto
-    # compiler only allows importing by relative path when the importing and
-    # imported files are underneath the same compilation source prefix, so the
-    # source prefix must be src/, not src/test/
-    add_library(bitcoin_ipc_test STATIC EXCLUDE_FROM_ALL
-      test/ipc_test.cpp
-    )
-    target_capnp_sources(bitcoin_ipc_test ${PROJECT_SOURCE_DIR}
-      test/ipc_test.capnp
-    )
-    add_dependencies(bitcoin_ipc_test bitcoin_ipc_headers)
 endif()
 
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Bitcoin Core developers
+// Copyright (c) 2022-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -65,7 +65,7 @@ void CheckMempoolTRUCInvariants(const CTxMemPool& tx_pool);
 
 /** One-line wrapper for creating a mempool changeset with a single transaction
  *  and applying it if the policy limits are respected. */
-void AddToMempool(CTxMemPool& tx_pool, const CTxMemPoolEntry& entry);
+void TryAddToMempool(CTxMemPool& tx_pool, const CTxMemPoolEntry& entry);
 
 /** Mock the mempool minimum feerate by adding a transaction and calling TrimToSize(0),
  * simulating the mempool "reaching capacity" and evicting by descendant feerate.  Note that

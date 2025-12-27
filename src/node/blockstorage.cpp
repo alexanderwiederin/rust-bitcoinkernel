@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2022 The Bitcoin Core developers
+// Copyright (c) 2011-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,7 +7,6 @@
 #include <arith_uint256.h>
 #include <chain.h>
 #include <consensus/params.h>
-#include <consensus/validation.h>
 #include <dbwrapper.h>
 #include <flatfile.h>
 #include <hash.h>
@@ -15,6 +14,7 @@
 #include <kernel/chainparams.h>
 #include <kernel/messagestartchars.h>
 #include <kernel/notifications_interface.h>
+#include <kernel/types.h>
 #include <logging.h>
 #include <pow.h>
 #include <primitives/block.h>
@@ -22,16 +22,17 @@
 #include <random.h>
 #include <serialize.h>
 #include <signet.h>
-#include <span.h>
 #include <streams.h>
 #include <sync.h>
 #include <tinyformat.h>
 #include <uint256.h>
 #include <undo.h>
-#include <util/batchpriority.h>
 #include <util/check.h>
+#include <util/expected.h>
 #include <util/fs.h>
 #include <util/obfuscation.h>
+#include <util/overflow.h>
+#include <util/result.h>
 #include <util/signalinterrupt.h>
 #include <util/strencodings.h>
 #include <util/syserror.h>
@@ -39,9 +40,17 @@
 #include <util/translation.h>
 #include <validation.h>
 
+#include <cerrno>
+#include <compare>
 #include <cstddef>
+#include <cstdio>
+#include <exception>
 #include <map>
 #include <optional>
+#include <ostream>
+#include <span>
+#include <stdexcept>
+#include <system_error>
 #include <unordered_map>
 
 namespace kernel {
@@ -282,8 +291,7 @@ void BlockManager::PruneOneBlockFile(const int fileNumber)
 void BlockManager::FindFilesToPruneManual(
     std::set<int>& setFilesToPrune,
     int nManualPruneHeight,
-    const Chainstate& chain,
-    ChainstateManager& chainman)
+    const Chainstate& chain)
 {
     assert(IsPruneMode() && nManualPruneHeight > 0);
 
@@ -292,7 +300,7 @@ void BlockManager::FindFilesToPruneManual(
         return;
     }
 
-    const auto [min_block_to_prune, last_block_can_prune] = chainman.GetPruneRange(chain, nManualPruneHeight);
+    const auto [min_block_to_prune, last_block_can_prune] = chain.GetPruneRange(nManualPruneHeight);
 
     int count = 0;
     for (int fileNumber = 0; fileNumber < this->MaxBlockfileNum(); fileNumber++) {
@@ -316,9 +324,16 @@ void BlockManager::FindFilesToPrune(
     ChainstateManager& chainman)
 {
     LOCK2(cs_main, cs_LastBlockFile);
-    // Distribute our -prune budget over all chainstates.
+    // Compute `target` value with maximum size (in bytes) of blocks below the
+    // `last_prune` height which should be preserved and not pruned. The
+    // `target` value will be derived from the -prune preference provided by the
+    // user. If there is a historical chainstate being used to populate indexes
+    // and validate the snapshot, the target is divided by two so half of the
+    // block storage will be reserved for the historical chainstate, and the
+    // other half will be reserved for the most-work chainstate.
+    const int num_chainstates{chainman.HistoricalChainstate() ? 2 : 1};
     const auto target = std::max(
-        MIN_DISK_SPACE_FOR_BLOCK_FILES, GetPruneTarget() / chainman.GetAll().size());
+        MIN_DISK_SPACE_FOR_BLOCK_FILES, GetPruneTarget() / num_chainstates);
     const uint64_t target_sync_height = chainman.m_best_header->nHeight;
 
     if (chain.m_chain.Height() < 0 || target == 0) {
@@ -328,7 +343,7 @@ void BlockManager::FindFilesToPrune(
         return;
     }
 
-    const auto [min_block_to_prune, last_block_can_prune] = chainman.GetPruneRange(chain, last_prune);
+    const auto [min_block_to_prune, last_block_can_prune] = chain.GetPruneRange(last_prune);
 
     uint64_t nCurrentUsage = CalculateCurrentUsage();
     // We don't check to prune until after we've allocated new space for files
@@ -863,7 +878,7 @@ FlatFilePos BlockManager::FindNextBlockPos(unsigned int nAddSize, unsigned int n
         // a reindex. A flush error might also leave some of the data files
         // untrimmed.
         if (!FlushBlockFile(last_blockfile, /*fFinalize=*/true, finalize_undo)) {
-            LogPrintLevel(BCLog::BLOCKSTORAGE, BCLog::Level::Warning,
+            LogWarning(
                           "Failed to flush previous block file %05i (finalize=1, finalize_undo=%i) before opening new block file %05i\n",
                           last_blockfile, finalize_undo, nFile);
         }
@@ -987,7 +1002,7 @@ bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationSt
             // fact it is. Note though, that a failed flush might leave the data
             // file untrimmed.
             if (!FlushUndoFile(pos.nFile, true)) {
-                LogPrintLevel(BCLog::BLOCKSTORAGE, BCLog::Level::Warning, "Failed to flush undo file %05i\n", pos.nFile);
+                LogWarning("Failed to flush undo file %05i\n", pos.nFile);
             }
         } else if (pos.nFile == cursor.file_num && block.nHeight > cursor.undo_height) {
             cursor.undo_height = block.nHeight;
@@ -1006,14 +1021,14 @@ bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos, const std::o
     block.SetNull();
 
     // Open history file to read
-    std::vector<std::byte> block_data;
-    if (!ReadRawBlock(block_data, pos)) {
+    const auto block_data{ReadRawBlock(pos)};
+    if (!block_data) {
         return false;
     }
 
     try {
         // Read block
-        SpanReader{block_data} >> TX_WITH_WITNESS(block);
+        SpanReader{*block_data} >> TX_WITH_WITNESS(block);
     } catch (const std::exception& e) {
         LogError("Deserialize or I/O error - %s at %s while reading block", e.what(), pos.ToString());
         return false;
@@ -1048,19 +1063,19 @@ bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
     return ReadBlock(block, block_pos, index.GetBlockHash());
 }
 
-bool BlockManager::ReadRawBlock(std::vector<std::byte>& block, const FlatFilePos& pos) const
+BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& pos, std::optional<std::pair<size_t, size_t>> block_part) const
 {
     if (pos.nPos < STORAGE_HEADER_BYTES) {
         // If nPos is less than STORAGE_HEADER_BYTES, we can't read the header that precedes the block data
         // This would cause an unsigned integer underflow when trying to position the file cursor
         // This can happen after pruning or default constructed positions
         LogError("Failed for %s while reading raw block storage header", pos.ToString());
-        return false;
+        return util::Unexpected{ReadRawError::IO};
     }
     AutoFile filein{OpenBlockFile({pos.nFile, pos.nPos - STORAGE_HEADER_BYTES}, /*fReadOnly=*/true)};
     if (filein.IsNull()) {
         LogError("OpenBlockFile failed for %s while reading raw block", pos.ToString());
-        return false;
+        return util::Unexpected{ReadRawError::IO};
     }
 
     try {
@@ -1072,23 +1087,31 @@ bool BlockManager::ReadRawBlock(std::vector<std::byte>& block, const FlatFilePos
         if (blk_start != GetParams().MessageStart()) {
             LogError("Block magic mismatch for %s: %s versus expected %s while reading raw block",
                 pos.ToString(), HexStr(blk_start), HexStr(GetParams().MessageStart()));
-            return false;
+            return util::Unexpected{ReadRawError::IO};
         }
 
         if (blk_size > MAX_SIZE) {
             LogError("Block data is larger than maximum deserialization size for %s: %s versus %s while reading raw block",
                 pos.ToString(), blk_size, MAX_SIZE);
-            return false;
+            return util::Unexpected{ReadRawError::IO};
         }
 
-        block.resize(blk_size); // Zeroing of memory is intentional here
-        filein.read(block);
+        if (block_part) {
+            const auto [offset, size]{*block_part};
+            if (size == 0 || SaturatingAdd(offset, size) > blk_size) {
+                return util::Unexpected{ReadRawError::BadPartRange}; // Avoid logging - offset/size come from untrusted REST input
+            }
+            filein.seek(offset, SEEK_CUR);
+            blk_size = size;
+        }
+
+        std::vector<std::byte> data(blk_size); // Zeroing of memory is intentional here
+        filein.read(data);
+        return data;
     } catch (const std::exception& e) {
         LogError("Read from block file failed: %s for %s while reading raw block", e.what(), pos.ToString());
-        return false;
+        return util::Unexpected{ReadRawError::IO};
     }
-
-    return true;
 }
 
 FlatFilePos BlockManager::WriteBlock(const CBlock& block, int nHeight)
@@ -1224,26 +1247,27 @@ void ImportBlocks(ChainstateManager& chainman, std::span<const fs::path> import_
 
     // -reindex
     if (!chainman.m_blockman.m_blockfiles_indexed) {
-        int nFile = 0;
+        int total_files{0};
+        while (fs::exists(chainman.m_blockman.GetBlockPosFilename(FlatFilePos(total_files, 0)))) {
+            total_files++;
+        }
+
         // Map of disk positions for blocks with unknown parent (only used for reindex);
         // parent hash -> child disk position, multiple children can have the same parent.
         std::multimap<uint256, FlatFilePos> blocks_with_unknown_parent;
-        while (true) {
+
+        for (int nFile{0}; nFile < total_files; ++nFile) {
             FlatFilePos pos(nFile, 0);
-            if (!fs::exists(chainman.m_blockman.GetBlockPosFilename(pos))) {
-                break; // No block files left to reindex
-            }
             AutoFile file{chainman.m_blockman.OpenBlockFile(pos, /*fReadOnly=*/true)};
             if (file.IsNull()) {
                 break; // This error is logged in OpenBlockFile
             }
-            LogInfo("Reindexing block file blk%05u.dat...", (unsigned int)nFile);
+            LogInfo("Reindexing block file blk%05u.dat (%d%% complete)...", (unsigned int)nFile, nFile * 100 / total_files);
             chainman.LoadExternalBlockFile(file, &pos, &blocks_with_unknown_parent);
             if (chainman.m_interrupt) {
                 LogInfo("Interrupt requested. Exit reindexing.");
                 return;
             }
-            nFile++;
         }
         WITH_LOCK(::cs_main, chainman.m_blockman.m_block_tree_db->WriteReindexing(false));
         chainman.m_blockman.m_blockfiles_indexed = true;
@@ -1263,21 +1287,13 @@ void ImportBlocks(ChainstateManager& chainman, std::span<const fs::path> import_
                 return;
             }
         } else {
-            LogPrintf("Warning: Could not open blocks file %s\n", fs::PathToString(path));
+            LogWarning("Could not open blocks file %s", fs::PathToString(path));
         }
     }
 
     // scan for better chains in the block chain database, that are not yet connected in the active best chain
-
-    // We can't hold cs_main during ActivateBestChain even though we're accessing
-    // the chainman unique_ptrs since ABC requires us not to be holding cs_main, so retrieve
-    // the relevant pointers before the ABC call.
-    for (Chainstate* chainstate : WITH_LOCK(::cs_main, return chainman.GetAll())) {
-        BlockValidationState state;
-        if (!chainstate->ActivateBestChain(state, nullptr)) {
-            chainman.GetNotifications().fatalError(strprintf(_("Failed to connect best block (%s)."), state.ToString()));
-            return;
-        }
+    if (auto result = chainman.ActivateBestChains(); !result) {
+        chainman.GetNotifications().fatalError(util::ErrorString(result));
     }
     // End scope of ImportingNow
 }
