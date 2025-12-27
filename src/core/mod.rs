@@ -19,7 +19,7 @@ pub use block::{BlockHashExt, BlockSpentOutputsExt, CoinExt, TransactionSpentOut
 pub use script::ScriptPubkeyExt;
 pub use transaction::{TransactionExt, TxInExt, TxOutExt, TxOutPointExt, TxidExt};
 
-pub use verify::{verify, ScriptVerifyError};
+pub use verify::{verify, PrecomputedTransactionData, ScriptVerifyError};
 
 pub mod verify_flags {
     pub use super::verify::{

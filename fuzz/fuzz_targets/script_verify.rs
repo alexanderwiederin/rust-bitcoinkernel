@@ -4,7 +4,8 @@ use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 
 use bitcoinkernel::{
-    verify, KernelError, ScriptPubkey, ScriptVerifyError, Transaction, TxOut, VERIFY_WITNESS,
+    verify::{verify, PrecomputedTransactionData},
+    KernelError, ScriptPubkey, ScriptVerifyError, Transaction, TxOut, VERIFY_WITNESS,
 };
 
 #[derive(Debug, Arbitrary)]
@@ -41,13 +42,19 @@ fuzz_target!(|data: VerifyInput| {
         return;
     };
 
+    let tx_data = if let Ok(res) = PrecomputedTransactionData::new(&transaction, &spent_outputs) {
+        res
+    } else {
+        return;
+    };
+
     let res = verify(
         &script_pubkey,
         data.amount,
         &transaction,
         data.input_index,
         data.flags,
-        &spent_outputs,
+        &tx_data,
     );
 
     match res {
