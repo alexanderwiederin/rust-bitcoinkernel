@@ -212,7 +212,7 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
     | VERIFY_CHECKSEQUENCEVERIFY
     | VERIFY_WITNESS;
 
-/// Precomputed transaction data for verifying a transasction's scripts.
+/// Precomputed transaction data for verifying a transaction's scripts.
 ///
 /// Precomputes the hashes required to verify a transaction and avoids quadratic
 /// hashing costs when verifying multiple scripts from a transaction.
@@ -223,6 +223,11 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
 ///
 /// Previous outputs are only required if verifying a taproot transaction. An
 /// empty slice may be passed in otherwise.
+///
+/// # Arguments
+///
+/// * `tx` - The transaction to precompute data for
+/// * `spent_outputs` - Previous transaction outputs being spent (required for taproot)
 ///
 /// # Returns
 ///
@@ -269,6 +274,11 @@ impl PrecomputedTransactionData {
                 spent_outputs.len(),
             )
         };
+        if inner.is_null() {
+            return Err(KernelError::Internal(
+                "Failed to create PrecomputedTransactionData".to_string(),
+            ));
+        }
         Ok(PrecomputedTransactionData { inner })
     }
 }

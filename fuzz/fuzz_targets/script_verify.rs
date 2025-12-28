@@ -4,8 +4,8 @@ use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 
 use bitcoinkernel::{
-    verify::{verify, PrecomputedTransactionData},
-    KernelError, ScriptPubkey, ScriptVerifyError, Transaction, TxOut, VERIFY_WITNESS,
+    verify, KernelError, PrecomputedTransactionData, ScriptPubkey, ScriptVerifyError, Transaction,
+    TxOut, VERIFY_WITNESS,
 };
 
 #[derive(Debug, Arbitrary)]
