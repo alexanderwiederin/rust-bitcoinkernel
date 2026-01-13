@@ -20,6 +20,7 @@ git subtree pull --prefix libbitcoinkernel-sys/bitcoin https://github.com/bitcoi
 
 After updating the subtree, you can check for kernel-related commits in the
 update using the provided script:
+
 ```
 ./contrib/check_subtree_kernel_commits.sh
 ```
@@ -32,6 +33,13 @@ dependencies. Once setup, run:
 ```bash
 cargo b
 ```
+
+## Documentation
+
+You can find detailed information about the library on its
+[crates.io](https://crates.io/crates/bitcoinkernel), or access its
+documentation directly via
+[doc.rs](https://docs.rs/bitcoinkernel/latest/bitcoinkernel/).
 
 ## Examples
 
@@ -55,6 +63,7 @@ cargo fuzz run script_verify
 ```
 
 Sanitizers can be turned on with e.g.
+
 ```bash
 RUSTFLAGS="-Zsanitizer=address" cargo fuzz run block_roundtrip
 ```
@@ -70,6 +79,7 @@ https://github.com/alexanderwiederin/qa-assets
 
 Once fuzzed, a coverage report can be generated with (picking the `verify`
 target as an example):
+
 ```
 RUSTFLAGS="-C instrument-coverage" cargo fuzz coverage script_verify
 llvm-cov show \
@@ -83,8 +93,8 @@ llvm-cov show \
 ```
 
 You may have to install the following tooling:
+
 ```
 rustup component add llvm-tools-preview
 cargo install rustfilt
 ```
-
