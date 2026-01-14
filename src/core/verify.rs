@@ -36,12 +36,13 @@
 //! ## Basic verification with all consensus rules
 //!
 //! ```no_run
-//! # use bitcoinkernel::{prelude::*, Transaction, verify, VERIFY_ALL};
+//! # use bitcoinkernel::{prelude::*, PrecomputedTransactionData, Transaction, verify, VERIFY_ALL};
 //! # let spending_tx_bytes = vec![];
 //! # let prev_tx_bytes = vec![];
 //! # let spending_tx = Transaction::new(&spending_tx_bytes).unwrap();
 //! # let prev_tx = Transaction::new(&prev_tx_bytes).unwrap();
 //! let prev_output = prev_tx.output(0).unwrap();
+//! let tx_data = PrecomputedTransactionData::new(&spending_tx, &[prev_output]).unwrap();
 //!
 //! let result = verify(
 //!     &prev_output.script_pubkey(),
@@ -49,7 +50,7 @@
 //!     &spending_tx,
 //!     0,
 //!     Some(VERIFY_ALL),
-//!     &[prev_output],
+//!     &tx_data,
 //! );
 //!
 //! match result {
@@ -61,26 +62,27 @@
 //! ## Verifying pre-Taproot transactions
 //!
 //! ```no_run
-//! # use bitcoinkernel::{prelude::*, Transaction, verify, VERIFY_ALL_PRE_TAPROOT};
+//! # use bitcoinkernel::{prelude::*, Transaction, PrecomputedTransactionData, verify, VERIFY_ALL_PRE_TAPROOT};
 //! # let spending_tx_bytes = vec![];
 //! # let prev_tx_bytes = vec![];
 //! # let spending_tx = Transaction::new(&spending_tx_bytes).unwrap();
 //! # let prev_tx = Transaction::new(&prev_tx_bytes).unwrap();
 //! # let prev_output = prev_tx.output(0).unwrap();
+//! let tx_data = PrecomputedTransactionData::new(&prev_tx, &[prev_output]).unwrap();
 //! let result = verify(
 //!     &prev_output.script_pubkey(),
 //!     Some(prev_output.value()),
 //!     &spending_tx,
 //!     0,
 //!     Some(VERIFY_ALL_PRE_TAPROOT),
-//!     &[prev_output],
+//!     &tx_data,
 //! );
 //! ```
 //!
 //! ## Verifying with multiple spent outputs
 //!
 //! ```no_run
-//! # use bitcoinkernel::{prelude::*, Transaction, verify, VERIFY_ALL};
+//! # use bitcoinkernel::{prelude::*, PrecomputedTransactionData, Transaction, verify, VERIFY_ALL};
 //! # let spending_tx_bytes = vec![];
 //! # let prev_tx1_bytes = vec![];
 //! # let prev_tx2_bytes = vec![];
@@ -91,6 +93,7 @@
 //!     prev_tx1.output(0).unwrap(),
 //!     prev_tx2.output(1).unwrap(),
 //! ];
+//! let tx_data = PrecomputedTransactionData::new(&prev_tx1, &spent_outputs).unwrap();
 //!
 //! let result = verify(
 //!     &spent_outputs[0].script_pubkey(),
@@ -98,26 +101,27 @@
 //!     &spending_tx,
 //!     0,
 //!     Some(VERIFY_ALL),
-//!     &spent_outputs,
+//!     &tx_data,
 //! );
 //! ```
 //!
 //! ## Handling verification errors
 //!
 //! ```no_run
-//! # use bitcoinkernel::{prelude::*, Transaction, verify, VERIFY_ALL, KernelError, ScriptVerifyError};
+//! # use bitcoinkernel::{prelude::*, PrecomputedTransactionData, Transaction, verify, VERIFY_ALL, KernelError, ScriptVerifyError};
 //! # let spending_tx_bytes = vec![];
 //! # let prev_tx_bytes = vec![];
 //! # let spending_tx = Transaction::new(&spending_tx_bytes).unwrap();
 //! # let prev_tx = Transaction::new(&prev_tx_bytes).unwrap();
 //! # let prev_output = prev_tx.output(0).unwrap();
+//! # let tx_data = PrecomputedTransactionData::new(&prev_tx, &[prev_output]).unwrap();
 //! let result = verify(
 //!     &prev_output.script_pubkey(),
 //!     Some(prev_output.value()),
 //!     &spending_tx,
 //!     0,
 //!     Some(VERIFY_ALL),
-//!     &[prev_output],
+//!     &tx_data,
 //! );
 //!
 //! match result {
@@ -150,14 +154,17 @@ use std::{
 };
 
 use libbitcoinkernel_sys::{
-    btck_ScriptVerificationFlags, btck_ScriptVerifyStatus, btck_TransactionOutput,
+    btck_PrecomputedTransactionData, btck_ScriptVerificationFlags, btck_ScriptVerifyStatus,
+    btck_TransactionOutput, btck_precomputed_transaction_data_copy,
+    btck_precomputed_transaction_data_create, btck_precomputed_transaction_data_destroy,
     btck_script_pubkey_verify,
 };
 
 use crate::{
     c_helpers,
     ffi::{
-        BTCK_SCRIPT_VERIFICATION_FLAGS_ALL, BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKLOCKTIMEVERIFY,
+        sealed::AsPtr, BTCK_SCRIPT_VERIFICATION_FLAGS_ALL,
+        BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKLOCKTIMEVERIFY,
         BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKSEQUENCEVERIFY, BTCK_SCRIPT_VERIFICATION_FLAGS_DERSIG,
         BTCK_SCRIPT_VERIFICATION_FLAGS_NONE, BTCK_SCRIPT_VERIFICATION_FLAGS_NULLDUMMY,
         BTCK_SCRIPT_VERIFICATION_FLAGS_P2SH, BTCK_SCRIPT_VERIFICATION_FLAGS_TAPROOT,
@@ -205,6 +212,102 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
     | VERIFY_CHECKSEQUENCEVERIFY
     | VERIFY_WITNESS;
 
+/// Precomputed transaction data for verifying a transaction's scripts.
+///
+/// Precomputes the hashes required to verify a transaction and avoids quadratic
+/// hashing costs when verifying multiple scripts from a transaction.
+///
+/// PrecomputedTransactionData is created from a transaction, and if doing
+/// taproot verification, its previous outputs [`crate::TxOut`]. It is required
+/// to perform script verification.
+///
+/// Previous outputs are only required if verifying a taproot transaction. An
+/// empty slice may be passed in otherwise.
+///
+/// # Arguments
+///
+/// * `tx` - The transaction to precompute data for
+/// * `spent_outputs` - Previous transaction outputs being spent (required for taproot)
+///
+/// # Returns
+///
+/// * `Ok(...)` - The PrecomputedTransactionData
+/// * `Err(KernelError::MismatchedOutputsSize)` - Number of outputs does not match
+/// the number of the transaction's inputs.
+///
+/// # Examples
+///
+/// Creating a PrecomputedTransactionData:
+///
+/// ```no_run
+/// # use bitcoinkernel::{prelude::*, Transaction, TxOut, PrecomputedTransactionData};
+/// # let raw_tx = vec![0u8; 100]; // placeholder
+/// # let tx = Transaction::new(&raw_tx).unwrap();
+/// # let tx_data = PrecomputedTransactionData::new(&tx, &Vec::<TxOut>::new());
+/// ```
+#[derive(Debug)]
+pub struct PrecomputedTransactionData {
+    inner: *mut btck_PrecomputedTransactionData,
+}
+
+impl PrecomputedTransactionData {
+    pub fn new(
+        tx: &impl TransactionExt,
+        spent_outputs: &[impl TxOutExt],
+    ) -> Result<PrecomputedTransactionData, KernelError> {
+        let kernel_spent_outputs: Vec<*const btck_TransactionOutput> =
+            spent_outputs.iter().map(|utxo| utxo.as_ptr()).collect();
+
+        let kernel_spent_outputs_ptr = if kernel_spent_outputs.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            if spent_outputs.len() != tx.input_count() {
+                return Err(KernelError::MismatchedOutputsSize);
+            }
+            kernel_spent_outputs.as_ptr() as *mut *const btck_TransactionOutput
+        };
+
+        let inner = unsafe {
+            btck_precomputed_transaction_data_create(
+                tx.as_ptr(),
+                kernel_spent_outputs_ptr,
+                spent_outputs.len(),
+            )
+        };
+        if inner.is_null() {
+            return Err(KernelError::Internal(
+                "Failed to create PrecomputedTransactionData".to_string(),
+            ));
+        }
+        Ok(PrecomputedTransactionData { inner })
+    }
+}
+
+impl AsPtr<btck_PrecomputedTransactionData> for PrecomputedTransactionData {
+    fn as_ptr(&self) -> *const btck_PrecomputedTransactionData {
+        self.inner as *const _
+    }
+}
+
+impl Clone for PrecomputedTransactionData {
+    fn clone(&self) -> Self {
+        PrecomputedTransactionData {
+            inner: unsafe { btck_precomputed_transaction_data_copy(self.inner) },
+        }
+    }
+}
+
+impl Drop for PrecomputedTransactionData {
+    fn drop(&mut self) {
+        unsafe {
+            btck_precomputed_transaction_data_destroy(self.inner);
+        }
+    }
+}
+
+unsafe impl Send for PrecomputedTransactionData {}
+unsafe impl Sync for PrecomputedTransactionData {}
+
 /// Verifies a transaction input against its corresponding output script.
 ///
 /// This function checks that the transaction input at the specified index properly
@@ -221,10 +324,8 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
 /// * `input_index` - The zero-based index of the input within `tx_to` to verify
 /// * `flags` - Verification flags specifying which consensus rules to enforce. If `None`,
 ///   defaults to [`VERIFY_ALL`]. Combine multiple flags using bitwise OR (`|`).
-/// * `spent_outputs` - The outputs being spent by the transaction. For SegWit and Taproot,
-///   this should contain all outputs spent by all inputs in the transaction. For pre-SegWit,
-///   this can be empty or contain just the output being spent. The length must either be 0
-///   or match the number of inputs in the transaction.
+/// * `precomputed_txdata` - The pre-computed hashes required to verify the script. For verifying taproot scripts,
+///   this must contain all outputs spent by all inputs in the transaction.
 ///
 /// # Returns
 ///
@@ -245,11 +346,12 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
 /// ## Verifying a P2PKH transaction
 ///
 /// ```no_run
-/// # use bitcoinkernel::{prelude::*, Transaction, TxOut, verify, VERIFY_ALL};
+/// # use bitcoinkernel::{prelude::*, PrecomputedTransactionData, Transaction, TxOut, verify, VERIFY_ALL};
 /// # let tx_bytes = vec![];
 /// # let spending_tx = Transaction::new(&tx_bytes).unwrap();
 /// # let prev_tx = Transaction::new(&tx_bytes).unwrap();
 /// let prev_output = prev_tx.output(0).unwrap();
+/// let tx_data = PrecomputedTransactionData::new(&spending_tx, &Vec::<TxOut>::new()).unwrap();
 ///
 /// let result = verify(
 ///     &prev_output.script_pubkey(),
@@ -257,19 +359,20 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
 ///     &spending_tx,
 ///     0,
 ///     Some(VERIFY_ALL),
-///     &[] as &[TxOut],
+///     &tx_data,
 /// );
 /// ```
 ///
 /// ## Using custom flags
 ///
 /// ```no_run
-/// # use bitcoinkernel::{prelude::*, Transaction, TxOut, verify, VERIFY_P2SH, VERIFY_DERSIG};
+/// # use bitcoinkernel::{prelude::*, PrecomputedTransactionData, Transaction, TxOut, verify, VERIFY_P2SH, VERIFY_DERSIG};
 /// # let tx_bytes = vec![];
 /// # let spending_tx = Transaction::new(&tx_bytes).unwrap();
 /// # let prev_output = spending_tx.output(0).unwrap();
 /// // Only verify P2SH and DERSIG rules
 /// let custom_flags = VERIFY_P2SH | VERIFY_DERSIG;
+/// let tx_data = PrecomputedTransactionData::new(&spending_tx, &Vec::<TxOut>::new()).unwrap();
 ///
 /// let result = verify(
 ///     &prev_output.script_pubkey(),
@@ -277,7 +380,7 @@ pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
 ///     &spending_tx,
 ///     0,
 ///     Some(custom_flags),
-///     &[] as &[TxOut],
+///     &tx_data,
 /// );
 /// ```
 ///
@@ -291,18 +394,12 @@ pub fn verify(
     tx_to: &impl TransactionExt,
     input_index: usize,
     flags: Option<u32>,
-    spent_outputs: &[impl TxOutExt],
+    precomputed_txdata: &PrecomputedTransactionData,
 ) -> Result<(), KernelError> {
     let input_count = tx_to.input_count();
 
     if input_index >= input_count {
         return Err(KernelError::ScriptVerify(ScriptVerifyError::TxInputIndex));
-    }
-
-    if !spent_outputs.is_empty() && spent_outputs.len() != input_count {
-        return Err(KernelError::ScriptVerify(
-            ScriptVerifyError::SpentOutputsMismatch,
-        ));
     }
 
     let kernel_flags = if let Some(flag) = flags {
@@ -315,15 +412,6 @@ pub fn verify(
     };
 
     let kernel_amount = amount.unwrap_or_default();
-    let kernel_spent_outputs: Vec<*const btck_TransactionOutput> =
-        spent_outputs.iter().map(|utxo| utxo.as_ptr()).collect();
-
-    let spent_outputs_ptr = if kernel_spent_outputs.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        kernel_spent_outputs.as_ptr() as *mut *const btck_TransactionOutput
-    };
-
     let mut status = ScriptVerifyStatus::Ok.into();
 
     let ret = unsafe {
@@ -331,8 +419,7 @@ pub fn verify(
             script_pubkey.as_ptr(),
             kernel_amount,
             tx_to.as_ptr(),
-            spent_outputs_ptr,
-            spent_outputs.len(),
+            precomputed_txdata.as_ptr(),
             input_index as u32,
             kernel_flags,
             &mut status,
@@ -436,12 +523,6 @@ pub enum ScriptVerifyError {
     /// internal consistency rules.
     InvalidFlagsCombination,
 
-    /// The spent_outputs array length doesn't match the input count.
-    ///
-    /// When spent_outputs is non-empty, it must contain exactly one output
-    /// for each input in the transaction.
-    SpentOutputsMismatch,
-
     /// Spent outputs are required but were not provided.
     SpentOutputsRequired,
 
@@ -457,7 +538,6 @@ impl Display for ScriptVerifyError {
             ScriptVerifyError::InvalidFlagsCombination => {
                 write!(f, "Invalid combination of verification flags")
             }
-            ScriptVerifyError::SpentOutputsMismatch => write!(f, "Spent outputs mismatch"),
             ScriptVerifyError::SpentOutputsRequired => {
                 write!(f, "Spent outputs required for verification")
             }
@@ -610,7 +690,6 @@ mod tests {
             ScriptVerifyError::TxInputIndex,
             ScriptVerifyError::InvalidFlags,
             ScriptVerifyError::InvalidFlagsCombination,
-            ScriptVerifyError::SpentOutputsMismatch,
             ScriptVerifyError::SpentOutputsRequired,
             ScriptVerifyError::Invalid,
         ];

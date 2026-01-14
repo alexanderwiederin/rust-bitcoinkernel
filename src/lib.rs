@@ -60,12 +60,13 @@
 //! ### Script Verification
 //!
 //! ```no_run
-//! use bitcoinkernel::{prelude::*, Transaction, verify, VERIFY_ALL};
+//! use bitcoinkernel::{prelude::*, PrecomputedTransactionData, Transaction, verify, VERIFY_ALL};
 //! let spending_tx_bytes = vec![]; // placeholder
 //! let prev_tx_bytes = vec![]; // placeholder
 //! let spending_tx = Transaction::new(&spending_tx_bytes).unwrap();
 //! let prev_tx = Transaction::new(&prev_tx_bytes).unwrap();
 //! let prev_output = prev_tx.output(0).unwrap();
+//! let tx_data = PrecomputedTransactionData::new(&spending_tx, &[prev_output]).unwrap();
 //!
 //! let result = verify(
 //!     &prev_output.script_pubkey(),
@@ -73,7 +74,7 @@
 //!     &spending_tx,
 //!     0,
 //!     Some(VERIFY_ALL),
-//!     &[prev_output],
+//!     &tx_data,
 //! );
 //!
 //! match result {
@@ -254,6 +255,7 @@ pub enum KernelError {
     OutOfBounds,
     ScriptVerify(ScriptVerifyError),
     SerializationFailed,
+    MismatchedOutputsSize,
     InvalidLength { expected: usize, actual: usize },
 }
 
@@ -274,6 +276,7 @@ impl fmt::Display for KernelError {
             KernelError::OutOfBounds => write!(f, "Out of bounds"),
             KernelError::ScriptVerify(err) => write!(f, "Script verification error: {}", err),
             KernelError::SerializationFailed => write!(f, "Serialization failed"),
+            KernelError::MismatchedOutputsSize => write!(f, "Number of outputs size does not correspond to the number of inputs of the transaction."),
             KernelError::InvalidLength { expected, actual } => {
                 write!(f, "Invalid length: expected {}, got {}", expected, actual)
             }
@@ -292,9 +295,9 @@ impl std::error::Error for KernelError {
 
 pub use crate::core::{
     verify, Block, BlockHash, BlockSpentOutputs, BlockSpentOutputsRef, BlockTreeEntry, Coin,
-    CoinRef, ScriptPubkey, ScriptPubkeyRef, ScriptVerifyError, Transaction, TransactionRef,
-    TransactionSpentOutputs, TransactionSpentOutputsRef, TxIn, TxInRef, TxOut, TxOutPoint,
-    TxOutPointRef, TxOutRef, Txid, TxidRef,
+    CoinRef, PrecomputedTransactionData, ScriptPubkey, ScriptPubkeyRef, ScriptVerifyError,
+    Transaction, TransactionRef, TransactionSpentOutputs, TransactionSpentOutputsRef, TxIn,
+    TxInRef, TxOut, TxOutPoint, TxOutPointRef, TxOutRef, Txid, TxidRef,
 };
 
 pub use crate::log::{disable_logging, Log, LogCategory, LogLevel, Logger};

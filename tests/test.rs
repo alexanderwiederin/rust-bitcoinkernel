@@ -4,8 +4,9 @@ mod tests {
         prelude::*, verify, Block, BlockHash, BlockSpentOutputs, BlockTreeEntry,
         BlockValidationStateRef, ChainParams, ChainType, ChainstateManager,
         ChainstateManagerBuilder, Coin, Context, ContextBuilder, KernelError, Log, Logger,
-        ScriptPubkey, ScriptVerifyError, Transaction, TransactionSpentOutputs, TxIn, TxOut,
-        TxOutRef, VERIFY_ALL_PRE_TAPROOT, VERIFY_TAPROOT, VERIFY_WITNESS,
+        PrecomputedTransactionData, ScriptPubkey, ScriptVerifyError, Transaction,
+        TransactionSpentOutputs, TxIn, TxOut, TxOutRef, VERIFY_ALL, VERIFY_ALL_PRE_TAPROOT,
+        VERIFY_TAPROOT, VERIFY_WITNESS,
     };
     use std::fs::File;
     use std::io::{BufRead, BufReader};
@@ -280,6 +281,23 @@ mod tests {
             "010000000001011f97548fbbe7a0db7588a66e18d803d0089315aa7d4cc28360b6ec50ef36718a0100000000ffffffff02df1776000000000017a9146c002a686959067f4866b8fb493ad7970290ab728757d29f0000000000220020701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58d04004730440220565d170eed95ff95027a69b313758450ba84a01224e1f7f130dda46e94d13f8602207bdd20e307f062594022f12ed5017bbf4a055a06aea91c10110a0e3bb23117fc014730440220647d2dc5b15f60bc37dc42618a370b2a1490293f9e5c8464f53ec4fe1dfe067302203598773895b4b16d37485cbe21b337f4e4b650739880098c592553add7dd4355016952210375e00eb72e29da82b89367947f29ef34afb75e8654f6ea368e0acdfd92976b7c2103a1b26313f430c4b15bb1fdce663207659d8cac749a0e53d70eff01874496feff2103c96d495bfdd5ba4145e3e046fee45e84a8a48ad05bd8dbb395c011a32cf9f88053ae00000000",
             18393430 , 0
         ).is_err());
+
+        let spent = "5120339ce7e165e67d93adb3fef88a6d4beed33f01fa876f05a225242b82a631abc0";
+        let spending = "01000000000101d1f1c1f8cdf6759167b90f52c9ad358a369f95284e841d7a2536cef31c0549580100000000fdffffff020000000000000000316a2f49206c696b65205363686e6f7272207369677320616e6420492063616e6e6f74206c69652e204062697462756734329e06010000000000225120a37c3903c8d0db6512e2b40b0dffa05e5a3ab73603ce8c9c4b7771e5412328f90140a60c383f71bac0ec919b1d7dbc3eb72dd56e7aa99583615564f9f99b8ae4e837b758773a5b2e4c51348854c8389f008e05029db7f464a5ff2e01d5e6e626174affd30a00";
+        let spent_script_pubkey =
+            ScriptPubkey::try_from(hex::decode(spent).unwrap().as_slice()).unwrap();
+        let spending_tx = Transaction::new(hex::decode(spending).unwrap().as_slice()).unwrap();
+        let outputs: Vec<TxOut> = vec![TxOut::new(&spent_script_pubkey, 88480)];
+        let tx_data = PrecomputedTransactionData::new(&spending_tx, &outputs).unwrap();
+        assert!(verify(
+            &spent_script_pubkey,
+            Some(88480),
+            &spending_tx,
+            0,
+            Some(VERIFY_ALL),
+            &tx_data,
+        )
+        .is_ok());
     }
 
     #[test]
@@ -290,6 +308,8 @@ mod tests {
         let tx_hex = "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700";
         let tx = Transaction::new(hex::decode(tx_hex).unwrap().as_slice()).unwrap();
         let dummy_output = TxOut::new(&script_pubkey, 100000);
+        let tx_data =
+            PrecomputedTransactionData::new(&tx, std::slice::from_ref(&dummy_output)).unwrap();
 
         // tx_index out of bounds
         let result = verify(
@@ -298,7 +318,7 @@ mod tests {
             &tx,
             999,
             Some(VERIFY_ALL_PRE_TAPROOT),
-            std::slice::from_ref(&dummy_output),
+            &tx_data,
         );
         assert!(matches!(
             result,
@@ -306,32 +326,13 @@ mod tests {
         ));
 
         let wrong_spent_outputs = vec![dummy_output.clone(), dummy_output.clone()];
-
-        // two transaction outputs for one input
-        let result = verify(
-            &script_pubkey,
-            Some(0),
-            &tx,
-            0,
-            Some(VERIFY_ALL_PRE_TAPROOT),
-            &wrong_spent_outputs,
-        );
         assert!(matches!(
-            result,
-            Err(KernelError::ScriptVerify(
-                ScriptVerifyError::SpentOutputsMismatch
-            ))
+            PrecomputedTransactionData::new(&tx, &wrong_spent_outputs),
+            Err(KernelError::MismatchedOutputsSize)
         ));
 
         // Test Invalid flags
-        let result = verify(
-            &script_pubkey,
-            Some(0),
-            &tx,
-            0,
-            Some(0xFFFFFFFF),
-            std::slice::from_ref(&dummy_output),
-        );
+        let result = verify(&script_pubkey, Some(0), &tx, 0, Some(0xFFFFFFFF), &tx_data);
         assert!(matches!(
             result,
             Err(KernelError::ScriptVerify(ScriptVerifyError::InvalidFlags))
@@ -344,7 +345,7 @@ mod tests {
             &tx,
             0,
             Some(VERIFY_WITNESS),
-            std::slice::from_ref(&dummy_output),
+            &tx_data,
         );
         assert!(matches!(
             result,
@@ -354,13 +355,14 @@ mod tests {
         ));
 
         // Test Spent outputs required
+        let tx_data_invalid = PrecomputedTransactionData::new(&tx, &Vec::<TxOut>::new()).unwrap();
         let result = verify(
             &script_pubkey,
             Some(0),
             &tx,
             0,
             Some(VERIFY_TAPROOT),
-            &Vec::<TxOut>::new(),
+            &tx_data_invalid,
         );
         assert!(matches!(
             result,
@@ -569,13 +571,14 @@ mod tests {
         let spent_script_pubkey =
             ScriptPubkey::try_from(hex::decode(spent).unwrap().as_slice()).unwrap();
         let spending_tx = Transaction::new(hex::decode(spending).unwrap().as_slice()).unwrap();
+        let tx_data = PrecomputedTransactionData::new(&spending_tx, &outputs).unwrap();
         verify(
             &spent_script_pubkey,
             Some(amount),
             &spending_tx,
             input,
             Some(VERIFY_ALL_PRE_TAPROOT),
-            &outputs,
+            &tx_data,
         )?;
         Ok(())
     }
