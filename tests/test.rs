@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod tests {
+    use bitcoinkernel::notifications::types::BlockValidationState;
+    use bitcoinkernel::state::chainstate::ProcessBlockHeaderResult;
     use bitcoinkernel::{
-        prelude::*, verify, Block, BlockHash, BlockSpentOutputs, BlockTreeEntry,
+        prelude::*, verify, Block, BlockHash, BlockHeader, BlockSpentOutputs, BlockTreeEntry,
         BlockValidationStateRef, ChainParams, ChainType, ChainstateManager,
         ChainstateManagerBuilder, Coin, Context, ContextBuilder, KernelError, Log, Logger,
         PrecomputedTransactionData, ScriptPubkey, ScriptVerifyError, Transaction,
-        TransactionSpentOutputs, TxIn, TxOut, VERIFY_ALL, VERIFY_ALL_PRE_TAPROOT, VERIFY_TAPROOT,
-        VERIFY_WITNESS,
+        TransactionSpentOutputs, TxIn, TxOut, ValidationMode, VERIFY_ALL, VERIFY_ALL_PRE_TAPROOT,
+        VERIFY_TAPROOT, VERIFY_WITNESS,
     };
     use libbitcoinkernel_sys::btck_ScriptVerificationFlags;
     use std::fs::File;
@@ -365,6 +367,25 @@ mod tests {
     }
 
     #[test]
+    fn test_header_validation() {
+        let (context, data_dir) = testing_setup();
+        let blocks_dir = data_dir.clone() + "/blocks";
+        let block_data = read_block_data();
+        let chainman = ChainstateManager::new(&context, &data_dir, &blocks_dir).unwrap();
+
+        for raw_block in block_data.iter() {
+            let block = Block::new(raw_block.as_slice()).unwrap();
+            let result = chainman.process_block_header(&block.header());
+            match result {
+                ProcessBlockHeaderResult::Success(state) => {
+                    assert_eq!(state.mode(), ValidationMode::Valid);
+                }
+                _ => assert!(false),
+            };
+        }
+    }
+
+    #[test]
     fn test_chain_operations() {
         let (context, data_dir) = testing_setup();
 
@@ -604,6 +625,11 @@ mod tests {
         is_send::<ChainstateManager>();
         is_sync::<BlockHash>();
         is_send::<BlockHash>();
+        is_sync::<BlockHeader>();
+        is_send::<BlockHeader>();
+        is_sync::<BlockValidationState>();
+        is_send::<BlockValidationState>();
+
         // is_sync::<Rc<u8>>(); // won't compile, kept as a failure case.
         // is_send::<Rc<u8>>(); // won't compile, kept as a failure case.
     }

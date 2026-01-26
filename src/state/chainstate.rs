@@ -28,22 +28,26 @@
 use std::ffi::CString;
 
 use libbitcoinkernel_sys::{
-    btck_BlockHash, btck_ChainstateManager, btck_ChainstateManagerOptions, btck_block_read,
-    btck_block_spent_outputs_read, btck_chainstate_manager_create, btck_chainstate_manager_destroy,
-    btck_chainstate_manager_get_active_chain, btck_chainstate_manager_get_block_tree_entry_by_hash,
-    btck_chainstate_manager_import_blocks, btck_chainstate_manager_options_create,
-    btck_chainstate_manager_options_destroy, btck_chainstate_manager_options_set_wipe_dbs,
+    btck_BlockHash, btck_BlockValidationState, btck_ChainstateManager,
+    btck_ChainstateManagerOptions, btck_block_read, btck_block_spent_outputs_read,
+    btck_chainstate_manager_create, btck_chainstate_manager_destroy,
+    btck_chainstate_manager_get_active_chain, btck_chainstate_manager_get_best_entry,
+    btck_chainstate_manager_get_block_tree_entry_by_hash, btck_chainstate_manager_import_blocks,
+    btck_chainstate_manager_options_create, btck_chainstate_manager_options_destroy,
+    btck_chainstate_manager_options_set_wipe_dbs,
     btck_chainstate_manager_options_set_worker_threads_num,
     btck_chainstate_manager_options_update_block_tree_db_in_memory,
     btck_chainstate_manager_options_update_chainstate_db_in_memory,
-    btck_chainstate_manager_process_block,
+    btck_chainstate_manager_process_block, btck_chainstate_manager_process_block_header,
 };
 
 use crate::{
+    core::block::BlockHeader,
     ffi::{
         c_helpers,
         sealed::{AsPtr, FromMutPtr, FromPtr},
     },
+    notifications::types::BlockValidationState,
     Block, BlockHash, BlockSpentOutputs, BlockTreeEntry, KernelError,
 };
 
@@ -65,6 +69,17 @@ pub enum ProcessBlockResult {
     /// [`crate::ContextBuilder::with_block_checked_validation`] for retrieving
     /// detailed error information.
     Rejected,
+}
+
+/// Result of proceesing a header with the [`ChainstateManager`]
+///
+/// Indicates whether a block header was processed, or rejected, and whether it is valid.
+#[derive(Clone)]
+pub enum ProcessBlockHeaderResult {
+    /// Header was succssfully processed and added to the block tree
+    Success(BlockValidationState),
+    /// Header processing failed
+    Failed(BlockValidationState),
 }
 
 impl ProcessBlockResult {
@@ -221,7 +236,7 @@ impl ChainstateManager {
     ///   validation state through the block checked callback.
     ///
     /// # Validation Details
-    /// The block checked callback receives a [`BlockValidationStateRef`](crate::notifications::types::BlockValidationStateRef)
+    /// The block checked callback receives a [`BlockValidationStateRef`](crate::BlockValidationStateRef)
     /// containing validation results for the block. This callback fires for all validated blocks.
     /// To detect when a block extends the active chain, use [`ContextBuilder::with_block_connected_validation`](crate::ContextBuilder::with_block_connected_validation)
     /// or [`ContextBuilder::validation`](crate::ContextBuilder::validation).
@@ -250,6 +265,59 @@ impl ChainstateManager {
             (true, true) => ProcessBlockResult::NewBlock,
             (true, false) => ProcessBlockResult::Duplicate,
             (false, _) => ProcessBlockResult::Rejected,
+        }
+    }
+
+    /// Process and validate a block header.
+    ///
+    /// Attempts to validate the block header and add it to the block tree. This
+    /// verifies its proof of work and connection to another existing header, or
+    /// block. `process_block_header` can be used by developers to implement
+    /// "headers first sync", where a complete header chain is synchronized first
+    /// before synchronizing blocks.
+    ///
+    /// # Arguments
+    /// * `header` - The [`BlockHeader`] to process
+    ///
+    /// # Returns
+    /// A [`ProcessBlockHeaderResult`] indicating whether it was processed successfully and
+    /// the header was valid.
+    ///
+    /// # Important Notes
+    /// - Calling this function will allocate internal resources and will eventually
+    ///   write to the file system on success. It is up to the implementing developer
+    ///   to ensure that headers processed here do indeed build towards a most proof
+    ///   of work chain to avoid attackers feeding many low-work header chains in
+    ///   order to exhaust system resources. This can be achieved by pre-syncing a
+    ///   portion of the header chain outside of the kernel's responsibility up to a
+    ///   certain minimum proof of work threshold.
+    ///
+    /// To detect when a header extends the most proof of work header chain, use
+    /// [`ContextBuilder::with_header_tip_notification`](crate::ContextBuilder::with_header_tip_notification),
+    /// or [`ContextBuilder::notifications`](crate::ContextBuilder::notifications)
+    /// # Example
+    /// ```no_run
+    /// # use bitcoinkernel::{BlockHeader, ChainstateManager, ProcessBlockHeaderResult};
+    /// # let chainman: ChainstateManager = unimplemented!();
+    /// # let header: BlockHeader = unimplemented!();
+    /// match chainman.process_block_header(&header) {
+    ///     ProcessBlockHeaderResult::Success(_) => println!("Block header validated and written to disk"),
+    ///     _ => println!("Failed to process header")
+    /// }
+    /// ```
+    pub fn process_block_header(&self, header: &BlockHeader) -> ProcessBlockHeaderResult {
+        let state = BlockValidationState::new();
+        let processed = unsafe {
+            btck_chainstate_manager_process_block_header(
+                self.inner,
+                header.as_ptr(),
+                state.as_ptr() as *mut btck_BlockValidationState,
+            )
+        };
+        if c_helpers::success(processed) {
+            ProcessBlockHeaderResult::Success(state)
+        } else {
+            ProcessBlockHeaderResult::Failed(state)
         }
     }
 
@@ -345,6 +413,26 @@ impl ChainstateManager {
     pub fn active_chain(&self) -> Chain<'_> {
         let ptr = unsafe { btck_chainstate_manager_get_active_chain(self.inner) };
         unsafe { Chain::from_ptr(ptr) }
+    }
+
+    /// Get the block tree entry with the most known cumulative proof of work.
+    ///
+    /// This is tracked internally by the ChainstateManager.
+    ///
+    /// # Returns
+    /// * `Some(`[`BlockTreeEntry`]`)` - The entry with the most known cumulative proof of work.
+    /// * `None` - No best entry exists. This should never occur outside, but is left as a defensive measure.
+    ///
+    /// # Lifetime
+    /// The returned [`BlockTreeEntry`] reference is tied to the lifetime of the
+    /// [`ChainstateManager`] and becomes invalid when the manager is dropped.
+    pub fn best_entry(&self) -> Option<BlockTreeEntry<'_>> {
+        let ptr = unsafe { btck_chainstate_manager_get_best_entry(self.inner) };
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { BlockTreeEntry::from_ptr(ptr) })
+        }
     }
 
     /// Get a block tree entry by its block hash.

@@ -36,6 +36,24 @@
 //! # }
 //! ```
 //!
+//! ## Inspecting a block header
+//!
+//! ```no_run
+//!  use bitcoinkernel::{prelude::*, Block};
+//!
+//! # fn example() -> Result<(), bitcoinkernel::KernelError> {
+//! let block_data = vec![0u8; 100]; // placeholder
+//! let block = Block::new(&block_data)?;
+//!
+//! // Get block header's bits
+//! let header = block.header();
+//! println!("Target nBits: {}", header.bits());
+//!
+//! # Ok(())
+//! # }
+//!
+//! ```
+//!
 //! ## Working with Block Hashes
 //!
 //! Block hashes can be created from byte arrays and inspected as raw bytes
@@ -86,6 +104,7 @@
 //! both owned and borrowed types:
 //!
 //! - [`BlockHashExt`] - Operations on block hashes
+//! - [`BlockHeaderExt`]  - Operations on block headers
 //! - [`BlockSpentOutputsExt`] - Operations on block spent outputs
 //! - [`TransactionSpentOutputsExt`] - Operations on transaction spent outputs
 //! - [`CoinExt`] - Operations on coins
@@ -109,11 +128,15 @@ use std::{
 };
 
 use libbitcoinkernel_sys::{
-    btck_Block, btck_BlockHash, btck_BlockSpentOutputs, btck_Coin, btck_TransactionSpentOutputs,
-    btck_block_copy, btck_block_count_transactions, btck_block_create, btck_block_destroy,
-    btck_block_get_hash, btck_block_get_transaction_at, btck_block_hash_copy,
-    btck_block_hash_create, btck_block_hash_destroy, btck_block_hash_equals,
-    btck_block_hash_to_bytes, btck_block_spent_outputs_copy, btck_block_spent_outputs_count,
+    btck_Block, btck_BlockHash, btck_BlockHeader, btck_BlockSpentOutputs, btck_Coin,
+    btck_TransactionSpentOutputs, btck_block_copy, btck_block_count_transactions,
+    btck_block_create, btck_block_destroy, btck_block_get_hash, btck_block_get_header,
+    btck_block_get_transaction_at, btck_block_hash_copy, btck_block_hash_create,
+    btck_block_hash_destroy, btck_block_hash_equals, btck_block_hash_to_bytes,
+    btck_block_header_copy, btck_block_header_create, btck_block_header_destroy,
+    btck_block_header_get_bits, btck_block_header_get_hash, btck_block_header_get_nonce,
+    btck_block_header_get_prev_hash, btck_block_header_get_timestamp,
+    btck_block_header_get_version, btck_block_spent_outputs_copy, btck_block_spent_outputs_count,
     btck_block_spent_outputs_destroy, btck_block_spent_outputs_get_transaction_spent_outputs_at,
     btck_block_to_bytes, btck_coin_confirmation_height, btck_coin_copy, btck_coin_destroy,
     btck_coin_get_output, btck_coin_is_coinbase, btck_transaction_spent_outputs_copy,
@@ -420,6 +443,230 @@ impl<'a> Eq for BlockHashRef<'a> {}
 
 impl<'a> Copy for BlockHashRef<'a> {}
 
+/// Common operations for block headers, implemented by both owned and borrow types.
+pub trait BlockHeaderExt: AsPtr<btck_BlockHeader> {
+    /// Return the block hash of the header.
+    fn hash(&self) -> BlockHash {
+        unsafe { BlockHash::from_ptr(btck_block_header_get_hash(self.as_ptr())) }
+    }
+
+    /// Return the hash of the previous block.
+    fn prev_hash(&self) -> BlockHashRef<'_> {
+        unsafe { BlockHashRef::from_ptr(btck_block_header_get_prev_hash(self.as_ptr())) }
+    }
+
+    /// Get the timestamp from the header
+    fn timestamp(&self) -> u32 {
+        unsafe { btck_block_header_get_timestamp(self.as_ptr()) }
+    }
+
+    // Get the nBits from the header
+    fn bits(&self) -> u32 {
+        unsafe { btck_block_header_get_bits(self.as_ptr()) }
+    }
+
+    // Get the version of the header
+    fn version(&self) -> i32 {
+        unsafe { btck_block_header_get_version(self.as_ptr()) }
+    }
+
+    // Get the nonce of the header
+    fn nonce(&self) -> u32 {
+        unsafe { btck_block_header_get_nonce(self.as_ptr()) }
+    }
+}
+
+/// A Bitcoin block header.
+///
+/// Block headers contain a block's primitive data required to verify its proof of work.
+/// They are typically used for headers-first validation.
+///
+/// Its fields include: version, previous block hash, merkle root, timestamp, difficulty target (nBits), and nonce
+///
+/// The header's hash is computed on-demand.
+///
+/// # Creation
+///
+/// Block headers are created from
+/// - Raw serialized data using [`new`](Self::new)
+/// - Copying a header from a block with [`Block::header`]
+/// - Copying a header from a block tree entry with [`BlockTreeEntry::header`](crate::BlockTreeEntry::header)
+///
+/// # Examples
+///
+/// ```no_run
+/// use bitcoinkernel::BlockHeader;
+/// use bitcoinkernel::prelude::BlockHeaderExt;
+///
+/// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+/// let header_data = vec![0u8; 80]; // placeholder
+/// let header = BlockHeader::new(&header_data)?;
+///
+/// println!("Hash: {}", header.hash());
+/// # Ok(())
+/// # }
+///
+/// ```
+pub struct BlockHeader {
+    inner: *mut btck_BlockHeader,
+}
+
+unsafe impl Send for BlockHeader {}
+unsafe impl Sync for BlockHeader {}
+
+impl BlockHeader {
+    /// Creates a new block header from raw serialized data.
+    ///
+    /// Deserializes a block header from its wire format representation.
+    /// The data must contain a complete, valid block structure. Serialization
+    /// will succeed if the first 80 bytes of the data contain a valid header.
+    ///
+    /// # Arguments
+    /// * `raw_header` - The serialized block header in Bitcoin wire format
+    ///
+    /// # Errors
+    /// Return [`KernelError::Internal`] if:
+    /// - The data is not a valid header
+    /// - Deserialization fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use bitcoinkernel::BlockHeader;
+    ///
+    /// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+    /// let header_data = vec![0u8; 80]; //placeholder }
+    /// let header = BlockHeader::new(&header_data);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(raw_header: &[u8]) -> Result<Self, KernelError> {
+        let inner = unsafe {
+            btck_block_header_create(raw_header.as_ptr() as *const c_void, raw_header.len())
+        };
+
+        if inner.is_null() {
+            Err(KernelError::Internal(
+                "Failed to create header from bytes".to_string(),
+            ))
+        } else {
+            Ok(BlockHeader { inner })
+        }
+    }
+
+    pub fn as_ref(&self) -> BlockHeaderRef<'_> {
+        unsafe { BlockHeaderRef::from_ptr(self.inner as *const _) }
+    }
+}
+
+impl FromMutPtr<btck_BlockHeader> for BlockHeader {
+    unsafe fn from_ptr(ptr: *mut btck_BlockHeader) -> Self {
+        BlockHeader { inner: ptr }
+    }
+}
+
+impl AsPtr<btck_BlockHeader> for BlockHeader {
+    fn as_ptr(&self) -> *const btck_BlockHeader {
+        self.inner as *const _
+    }
+}
+
+impl Debug for BlockHeader {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BlockHeader(hash: {}, prev_hash: {}, timestamp: {}, bits: {}, version: {}, nonce: {})",
+            self.hash(),
+            self.prev_hash(),
+            self.timestamp(),
+            self.bits(),
+            self.version(),
+            self.nonce()
+        )
+    }
+}
+
+impl BlockHeaderExt for BlockHeader {}
+
+impl Clone for BlockHeader {
+    fn clone(&self) -> Self {
+        BlockHeader {
+            inner: unsafe { btck_block_header_copy(self.inner) },
+        }
+    }
+}
+
+impl Drop for BlockHeader {
+    fn drop(&mut self) {
+        unsafe { btck_block_header_destroy(self.inner) }
+    }
+}
+
+/// A borrowed reference to a block header.
+///
+/// Provides zero-copy access to block header data. It implements [`Copy`],
+/// making it cheap to pass around.
+///
+/// # Lifetime
+/// The reference is only valid as long as the data it references remains alive.
+///
+/// # Thread Safety
+/// `BlockHeaderRef` is both [`Send`] and [`Sync`].
+pub struct BlockHeaderRef<'a> {
+    inner: *const btck_BlockHeader,
+    marker: PhantomData<&'a ()>,
+}
+
+unsafe impl<'a> Send for BlockHeaderRef<'a> {}
+unsafe impl<'a> Sync for BlockHeaderRef<'a> {}
+
+impl<'a> BlockHeaderRef<'a> {
+    pub fn to_owned(&self) -> BlockHeader {
+        BlockHeader {
+            inner: unsafe { btck_block_header_copy(self.inner) },
+        }
+    }
+}
+
+impl<'a> AsPtr<btck_BlockHeader> for BlockHeaderRef<'a> {
+    fn as_ptr(&self) -> *const btck_BlockHeader {
+        self.inner
+    }
+}
+
+impl<'a> FromPtr<btck_BlockHeader> for BlockHeaderRef<'a> {
+    unsafe fn from_ptr(ptr: *const btck_BlockHeader) -> Self {
+        BlockHeaderRef {
+            inner: ptr,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'a> Debug for BlockHeaderRef<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BlockHeader(hash: {}, prev_hash: {}, timestamp: {}, bits: {}, version: {}, nonce: {})",
+            self.hash(),
+            self.prev_hash(),
+            self.timestamp(),
+            self.bits(),
+            self.version(),
+            self.nonce()
+        )
+    }
+}
+
+impl<'a> BlockHeaderExt for BlockHeaderRef<'a> {}
+
+impl<'a> Copy for BlockHeaderRef<'a> {}
+
+impl<'a> Clone for BlockHeaderRef<'a> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 /// A block containing a header and transactions.
 ///
 /// Blocks are the fundamental units of the block chain, linking together
@@ -429,7 +676,8 @@ impl<'a> Copy for BlockHashRef<'a> {}
 ///
 /// The block's hash is computed from the header fields using double SHA256.
 ///
-/// **Note**: Individual header fields are not currently accessible through this API.
+/// **Note**: Individual header fields are not currently accessible directly from the block, but may
+/// be retrieved through its header.
 /// You can access the block hash via [`hash`](Self::hash) and transactions via
 /// [`transaction`](Self::transaction) or [`transactions`](Self::transactions).
 ///
@@ -540,6 +788,22 @@ impl Block {
     /// ```
     pub fn transaction_count(&self) -> usize {
         unsafe { btck_block_count_transactions(self.inner) }
+    }
+
+    /// Returns the header of this block.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::Block;
+    /// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+    /// # let block_data = vec![0u8; 100]; // placeholder
+    /// # let block = Block::new(&block_data)?;
+    /// let header = block.header();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn header(&self) -> BlockHeader {
+        unsafe { BlockHeader::from_ptr(btck_block_get_header(self.inner)) }
     }
 
     /// Returns a reference to the transaction at the specified index.
@@ -1575,6 +1839,17 @@ mod tests {
     test_owned_trait_requirements!(test_block_requirements, Block, btck_Block);
 
     test_owned_trait_requirements!(
+        test_block_header_requirements,
+        BlockHeader,
+        btck_BlockHeader
+    );
+    test_ref_trait_requirements!(
+        test_block_header_ref_requirements,
+        BlockHeaderRef<'static>,
+        btck_BlockHeader
+    );
+
+    test_owned_trait_requirements!(
         test_block_spent_outputs_requirements,
         BlockSpentOutputs,
         btck_BlockSpentOutputs
@@ -1608,6 +1883,12 @@ mod tests {
     test_owned_clone_and_send!(
         test_block_clone_send,
         Block::new(&read_block_data()[0]).unwrap(),
+        Block::new(&read_block_data()[1]).unwrap()
+    );
+
+    test_owned_clone_and_send!(
+        test_block_header_clone_send,
+        Block::new(&read_block_data()[0]).unwrap().header(),
         Block::new(&read_block_data()[1]).unwrap()
     );
 
@@ -1720,6 +2001,28 @@ mod tests {
         assert_eq!(bytes1, original_bytes);
         assert_eq!(bytes2, original_bytes);
         assert_eq!(bytes3, original_bytes);
+    }
+
+    #[test]
+    fn test_block_header_from_block() {
+        let block_data = read_block_data();
+        let block = Block::new(&block_data[0]).unwrap();
+        let block_hash = block.hash();
+        let header = block.header();
+        assert_eq!(header.hash(), block_hash);
+        assert_ne!(header.prev_hash().to_owned(), block_hash);
+        assert_eq!(header.timestamp(), 1714234522);
+        assert_eq!(header.bits(), 545259519);
+        assert_eq!(header.version(), 536870912);
+        assert_eq!(header.nonce(), 0);
+    }
+
+    #[test]
+    fn test_block_header_new() {
+        let block_data = read_block_data();
+        let block = Block::new(&block_data[0]).unwrap();
+        let header = BlockHeader::new(&block_data[0]).unwrap();
+        assert_eq!(block.hash(), header.hash());
     }
 
     #[test]

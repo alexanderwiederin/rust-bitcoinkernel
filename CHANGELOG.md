@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added a `PrecomputedTransactionData` struct for holding transaction hashes required for script verification. It may be initialized with and without an array of outputs spent by the transaction. If no outputs are passed, no taproot verification is possible.
+- Added a `BlockHeader` struct for holding block header data. This may be used to retrieve block header struct internals, and to process block headers for the purpose of "headers-first" synchronization. Also add a `ChainstateManager` method to process block headers, i.e. validate and add them to its internal block tree data structure.
 
 ### Changed
 - Updated to latest libbitcoinkernel-sys with btck_PrecomputedTransactionData` changes.
