@@ -1,11 +1,11 @@
 [package]
 name = "libbitcoinkernel-sys"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
-authors = ["TheCharlatan <seb.kung@gmail.com>"]
+authors = ["sedited <seb.kung@gmail.com>"]
 description = "Raw Rust bindings to libbitcoinkernel"
 license = "MIT"
-repository = "https://github.com/TheCharlatan/rust-bitcoinkernel"
+repository = "https://github.com/sedited/rust-bitcoinkernel"
 documentation = "https://docs.rs/bitcoinkernel"
 links = "libbitcoinkernel.a"
 build = "build.rs"

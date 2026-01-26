@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-26
+
 ### Added
 - New `btck_block_tree_entry_equals` function for comparing BlockTreeEntry objects (096924d39d64)
 - New `btck_PrecomputedTransactionData` object for holding transaction hashes required when validating scripts (eb0594e23f0c)

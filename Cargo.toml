@@ -1,19 +1,19 @@
 [package]
 name = "bitcoinkernel"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 rust-version =  "1.71.0"
-authors = ["TheCharlatan <seb.kung@gmail.com>"]
+authors = ["sedited <seb.kung@gmail.com>"]
 description = "Safe Rust bindings to libbitcoinkernel"
 license = "MIT"
-repository = "https://github.com/TheCharlatan/rust-bitcoinkernel"
+repository = "https://github.com/sedited/rust-bitcoinkernel"
 documentation = "https://docs.rs/bitcoinkernel"
 keywords = ["bitcoin", "ffi", "libbitcoinkernel"]
 categories = ["cryptography::cryptocurrencies"]
 readme = "README.md"
 
 [dependencies]
-libbitcoinkernel-sys = { path = "libbitcoinkernel-sys", version = "0.1.1" }
+libbitcoinkernel-sys = { path = "libbitcoinkernel-sys", version = "0.2.0" }
 
 [dev-dependencies]
 hex = "0.4"
