@@ -21,7 +21,7 @@ mod tests {
     impl Log for TestLog {
         fn log(&self, message: &str) {
             log::info!(
-                target: "libbitcoinkernel", 
+                target: "libbitcoinkernel",
                 "{}", message.strip_suffix("\r\n").or_else(|| message.strip_suffix('\n')).unwrap_or(message));
         }
     }
@@ -595,6 +595,43 @@ mod tests {
             &tx_data,
         )?;
         Ok(())
+    }
+
+    #[cfg(feature = "script_debug")]
+    #[test]
+    fn test_script_debug() {
+        use bitcoinkernel::{ScriptDebugFrame, ScriptDebugger};
+        use std::sync::Mutex;
+
+        let frames: Arc<Mutex<Vec<ScriptDebugFrame>>> = Arc::new(Mutex::new(Vec::new()));
+        let frames_clone = frames.clone();
+        let _debugger = ScriptDebugger::new(move |frame| {
+            frames_clone.lock().unwrap().push(frame);
+        })
+        .expect("failed to register script debugger");
+
+        // Run a P2PKH verification (same test vector as script_verify_test)
+        verify_test(
+            "76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac",
+            "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700",
+            0, 0, vec![], VERIFY_ALL_PRE_TAPROOT,
+        )
+        .unwrap();
+
+        let collected = frames.lock().unwrap();
+        assert!(
+            !collected.is_empty(),
+            "debugger should have captured frames"
+        );
+
+        // All frames in a P2PKH execution should be on the main execution path
+        for frame in collected.iter() {
+            assert!(
+                frame.f_exec,
+                "P2PKH steps should all be in an active branch"
+            );
+            assert!(!frame.script.is_empty(), "script bytes should be non-empty");
+        }
     }
 
     #[test]
