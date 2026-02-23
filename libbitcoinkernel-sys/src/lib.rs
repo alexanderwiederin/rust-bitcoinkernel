@@ -263,6 +263,9 @@ pub type btck_NotifyWarningSet = Option<
 pub type btck_NotifyWarningUnset =
     Option<unsafe extern "C" fn(user_data: *mut c_void, warning: btck_Warning)>;
 
+pub type btck_ScriptDebugCallback =
+    Option<unsafe extern "C" fn(user_data: *mut c_void, state: *const btck_ScriptDebugState)>;
+
 pub type btck_ValidationInterfaceBlockChecked = Option<
     unsafe extern "C" fn(
         user_data: *mut c_void,
@@ -324,6 +327,20 @@ pub struct btck_NotificationInterfaceCallbacks {
 }
 
 #[repr(C)]
+pub struct btck_ScriptDebugState {
+    pub stack_items: *const *const c_uchar,
+    pub stack_item_sizes: *const usize,
+    pub stack_size: usize,
+    pub script: *const c_uchar,
+    pub script_size: usize,
+    pub opcode_pos: u32,
+    pub altstack_items: *const *const c_uchar,
+    pub altstack_item_sizes: *const usize,
+    pub altstack_size: usize,
+    pub f_exec: c_int,
+}
+
+#[repr(C)]
 pub struct btck_ValidationInterfaceCallbacks {
     pub user_data: *mut c_void,
     pub user_data_destroy: btck_DestroyCallback,
@@ -347,6 +364,7 @@ const _: () = {
         core::mem::align_of::<btck_NotificationInterfaceCallbacks>()
             == core::mem::align_of::<*const ()>()
     );
+    assert!(core::mem::align_of::<btck_ScriptDebugState>() == core::mem::align_of::<*const ()>());
     assert!(
         core::mem::size_of::<btck_ValidationInterfaceCallbacks>()
             == 6 * core::mem::size_of::<*const ()>()
@@ -838,5 +856,14 @@ extern "C" {
     ) -> c_int;
 
     pub fn btck_block_header_destroy(header: *mut btck_BlockHeader);
+
+    // --- ScriptDebug --------------------------------------------------------
+
+    pub fn btck_register_script_debug_callback(
+        user_data: *mut c_void,
+        callback: btck_ScriptDebugCallback,
+    );
+
+    pub fn btck_unregister_script_debug_callback();
 
 } // extern "C"
