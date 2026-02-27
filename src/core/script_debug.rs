@@ -4,7 +4,7 @@
 //! inspection of stack state at each opcode during script verification.
 
 use std::panic;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use libbitcoinkernel_sys::{
     btck_ScriptDebugState, btck_register_script_debug_callback,
@@ -28,15 +28,15 @@ pub struct ScriptDebugFrame {
 
 /// Guard that keeps a script debug callback registered.
 ///
-/// Only one `ScriptDebugger` can be active at a time (enforced by an atomic flag).
+/// Only one `ScriptDebugger` can be active at a time (enforced by a mutex).
 /// Dropping the `ScriptDebugger` unregisters the callback.
 pub struct ScriptDebugger {
     /// Double-boxed so the outer Box provides a stable thin pointer for C.
     _closure: Box<Box<dyn FnMut(ScriptDebugFrame)>>,
 }
 
-/// Global flag to prevent double-registration.
-static REGISTERED: AtomicBool = AtomicBool::new(false);
+/// Global mutex guarding callback registration.
+static REGISTERED: Mutex<bool> = Mutex::new(false);
 
 impl ScriptDebugger {
     /// Register a debug callback that receives a [`ScriptDebugFrame`] for each opcode step.
@@ -46,10 +46,8 @@ impl ScriptDebugger {
     where
         F: FnMut(ScriptDebugFrame) + 'static,
     {
-        if REGISTERED
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
+        let mut guard = REGISTERED.lock().unwrap();
+        if *guard {
             return None;
         }
 
@@ -61,16 +59,18 @@ impl ScriptDebugger {
             btck_register_script_debug_callback(user_data, Some(trampoline));
         }
 
+        *guard = true;
         Some(ScriptDebugger { _closure: closure })
     }
 }
 
 impl Drop for ScriptDebugger {
     fn drop(&mut self) {
+        let mut guard = REGISTERED.lock().unwrap();
         unsafe {
             btck_unregister_script_debug_callback();
         }
-        REGISTERED.store(false, Ordering::SeqCst);
+        *guard = false;
     }
 }
 
