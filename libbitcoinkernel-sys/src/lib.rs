@@ -15,6 +15,7 @@ pub type btck_BlockValidationResult = u32;
 pub type btck_ChainType = u8;
 pub type btck_LogCategory = u8;
 pub type btck_LogLevel = u8;
+pub type btck_ScriptError = u8;
 pub type btck_ScriptVerificationFlags = u32;
 pub type btck_ScriptVerifyStatus = u8;
 pub type btck_SynchronizationState = u8;
@@ -93,6 +94,72 @@ pub const btck_BlockCheckFlags_ALL: btck_BlockCheckFlags =
 pub const btck_ScriptVerifyStatus_OK: btck_ScriptVerifyStatus = 0;
 pub const btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION: btck_ScriptVerifyStatus = 1;
 pub const btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED: btck_ScriptVerifyStatus = 2;
+
+// btck_ScriptError
+
+pub const btck_ScriptError_OK: btck_ScriptError = 0;
+pub const btck_ScriptError_UNKNOWN: btck_ScriptError = 1;
+pub const btck_ScriptError_EVAL_FALSE: btck_ScriptError = 2;
+pub const btck_ScriptError_OP_RETURN: btck_ScriptError = 3;
+// Max sizes
+pub const btck_ScriptError_SCRIPT_SIZE: btck_ScriptError = 4;
+pub const btck_ScriptError_PUSH_SIZE: btck_ScriptError = 5;
+pub const btck_ScriptError_OP_COUNT: btck_ScriptError = 6;
+pub const btck_ScriptError_STACK_SIZE: btck_ScriptError = 7;
+pub const btck_ScriptError_SIG_COUNT: btck_ScriptError = 8;
+pub const btck_ScriptError_PUBKEY_COUNT: btck_ScriptError = 9;
+// Failed verify operations
+pub const btck_ScriptError_VERIFY: btck_ScriptError = 10;
+pub const btck_ScriptError_EQUALVERIFY: btck_ScriptError = 11;
+pub const btck_ScriptError_CHECKMULTISIGVERIFY: btck_ScriptError = 12;
+pub const btck_ScriptError_CHECKSIGVERIFY: btck_ScriptError = 13;
+pub const btck_ScriptError_NUMEQUALVERIFY: btck_ScriptError = 14;
+// Logical/Format/Canonical errors
+pub const btck_ScriptError_BAD_OPCODE: btck_ScriptError = 15;
+pub const btck_ScriptError_DISABLED_OPCODE: btck_ScriptError = 16;
+pub const btck_ScriptError_INVALID_STACK_OPERATION: btck_ScriptError = 17;
+pub const btck_ScriptError_INVALID_ALTSTACK_OPERATION: btck_ScriptError = 18;
+pub const btck_ScriptError_UNBALANCED_CONDITIONAL: btck_ScriptError = 19;
+// CHECKLOCKTIMEVERIFY and CHECKSEQUENCEVERIFY
+pub const btck_ScriptError_NEGATIVE_LOCKTIME: btck_ScriptError = 20;
+pub const btck_ScriptError_UNSATISFIED_LOCKTIME: btck_ScriptError = 21;
+// Malleability
+pub const btck_ScriptError_SIG_HASHTYPE: btck_ScriptError = 22;
+pub const btck_ScriptError_SIG_DER: btck_ScriptError = 23;
+pub const btck_ScriptError_MINIMALDATA: btck_ScriptError = 24;
+pub const btck_ScriptError_SIG_PUSHONLY: btck_ScriptError = 25;
+pub const btck_ScriptError_SIG_HIGH_S: btck_ScriptError = 26;
+pub const btck_ScriptError_SIG_NULLDUMMY: btck_ScriptError = 27;
+pub const btck_ScriptError_PUBKEYTYPE: btck_ScriptError = 28;
+pub const btck_ScriptError_CLEANSTACK: btck_ScriptError = 29;
+pub const btck_ScriptError_MINIMALIF: btck_ScriptError = 30;
+pub const btck_ScriptError_SIG_NULLFAIL: btck_ScriptError = 31;
+// Softfork safeness
+pub const btck_ScriptError_DISCOURAGE_UPGRADABLE_NOPS: btck_ScriptError = 32;
+pub const btck_ScriptError_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM: btck_ScriptError = 33;
+pub const btck_ScriptError_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION: btck_ScriptError = 34;
+pub const btck_ScriptError_DISCOURAGE_OP_SUCCESS: btck_ScriptError = 35;
+pub const btck_ScriptError_DISCOURAGE_UPGRADABLE_PUBKEYTYPE: btck_ScriptError = 36;
+// Segregated witness
+pub const btck_ScriptError_WITNESS_PROGRAM_WRONG_LENGTH: btck_ScriptError = 37;
+pub const btck_ScriptError_WITNESS_PROGRAM_WITNESS_EMPTY: btck_ScriptError = 38;
+pub const btck_ScriptError_WITNESS_PROGRAM_MISMATCH: btck_ScriptError = 39;
+pub const btck_ScriptError_WITNESS_MALLEATED: btck_ScriptError = 40;
+pub const btck_ScriptError_WITNESS_MALLEATED_P2SH: btck_ScriptError = 41;
+pub const btck_ScriptError_WITNESS_UNEXPECTED: btck_ScriptError = 42;
+pub const btck_ScriptError_WITNESS_PUBKEYTYPE: btck_ScriptError = 43;
+// Taproot
+pub const btck_ScriptError_SCHNORR_SIG_SIZE: btck_ScriptError = 44;
+pub const btck_ScriptError_SCHNORR_SIG_HASHTYPE: btck_ScriptError = 45;
+pub const btck_ScriptError_SCHNORR_SIG: btck_ScriptError = 46;
+pub const btck_ScriptError_TAPROOT_WRONG_CONTROL_SIZE: btck_ScriptError = 47;
+pub const btck_ScriptError_TAPSCRIPT_VALIDATION_WEIGHT: btck_ScriptError = 48;
+pub const btck_ScriptError_TAPSCRIPT_CHECKMULTISIG: btck_ScriptError = 49;
+pub const btck_ScriptError_TAPSCRIPT_MINIMALIF: btck_ScriptError = 50;
+pub const btck_ScriptError_TAPSCRIPT_EMPTY_PUBKEY: btck_ScriptError = 51;
+// Constant scriptCode
+pub const btck_ScriptError_OP_CODESEPARATOR: btck_ScriptError = 52;
+pub const btck_ScriptError_SIG_FINDANDDELETE: btck_ScriptError = 53;
 
 // btck_SynchronizationState
 
@@ -431,6 +498,7 @@ extern "C" {
         input_index: c_uint,
         flags: btck_ScriptVerificationFlags,
         status: *mut btck_ScriptVerifyStatus,
+        script_error: *mut btck_ScriptError,
     ) -> c_int;
 
     pub fn btck_script_pubkey_to_bytes(

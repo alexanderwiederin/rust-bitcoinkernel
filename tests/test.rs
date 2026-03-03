@@ -248,6 +248,103 @@ mod tests {
     }
 
     #[test]
+    fn test_script_error_codes() {
+        let p2pkh_tx = "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700";
+
+        // OP_RETURN (0x6a) → OpReturn
+        assert!(matches!(
+            verify_test("6a", p2pkh_tx, 0, 0, vec![], VERIFY_ALL_PRE_TAPROOT),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+
+        // OP_0 (0x00) pushes empty bytes → top of stack is false → EvalFalse
+        assert!(matches!(
+            verify_test("00", p2pkh_tx, 0, 0, vec![], VERIFY_ALL_PRE_TAPROOT),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+
+        assert!(matches!(
+            verify_test("88", p2pkh_tx, 0, 0, vec![], VERIFY_ALL_PRE_TAPROOT),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+
+        // OP_IF (0x63) without OP_ENDIF → UnbalancedConditional
+        assert!(matches!(
+            verify_test("63", p2pkh_tx, 0, 0, vec![], VERIFY_ALL_PRE_TAPROOT),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+
+        // OP_DROP OP_DROP OP_DROP (0x75 0x75 0x75): scriptSig pushes 2 items,
+        // third OP_DROP has nothing to pop → InvalidStackOperation
+        assert!(matches!(
+            verify_test("757575", p2pkh_tx, 0, 0, vec![], VERIFY_ALL_PRE_TAPROOT),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+
+        // OP_2MUL (0x8d) is a disabled opcode → DisabledOpcode
+        assert!(matches!(
+            verify_test("8d", p2pkh_tx, 0, 0, vec![], VERIFY_ALL_PRE_TAPROOT),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+
+        // P2PKH with wrong pubkey hash: OP_DUP OP_HASH160 <20 zero bytes> OP_EQUALVERIFY OP_CHECKSIG
+        // Hash won't match the actual pubkey → EqualVerify
+        assert!(matches!(
+            verify_test(
+                "76a914000000000000000000000000000000000000000088ac",
+                p2pkh_tx,
+                0,
+                0,
+                vec![],
+                VERIFY_ALL_PRE_TAPROOT
+            ),
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
+        ));
+    }
+
+    #[test]
+    fn test_script_verify() {
+        // a random old-style transaction from the blockchain
+        verify_test (
+            "76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac",
+            "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700",
+            0, 0, vec![], VERIFY_ALL_PRE_TAPROOT
+        ).unwrap();
+
+        // a random segwit transaction from the blockchain using native segwit
+        verify_test(
+            "0020701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58d",
+            "010000000001011f97548fbbe7a0db7588a66e18d803d0089315aa7d4cc28360b6ec50ef36718a0100000000ffffffff02df1776000000000017a9146c002a686959067f4866b8fb493ad7970290ab728757d29f0000000000220020701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58d04004730440220565d170eed95ff95027a69b313758450ba84a01224e1f7f130dda46e94d13f8602207bdd20e307f062594022f12ed5017bbf4a055a06aea91c10110a0e3bb23117fc014730440220647d2dc5b15f60bc37dc42618a370b2a1490293f9e5c8464f53ec4fe1dfe067302203598773895b4b16d37485cbe21b337f4e4b650739880098c592553add7dd4355016952210375e00eb72e29da82b89367947f29ef34afb75e8654f6ea368e0acdfd92976b7c2103a1b26313f430c4b15bb1fdce663207659d8cac749a0e53d70eff01874496feff2103c96d495bfdd5ba4145e3e046fee45e84a8a48ad05bd8dbb395c011a32cf9f88053ae00000000",
+            18393430 , 0, vec![], VERIFY_ALL_PRE_TAPROOT
+        ).unwrap();
+
+        // a random old-style transaction from the blockchain - WITH BAD OPCODE replacing OP_CHECKSIG
+        // scriptPubkey ends with 0xff instead of 0xac (OP_CHECKSIG), so EQUALVERIFY passes
+        // (correct pubkey hash) but then 0xff is an undefined opcode → BadOpcode
+        assert!(matches!(verify_test(
+            "76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ff",
+            "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700",
+            0, 0 , vec![], VERIFY_ALL_PRE_TAPROOT
+        ), Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))));
+
+        // a random segwit transaction from the blockchain using native segwit - WITH WRONG WITNESS HASH
+        // Last byte of witness program changed (c58d → c58f), so hash doesn't match → WitnessProgramMismatch
+        assert!(matches!(verify_test(
+            "0020701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58f",
+            "010000000001011f97548fbbe7a0db7588a66e18d803d0089315aa7d4cc28360b6ec50ef36718a0100000000ffffffff02df1776000000000017a9146c002a686959067f4866b8fb493ad7970290ab728757d29f0000000000220020701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58d04004730440220565d170eed95ff95027a69b313758450ba84a01224e1f7f130dda46e94d13f8602207bdd20e307f062594022f12ed5017bbf4a055a06aea91c10110a0e3bb23117fc014730440220647d2dc5b15f60bc37dc42618a370b2a1490293f9e5c8464f53ec4fe1dfe067302203598773895b4b16d37485cbe21b337f4e4b650739880098c592553add7dd4355016952210375e00eb72e29da82b89367947f29ef34afb75e8654f6ea368e0acdfd92976b7c2103a1b26313f430c4b15bb1fdce663207659d8cac749a0e53d70eff01874496feff2103c96d495bfdd5ba4145e3e046fee45e84a8a48ad05bd8dbb395c011a32cf9f88053ae00000000",
+            18393430 , 0, vec![], VERIFY_ALL_PRE_TAPROOT
+        ), Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))));
+
+        // a random taproot transaction
+        let spent = "5120339ce7e165e67d93adb3fef88a6d4beed33f01fa876f05a225242b82a631abc0";
+        let spending  = "01000000000101d1f1c1f8cdf6759167b90f52c9ad358a369f95284e841d7a2536cef31c0549580100000000fdffffff020000000000000000316a2f49206c696b65205363686e6f7272207369677320616e6420492063616e6e6f74206c69652e204062697462756734329e06010000000000225120a37c3903c8d0db6512e2b40b0dffa05e5a3ab73603ce8c9c4b7771e5412328f90140a60c383f71bac0ec919b1d7dbc3eb72dd56e7aa99583615564f9f99b8ae4e837b758773a5b2e4c51348854c8389f008e05029db7f464a5ff2e01d5e6e626174affd30a00";
+        let spent_script_pubkey =
+            ScriptPubkey::try_from(hex::decode(spent).unwrap().as_slice()).unwrap();
+        let outputs: Vec<TxOut> = vec![TxOut::new(&spent_script_pubkey, 88480)];
+        verify_test(spent, spending, 88480, 0, outputs, VERIFY_ALL).unwrap();
+    }
+
+    #[test]
     fn script_verify_p2pkh() {
         // Spending a P2PKH output using a mainnet tx with id aca326a724eda9a461c10a876534ecd5ae7b27f10f26c3862fb996f80ea2d45d
         let spk = "76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac";
@@ -259,9 +356,10 @@ mod tests {
 
         // same tx but with corrupted signature
         let tx_corrupted_sig = "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c6f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700";
+
         assert!(matches!(
             verify_test(spk, tx_corrupted_sig, 0, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
 
         // same tx but with a non-DER signature
@@ -276,7 +374,7 @@ mod tests {
                 vec![],
                 base_flags | VERIFY_DERSIG
             ),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
     }
 
@@ -294,7 +392,7 @@ mod tests {
         let tx_corrupted_sig = "0100000001dd320ee7e290ddd042332f85dd064d2ee052257a9f4761929c237a7674ff1f0d01000000fdfe0000483045023100f808cadda09bf753740a9d1f012fe9224d670d2b4337af61858e9a61d1415a6a0220296e83ac33055c8e58bcd4f7a1afc010b6da0787e41b0add9ced70bf1b5694c901483045022100ed525f5b43420c4fe745a19276e851bf21270bbb81717e4ead7d7919a1be267802201b48b9e6c92cc698f6ceb0c170321deb253d9d94c355f00bb0c6727a567d3dcf014c69522102239bbabd01dc2e4974d60dd658ca8547924f3f3fa5e583f4dea116c5a330b7d32102135d7f51e7c3aced9d0b7a5c0dc374eea814afce5e5a075f3bacf143b33af2e62102606e72be62d5fcff8764807ff676d31e7e99b5f56b79e38fdbb794d2796bbbfa53aeffffffff02846a8700000000001976a914932850c5373a1dda47027c51125b0493c026c9a388ac4da06c000000000017a91498dd7103a99f268f443fee4424a240af3d4a5aeb8700000000";
         assert!(matches!(
             verify_test(spk, tx_corrupted_sig, 0, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -318,7 +416,7 @@ mod tests {
                 vec![],
                 base_flags | VERIFY_NULLDUMMY
             ),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
     }
 
@@ -337,7 +435,7 @@ mod tests {
         let tx_locktime_50 = "0200000001738df4ccd15745a9539ff632cbe903f1050807edf35a1a3835c5bca619078f190100000071483045022100bdaefb402ddf25738762c57978b9f02adb9007e7c835673d8cbda6bc0b58ee78022054011b17b5d7d8b516d1ced26d124b435a5c4cccc7492778ab2a6661f5ef365801270164b1752102d8019ae39403a4c0b49e98a0be4ed9ad0b1ba20f324fd6268c7455841deddd0dac000000000118ddf50500000000015132000000";
         assert!(matches!(
             verify_test(spk, tx_locktime_50, 0, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -365,7 +463,7 @@ mod tests {
         let tx_sequence_5 = "0200000001b4b3b5eed405f118a43e411d51eace0b7a48ad6ec061e0c6d1e2a5dbc50fa178010000007148304502210080c15d7432d18c78529b95f6677dfc57ae22024789eefed400dbfebcdc8341da02204775fed6dedc3b540eea67c3bf8058e1211248970cdab9980c0ed09736e13fbb0127010ab275210291c420b3afc1c75796653268a727d61df2edd606c243b261df61dd22f388553fac050000000118ddf50500000000015100000000";
         assert!(matches!(
             verify_test(spk, tx_sequence_5, 0, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -393,7 +491,7 @@ mod tests {
         let tx_corrupted_sig = "01000000000101d9fd94d0ff0026d307c994d0003180a5f248146efb6371d040c5973f5f66d9df0400000017160014b31b31a6cb654cfab3c50567bcf124f48a0beaecffffffff012cbd1c000000000017a914233b74bf0823fa58bbbd26dfc3bb4ae715547167870247304402206f60569cac136c114a58aedd80f6fa1c51b49093e7af883e615c212bdafcd8d202200e91a55f408a021ad2631bc29a67bd6915b2d7e9ef0265627eabd7f7234455f6012103e7e802f50344303c76d12c089c8724c1b230e3b745693bbe16aad536293d15e300000000";
         assert!(matches!(
             verify_test(spk, tx_corrupted_sig, amount, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -421,7 +519,7 @@ mod tests {
         let tx_corrupted_sig = "020000000001018d30fa8c3023ae9e72f44cea3525b4fe084a816830efb98b605678230cc9c48d0100000023220020a9cd0514e7793003d378df96bbe21c901421ff089ad5598a1a9b5a3cf6eaef0afdffffff0201ed11a60000000017a914194b877577228c0012e4ca3c3780198d8b09d14c87bccb510200000000160014db65e96bfbf0d6ce727ab2518a2f45635367f8b3040047304402202e679780ebe920a1e367482cace23cebaa9d8be7e7d1bd727d7439fb62c8332802203008e33b111161206cd09c947588b43114011a60c7dbaf0679c60d891e38fbb701473044022029233663e8fdbaead30f4ff806018d7ec939505fb4e11cd53195e3ca83f36f5302202010174a3b84d1128272ef1fabf23f1add09e8e074ed2443688a718be86947e40169522102282a387d21d8784fbbf28e6d0cb3f9984996771e7283bd8f5c32dc4b7a961ba8210294586ab0277cae2a8b138527816bf9f36a7203265d83e08bbeaebdd7e1568b2c21030e724028e64b78c0479a35e7c9b4cc3c13456f12ba993a8f19a38ee3b2d7743953ae00000000";
         assert!(matches!(
             verify_test(spk, tx_corrupted_sig, amount, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -448,7 +546,7 @@ mod tests {
         // using wrong amount
         assert!(matches!(
             verify_test(spk, tx_valid, 5002, 0, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(spk, tx_valid, 5002, 0, vec![], base_flags & !VERIFY_WITNESS).unwrap();
     }
@@ -468,7 +566,7 @@ mod tests {
         let tx_corrupted_sig = "01000000000102e1434357ad4d08274ed106e21f2694d35000b46e66b1dd714d63e9cd3f2ab4740000000000ffffffffb9de6f14166a841772ec53c6e384adb3dc151ba1e7b2c0a92cc9f194690be1240000000000ffffffff0198282d0000000000160014c95362dd904e547af461dbf4cc4d251a8fa1295205483045022100c8553375207dd6ef92439a22707a268629b4af08ae94d02e92c8acc355f5911902207ed6b01a97a9cc52c1fb8c6c6999b27e9c34f703a03917d8a640a45e0589ed9901210200c503dc20b66731af9d189f0a0981b148b40cb2c26f3ff15cc90037b812b6e22017e3c268fe7c34ea02effd3975038fc09ce0326b063fe0ec9356b6f558ba55ff0101616382012088a820be72730c5ba3ae4d924ef26be8a20b2e820d63916bb9db4f38214f739b897e1d8876a9148d1fe4411b3cd3a0bccafb8b57ee0c071e5abd79670428c18969b17576a914bec3dacae92ec1cd60843a8704119b0e202c6d346888ac05483045022100ae691ea4c91edf52f44e56e4f53d1ab6bb2562bb34f4f56f4f0003ea52f91fa7022001ca2196e6961b29cff64e1b5ac8917ba90a162f8230860bbc7b050624578fb701210200c503dc20b66731af9d189f0a0981b148b40cb2c26f3ff15cc90037b812b6e220362fc6c6a5b56532c27f701a067eda066ec2be426b5cd696a3a030abffc446ce0101616382012088a820360537c727eed2694b8d5493c1b0b5d79289042af10f6cdb3361f14d3fab523e8876a9148d1fe4411b3cd3a0bccafb8b57ee0c071e5abd7967043cc18969b17576a914ad27aa467040ddf17bbea8be0794e3e6953c09066888ac00000000";
         assert!(matches!(
             verify_test(spk, tx_corrupted_sig, amount, 1, vec![], base_flags),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -507,7 +605,7 @@ mod tests {
                 outputs.clone(),
                 base_flags
             ),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
@@ -559,7 +657,7 @@ mod tests {
                 outputs.clone(),
                 base_flags
             ),
-            Err(KernelError::ScriptVerify(ScriptVerifyError::Invalid))
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(_)))
         ));
         verify_test(
             spk,
