@@ -45,7 +45,7 @@ jobs:
         cargo build --all-features --locked
  
     - name: Run tests with MSRV
-      run: cargo test --all-features --locked
+      run: cargo test --all-features --locked -- --test-threads=1
 
   check-lock-files:
     name: Check lock files
@@ -147,7 +147,7 @@ jobs:
 
     - name: Run tests with Valgrind
       run: |
-        find target/debug/deps -type f -executable -name "test-*" -not -name "*.so" -not -name "*.d" | xargs -I {} valgrind --leak-check=full --show-leak-kinds=all  --errors-for-leak-kinds=definite --suppressions=valgrind.supp --error-exitcode=1 {}
+        find target/debug/deps -type f -executable -name "test-*" -not -name "*.so" -not -name "*.d" | xargs -I {} valgrind --leak-check=full --show-leak-kinds=all  --errors-for-leak-kinds=definite --suppressions=valgrind.supp --error-exitcode=1 {} --test-threads=1
 
   windows-build:
     name: Build and Test on Windows
