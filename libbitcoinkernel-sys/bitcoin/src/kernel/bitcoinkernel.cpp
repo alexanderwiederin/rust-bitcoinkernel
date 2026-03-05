@@ -1460,7 +1460,8 @@ void btck_register_script_debug_callback(void* user_data, btck_ScriptDebugCallba
                             std::span<const std::vector<unsigned char>> altstack,
                             bool fExec,
                             uint8_t opcode,
-                            int nOpCount) {
+                            int nOpCount,
+                            uint8_t sigversion) {
         std::vector<const unsigned char*> stack_ptrs;
         std::vector<size_t> stack_sizes;
         stack_ptrs.reserve(stack.size());
@@ -1492,6 +1493,7 @@ void btck_register_script_debug_callback(void* user_data, btck_ScriptDebugCallba
         state.f_exec = fExec ? 1 : 0;
         state.opcode = opcode;
         state.op_count = nOpCount;
+        state.sig_version = sigversion;
 
         callback(user_data, &state);
     };
