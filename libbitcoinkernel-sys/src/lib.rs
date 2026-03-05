@@ -405,6 +405,8 @@ pub struct btck_ScriptDebugState {
     pub altstack_item_sizes: *const usize,
     pub altstack_size: usize,
     pub f_exec: c_int,
+    pub opcode: u8,
+    pub op_count: c_int,
 }
 
 #[repr(C)]
