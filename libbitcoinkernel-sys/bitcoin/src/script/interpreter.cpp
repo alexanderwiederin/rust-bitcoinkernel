@@ -460,7 +460,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 }
             }
 
-            DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, static_cast<uint8_t>(opcode), nOpCount);
+            DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, static_cast<uint8_t>(opcode), nOpCount, static_cast<uint8_t>(sigversion));
 
             if (opcode == OP_CAT ||
                 opcode == OP_SUBSTR ||
@@ -1236,8 +1236,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
         return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
     }
 
-    opcode = OP_INVALIDOPCODE;
-    DEBUG_SCRIPT(stack, script, opcode_pos, altstack, vfExec.all_true(), static_cast<uint8_t>(OP_INVALIDOPCODE), nOpCount);
+    DEBUG_SCRIPT(stack, script, opcode_pos, altstack, vfExec.all_true(), static_cast<uint8_t>(OP_INVALIDOPCODE), nOpCount, static_cast<uint8_t>(sigversion));
 
     if (!vfExec.empty())
         return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
