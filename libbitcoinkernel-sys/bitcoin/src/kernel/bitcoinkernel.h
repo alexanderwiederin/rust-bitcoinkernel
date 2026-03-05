@@ -1874,6 +1874,8 @@ typedef struct {
     uint8_t opcode;
     int op_count;
     uint8_t sig_version;
+    const unsigned char* tapleaf_hash;
+    uint32_t codeseparator_pos;
 } btck_ScriptDebugState;
 
 /**
