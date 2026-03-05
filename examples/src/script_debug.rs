@@ -25,7 +25,7 @@ fn main() {
             _ => "UNKNOWN",
         };
         println!(
-            "\n[step {}] opcode=0x{:02x} ({}) op_count={} sig_version={} f_exec={} stack_depth={}",
+            "\n[step {}] opcode=0x{:02x} ({}) op_count={} sig_version={} f_exec={} stack_depth={} codesep_pos={}",
             frame.opcode_pos,
             frame.opcode,
             opcode_name,
@@ -33,7 +33,11 @@ fn main() {
             sig_version_name,
             frame.f_exec,
             frame.stack.len(),
+            frame.codeseparator_pos,
         );
+        if let Some(hash) = &frame.tapleaf_hash {
+            println!("  Tapleaf hash: 0x{}", hex::encode(hash));
+        }
 
         if !frame.stack.is_empty() {
             println!("  Stack:");
