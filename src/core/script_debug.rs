@@ -63,6 +63,10 @@ pub struct ScriptDebugFrame {
     pub op_count: u32,
     /// Script execution context (legacy, segwit v0, tapscript, etc.).
     pub sig_version: SigVersion,
+    /// Tapleaf hash for tapscript execution, `None` for non-tapscript contexts.
+    pub tapleaf_hash: Option<[u8; 32]>,
+    /// Position of the last executed `OP_CODESEPARATOR`, or `0xFFFFFFFF` if none.
+    pub codeseparator_pos: u32,
 }
 
 /// Guard that keeps a script debug callback registered.
@@ -140,6 +144,15 @@ unsafe extern "C" fn trampoline(
 
         let sig_version = SigVersion::try_from(state.sig_version).unwrap_or(SigVersion::Base);
 
+        let tapleaf_hash = if state.tapleaf_hash.is_null() {
+            None
+        } else {
+            let bytes = unsafe { std::slice::from_raw_parts(state.tapleaf_hash, 32) };
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(bytes);
+            Some(hash)
+        };
+
         let frame = ScriptDebugFrame {
             stack,
             altstack,
@@ -149,6 +162,8 @@ unsafe extern "C" fn trampoline(
             opcode: state.opcode,
             op_count: state.op_count as u32,
             sig_version,
+            tapleaf_hash,
+            codeseparator_pos: state.codeseparator_pos,
         };
 
         let closure = unsafe { &mut **(user_data as *mut Box<dyn FnMut(ScriptDebugFrame)>) };
