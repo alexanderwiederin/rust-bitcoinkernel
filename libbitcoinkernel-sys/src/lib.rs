@@ -18,6 +18,7 @@ pub type btck_LogLevel = u8;
 pub type btck_ScriptVerificationFlags = u32;
 pub type btck_ScriptError = u8;
 pub type btck_ScriptVerifyStatus = u8;
+pub type btck_SigVersion = u8;
 pub type btck_SynchronizationState = u8;
 pub type btck_ValidationMode = u8;
 pub type btck_Warning = u8;
@@ -161,6 +162,13 @@ pub const btck_ScriptError_TAPSCRIPT_EMPTY_PUBKEY: btck_ScriptError = 52;
 // Constant scriptCode
 pub const btck_ScriptError_OP_CODESEPARATOR: btck_ScriptError = 53;
 pub const btck_ScriptError_SIG_FINDANDDELETE: btck_ScriptError = 54;
+
+// btck_SigVersion
+
+pub const btck_SigVersion_BASE: btck_SigVersion = 0;
+pub const btck_SigVersion_WITNESS_V0: btck_SigVersion = 1;
+pub const btck_SigVersion_TAPROOT: btck_SigVersion = 2;
+pub const btck_SigVersion_TAPSCRIPT: btck_SigVersion = 3;
 
 // btck_SynchronizationState
 
@@ -408,6 +416,7 @@ pub struct btck_ScriptDebugState {
     pub f_exec: c_int,
     pub opcode: u8,
     pub op_count: c_int,
+    pub sig_version: u8,
 }
 
 #[repr(C)]
