@@ -11,17 +11,17 @@
 #include <span>
 #include <vector>
 
-using DebugScriptCallback = std::function<void(std::span<const std::vector<unsigned char>>, const CScript&, uint32_t, std::span<const std::vector<unsigned char>>, bool, uint8_t, int, uint8_t)>;
+using DebugScriptCallback = std::function<void(std::span<const std::vector<unsigned char>>, const CScript&, uint32_t, std::span<const std::vector<unsigned char>>, bool, uint8_t, int, uint8_t, const unsigned char*, uint32_t)>;
 
-void DebugScript(std::span<const std::vector<unsigned char>> stack, const CScript& script, uint32_t opcode_pos, std::span<const std::vector<unsigned char>> altstack, bool fExec, uint8_t opcode, int nOpCount, uint8_t sigversion);
+void DebugScript(std::span<const std::vector<unsigned char>> stack, const CScript& script, uint32_t opcode_pos, std::span<const std::vector<unsigned char>> altstack, bool fExec, uint8_t opcode, int nOpCount, uint8_t sigversion, const unsigned char* tapleaf_hash, uint32_t codeseparator_pos);
 
 void RegisterDebugScriptCallback(DebugScriptCallback func);
 
 #ifdef ENABLE_SCRIPT_DEBUG
-#define DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, opcode, nOpCount, sigversion) \
-    DebugScript(stack, script, opcode_pos, altstack, fExec, opcode, nOpCount, sigversion);
+#define DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, opcode, nOpCount, sigversion, tapleaf_hash, codeseparator_pos) \
+    DebugScript(stack, script, opcode_pos, altstack, fExec, opcode, nOpCount, sigversion, tapleaf_hash, codeseparator_pos);
 #else
-#define DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, opcode, nOpCount, sigversion)
+#define DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, opcode, nOpCount, sigversion, tapleaf_hash, codeseparator_pos)
 #endif // ENABLE_SCRIPT_DEBUG
 
 #endif // BITCOIN_SCRIPT_DEBUG_H
