@@ -1461,7 +1461,9 @@ void btck_register_script_debug_callback(void* user_data, btck_ScriptDebugCallba
                             bool fExec,
                             uint8_t opcode,
                             int nOpCount,
-                            uint8_t sigversion) {
+                            uint8_t sigversion,
+                            const unsigned char* tapleaf_hash,
+                            uint32_t codeseparator_pos) {
         std::vector<const unsigned char*> stack_ptrs;
         std::vector<size_t> stack_sizes;
         stack_ptrs.reserve(stack.size());
@@ -1494,6 +1496,8 @@ void btck_register_script_debug_callback(void* user_data, btck_ScriptDebugCallba
         state.opcode = opcode;
         state.op_count = nOpCount;
         state.sig_version = sigversion;
+        state.tapleaf_hash = tapleaf_hash;
+        state.codeseparator_pos = codeseparator_pos;
 
         callback(user_data, &state);
     };

@@ -417,6 +417,8 @@ pub struct btck_ScriptDebugState {
     pub opcode: u8,
     pub op_count: c_int,
     pub sig_version: u8,
+    pub tapleaf_hash: *const c_uchar,
+    pub codeseparator_pos: u32,
 }
 
 #[repr(C)]
