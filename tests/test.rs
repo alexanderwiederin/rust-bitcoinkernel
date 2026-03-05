@@ -745,6 +745,22 @@ mod tests {
                 "P2PKH execution should use SigVersion::Base"
             );
         }
+
+        // P2PKH (non-tapscript) should have no tapleaf hash
+        for frame in collected.iter() {
+            assert_eq!(
+                frame.tapleaf_hash, None,
+                "P2PKH frames should have no tapleaf hash"
+            );
+        }
+
+        // codeseparator_pos should be 0xFFFFFFFF (no OP_CODESEPARATOR executed)
+        for frame in collected.iter() {
+            assert_eq!(
+                frame.codeseparator_pos, 0xFFFFFFFF,
+                "P2PKH frames should have codeseparator_pos = 0xFFFFFFFF"
+            );
+        }
     }
 
     /// Multiple threads race to register a debugger — at most one should be active at a time.
