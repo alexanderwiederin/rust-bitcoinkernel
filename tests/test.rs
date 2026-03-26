@@ -1225,6 +1225,179 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "script_debug")]
+    #[test]
+    fn test_script_trace_from_verify() {
+        use bitcoinkernel::{ScriptTrace, VERIFY_ALL_PRE_TAPROOT};
+
+        let spent_script_pubkey = ScriptPubkey::try_from(
+            hex::decode("76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac")
+                .unwrap()
+                .as_slice(),
+        )
+        .unwrap();
+        let spending_tx = Transaction::new(
+            hex::decode(
+                "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700",
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let tx_data = PrecomputedTransactionData::new(&spending_tx, &Vec::<TxOut>::new()).unwrap();
+
+        let trace = ScriptTrace::from_verify(
+            &spent_script_pubkey,
+            Some(0),
+            &spending_tx,
+            0,
+            Some(VERIFY_ALL_PRE_TAPROOT),
+            &tx_data,
+        )
+        .expect("from_verify should succeed");
+
+        // Should have captured frames
+        assert!(!trace.is_empty(), "trace should have frames");
+
+        // Verification passed, so no error
+        assert!(
+            trace.error().is_none(),
+            "successful verification should have no error"
+        );
+
+        // Accessors should work
+        assert!(trace.get(0).is_some(), "get(0) should return a frame");
+        assert!(
+            trace.get(trace.len()).is_none(),
+            "get(len) should return None"
+        );
+        assert_eq!(
+            trace.frames().len(),
+            trace.len(),
+            "frames() and len() should agree"
+        );
+        assert_eq!(
+            trace.iter().count(),
+            trace.len(),
+            "iter() count should match len()"
+        );
+
+        // First scriptPubKey frame should start with OP_DUP (0x76)
+        let p2pkh_script =
+            hex::decode("76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac").unwrap();
+        let p2pkh_frames: Vec<_> = trace
+            .iter()
+            .filter(|f| f.script == p2pkh_script && f.opcode != 0xff)
+            .collect();
+        assert!(!p2pkh_frames.is_empty(), "should have P2PKH frames");
+        assert_eq!(
+            p2pkh_frames[0].opcode, 0x76,
+            "first P2PKH opcode should be OP_DUP"
+        );
+    }
+
+    #[cfg(feature = "script_debug")]
+    #[test]
+    fn test_script_trace_from_verify_failure() {
+        use bitcoinkernel::{ScriptError, ScriptTrace, VERIFY_ALL_PRE_TAPROOT};
+
+        // Use a valid P2PKH scriptPubKey but a transaction with a bad signature.
+        // We construct this by using the correct tx but verifying against a
+        // different scriptPubKey (OP_1 OP_EQUAL), which will fail with EvalFalse
+        // since the scriptSig pushes a signature, not 0x01.
+        let spent_script_pubkey = ScriptPubkey::try_from(
+            hex::decode("5187").unwrap().as_slice(), // OP_1 OP_EQUAL
+        )
+        .unwrap();
+        let spending_tx = Transaction::new(
+            hex::decode(
+                "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700",
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let tx_data = PrecomputedTransactionData::new(&spending_tx, &Vec::<TxOut>::new()).unwrap();
+
+        let trace = ScriptTrace::from_verify(
+            &spent_script_pubkey,
+            Some(0),
+            &spending_tx,
+            0,
+            Some(VERIFY_ALL_PRE_TAPROOT),
+            &tx_data,
+        )
+        .expect("from_verify should succeed even when verification fails");
+
+        // Should have captured frames (scriptSig pushes + scriptPubKey execution)
+        assert!(
+            !trace.is_empty(),
+            "trace should have frames even on failure"
+        );
+
+        // Verification failed, so error should be present
+        assert!(
+            trace.error().is_some(),
+            "failed verification should have an error"
+        );
+        assert_eq!(
+            *trace.error().unwrap(),
+            ScriptError::EvalFalse,
+            "error should be EvalFalse"
+        );
+    }
+
+    #[cfg(feature = "script_debug")]
+    #[test]
+    fn test_script_trace_accessors() {
+        use bitcoinkernel::{ScriptTrace, VERIFY_ALL_PRE_TAPROOT};
+
+        let spent_script_pubkey = ScriptPubkey::try_from(
+            hex::decode("76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac")
+                .unwrap()
+                .as_slice(),
+        )
+        .unwrap();
+        let spending_tx = Transaction::new(
+            hex::decode(
+                "02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700",
+            )
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+        let tx_data = PrecomputedTransactionData::new(&spending_tx, &Vec::<TxOut>::new()).unwrap();
+
+        let trace = ScriptTrace::from_verify(
+            &spent_script_pubkey,
+            Some(0),
+            &spending_tx,
+            0,
+            Some(VERIFY_ALL_PRE_TAPROOT),
+            &tx_data,
+        )
+        .unwrap();
+
+        // is_empty
+        assert!(!trace.is_empty(), "trace should not be empty");
+
+        // get out of bounds
+        assert!(
+            trace.get(usize::MAX).is_none(),
+            "way out of bounds should be None"
+        );
+
+        // frames() slice length matches len()
+        assert_eq!(trace.frames().len(), trace.len());
+
+        // iter yields same frames as get()
+        for (i, frame) in trace.iter().enumerate() {
+            let got = trace.get(i).unwrap();
+            assert_eq!(got.opcode_pos, frame.opcode_pos);
+            assert_eq!(got.opcode, frame.opcode);
+        }
+    }
+
     #[test]
     fn test_traits() {
         fn is_sync<T: Sync>() {}
