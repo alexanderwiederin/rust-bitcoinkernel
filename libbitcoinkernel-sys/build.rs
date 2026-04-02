@@ -42,7 +42,7 @@ fn main() {
         .arg("-DENABLE_IPC=OFF")
         .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display()))
         .status()
-        .unwrap();
+        .expect("cmake should be installed and available in PATH");
 
     let num_jobs = env::var("NUM_JOBS")
         .ok()
