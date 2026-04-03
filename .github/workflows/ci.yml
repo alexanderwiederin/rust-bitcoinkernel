@@ -9,8 +9,12 @@ env:
 
 jobs:
   msrv-check:
-    name: Build with MSRV
+    name: Build with MSRV - ${{ matrix.dep }} deps
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dep: [minimal, recent]
     steps:
     - uses: actions/checkout@v3
 
@@ -28,15 +32,18 @@ jobs:
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
 
+    - name: Set dependencies
+      run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
+
     - name: Build with MSRV
       run: |
         # Ensure we're using the right version
         rustc --version
         # Build the project
-        cargo build --all-features
+        cargo build --all-features --locked
  
     - name: Run tests with MSRV
-      run: cargo test --all-features
+      run: cargo test --all-features --locked
 
   build:
     name: Build and Test
