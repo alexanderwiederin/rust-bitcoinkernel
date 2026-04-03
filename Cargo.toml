@@ -19,7 +19,7 @@ libbitcoinkernel-sys = { path = "libbitcoinkernel-sys", version = "0.2.0" }
 hex = "0.4"
 env_logger = "0.11"
 log = "0.4"
-tempdir = "0.3"
+tempdir = ">=0.3.6"
 
 [workspace]
 members = [
