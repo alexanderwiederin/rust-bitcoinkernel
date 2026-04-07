@@ -53,4 +53,4 @@ publish = true
 [build-dependencies]
 cc = "1.2"
 bindgen = "0.72"
-rustc-hash = "=2.1.1"
+rustc-hash = "<2.1.2"
