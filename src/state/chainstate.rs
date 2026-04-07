@@ -698,8 +698,7 @@ impl Drop for ChainstateManagerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ChainType, ContextBuilder};
-    use tempdir::TempDir;
+    use crate::{test_utils::TempDir, ChainType, ContextBuilder};
 
     fn create_test_context() -> Context {
         ContextBuilder::new()
@@ -708,19 +707,13 @@ mod tests {
             .unwrap()
     }
 
-    fn create_test_dirs() -> (TempDir, String, String) {
-        let temp_dir = TempDir::new("test_chainman").unwrap();
-        let data_dir = temp_dir.path().to_str().unwrap().to_string();
-        let blocks_dir = format!("{}/blocks", data_dir);
-        (temp_dir, data_dir, blocks_dir)
-    }
-
     #[test]
     fn test_chainstate_manager_options_new() {
         let context = create_test_context();
-        let (_temp_dir, data_dir, blocks_dir) = create_test_dirs();
+        let test_dir = TempDir::new("test_chainman");
 
-        let builder = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir);
+        let builder =
+            ChainstateManagerBuilder::new(&context, test_dir.data_dir(), test_dir.blocks_dir());
         assert!(builder.is_ok());
     }
 
@@ -738,11 +731,12 @@ mod tests {
     #[test]
     fn test_wipe_block_tree_without_chainstate_fails() {
         let context = create_test_context();
-        let (_temp_dir, data_dir, blocks_dir) = create_test_dirs();
+        let test_dir = TempDir::new("test_chainman");
 
-        let result = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)
-            .unwrap()
-            .wipe_db(true, false);
+        let result =
+            ChainstateManagerBuilder::new(&context, test_dir.data_dir(), test_dir.blocks_dir())
+                .unwrap()
+                .wipe_db(true, false);
 
         assert!(result.is_err());
         if let Err(e) = result {
@@ -753,16 +747,17 @@ mod tests {
     #[test]
     fn test_chainstate_manager_creation() {
         let context = create_test_context();
-        let (_temp_dir, data_dir, blocks_dir) = create_test_dirs();
+        let test_dir = TempDir::new("test_chainman");
 
-        let chainman = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)
-            .unwrap()
-            .block_tree_db_in_memory(true)
-            .chainstate_db_in_memory(true)
-            .wipe_db(false, true)
-            .unwrap()
-            .worker_threads(4)
-            .build();
+        let chainman =
+            ChainstateManagerBuilder::new(&context, test_dir.data_dir(), test_dir.blocks_dir())
+                .unwrap()
+                .block_tree_db_in_memory(true)
+                .chainstate_db_in_memory(true)
+                .wipe_db(false, true)
+                .unwrap()
+                .worker_threads(4)
+                .build();
 
         assert!(chainman.is_ok());
     }

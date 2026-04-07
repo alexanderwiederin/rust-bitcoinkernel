@@ -1,5 +1,8 @@
+mod common;
+
 #[cfg(test)]
 mod tests {
+    use crate::common::TempDir;
     use bitcoinkernel::notifications::types::BlockValidationState;
     use bitcoinkernel::state::chainstate::ProcessBlockHeaderResult;
     use bitcoinkernel::{
@@ -15,14 +18,13 @@ mod tests {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
     use std::sync::{Arc, Once};
-    use tempdir::TempDir;
 
     struct TestLog {}
 
     impl Log for TestLog {
         fn log(&self, message: &str) {
             log::info!(
-                target: "libbitcoinkernel", 
+                target: "libbitcoinkernel",
                 "{}", message.strip_suffix("\r\n").or_else(|| message.strip_suffix('\n')).unwrap_or(message));
         }
     }
@@ -88,15 +90,14 @@ mod tests {
         builder.build().unwrap()
     }
 
-    fn testing_setup() -> (Arc<Context>, String) {
+    fn testing_setup() -> (Arc<Context>, TempDir) {
         START.call_once(|| {
             setup_logging();
         });
         let context = Arc::new(create_context());
 
-        let temp_dir = TempDir::new("test_chainman_regtest").unwrap();
-        let data_dir = temp_dir.path();
-        (context, data_dir.to_str().unwrap().to_string())
+        let temp_dir = TempDir::new("test_chainman_regtest");
+        (context, temp_dir)
     }
 
     fn read_block_data() -> Vec<Vec<u8>> {
@@ -111,12 +112,11 @@ mod tests {
 
     fn setup_chainman_with_blocks(
         context: &Arc<Context>,
-        data_dir: &str,
+        temp_dir: &TempDir,
     ) -> Result<ChainstateManager, KernelError> {
-        let blocks_dir = data_dir.to_string() + "/blocks";
         let block_data = read_block_data();
 
-        let chainman = ChainstateManager::new(context, data_dir, &blocks_dir)?;
+        let chainman = ChainstateManager::new(context, temp_dir.data_dir(), temp_dir.blocks_dir())?;
 
         for raw_block in block_data.iter() {
             let block = Block::new(raw_block.as_slice())?;
@@ -131,15 +131,16 @@ mod tests {
 
     #[test]
     fn test_reindex() {
-        let (context, data_dir) = testing_setup();
-        let blocks_dir = data_dir.clone() + "/blocks";
+        let (context, temp_dir) = testing_setup();
+
         {
             let block_data = read_block_data();
 
-            let chainman = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)
-                .unwrap()
-                .build()
-                .unwrap();
+            let chainman =
+                ChainstateManagerBuilder::new(&context, temp_dir.data_dir(), temp_dir.blocks_dir())
+                    .unwrap()
+                    .build()
+                    .unwrap();
             for raw_block in block_data.iter() {
                 let block = Block::try_from(raw_block.as_slice()).unwrap();
                 let result = chainman.process_block(&block);
@@ -149,10 +150,11 @@ mod tests {
             }
         }
 
-        let chainman_builder = ChainstateManager::builder(&context, &data_dir, &blocks_dir)
-            .unwrap()
-            .wipe_db(false, true)
-            .unwrap();
+        let chainman_builder =
+            ChainstateManager::builder(&context, temp_dir.data_dir(), temp_dir.blocks_dir())
+                .unwrap()
+                .wipe_db(false, true)
+                .unwrap();
 
         let chainman = chainman_builder.build().unwrap();
         chainman.import_blocks().unwrap();
@@ -161,13 +163,14 @@ mod tests {
 
     #[test]
     fn test_invalid_block() {
-        let (context, data_dir) = testing_setup();
-        let blocks_dir = data_dir.clone() + "/blocks";
+        let (context, temp_dir) = testing_setup();
+
         for _ in 0..10 {
-            let chainman = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)
-                .unwrap()
-                .build()
-                .unwrap();
+            let chainman =
+                ChainstateManagerBuilder::new(&context, temp_dir.data_dir(), temp_dir.blocks_dir())
+                    .unwrap()
+                    .build()
+                    .unwrap();
 
             // Not a block
             let block = Block::try_from(hex::decode("deadbeef").unwrap().as_slice());
@@ -193,13 +196,14 @@ mod tests {
 
     #[test]
     fn test_process_data() {
-        let (context, data_dir) = testing_setup();
-        let blocks_dir = data_dir.clone() + "/blocks";
+        let (context, temp_dir) = testing_setup();
+
         let block_data = read_block_data();
-        let chainman = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)
-            .unwrap()
-            .build()
-            .unwrap();
+        let chainman =
+            ChainstateManagerBuilder::new(&context, temp_dir.data_dir(), temp_dir.blocks_dir())
+                .unwrap()
+                .build()
+                .unwrap();
 
         for raw_block in block_data.iter() {
             let block = Block::try_from(raw_block.as_slice()).unwrap();
@@ -212,13 +216,14 @@ mod tests {
 
     #[test]
     fn test_validate_any() {
-        let (context, data_dir) = testing_setup();
-        let blocks_dir = data_dir.clone() + "/blocks";
+        let (context, temp_dir) = testing_setup();
+
         let block_data = read_block_data();
-        let chainman = ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)
-            .unwrap()
-            .build()
-            .unwrap();
+        let chainman =
+            ChainstateManagerBuilder::new(&context, temp_dir.data_dir(), temp_dir.blocks_dir())
+                .unwrap()
+                .build()
+                .unwrap();
 
         chainman.import_blocks().unwrap();
         let block_2 = Block::try_from(block_data[1].clone().as_slice()).unwrap();
@@ -642,10 +647,11 @@ mod tests {
 
     #[test]
     fn test_header_validation() {
-        let (context, data_dir) = testing_setup();
-        let blocks_dir = data_dir.clone() + "/blocks";
+        let (context, temp_dir) = testing_setup();
+
         let block_data = read_block_data();
-        let chainman = ChainstateManager::new(&context, &data_dir, &blocks_dir).unwrap();
+        let chainman =
+            ChainstateManager::new(&context, temp_dir.data_dir(), temp_dir.blocks_dir()).unwrap();
 
         for raw_block in block_data.iter() {
             let block = Block::new(raw_block.as_slice()).unwrap();
@@ -661,9 +667,9 @@ mod tests {
 
     #[test]
     fn test_chain_operations() {
-        let (context, data_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup();
 
-        let chainman = setup_chainman_with_blocks(&context, &data_dir).unwrap();
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
         let chain = chainman.active_chain();
 
@@ -738,9 +744,9 @@ mod tests {
 
     #[test]
     fn test_block_spent_outputs_iterator() {
-        let (context, data_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup();
 
-        let chainman = setup_chainman_with_blocks(&context, &data_dir).unwrap();
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
         let active_chain = chainman.active_chain();
         let block_index_tip = active_chain.tip();
@@ -769,9 +775,9 @@ mod tests {
 
     #[test]
     fn test_transaction_spent_outputs_iterator() {
-        let (context, data_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup();
 
-        let chainman = setup_chainman_with_blocks(&context, &data_dir).unwrap();
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
         let active_chain = chainman.active_chain();
         let block_index_tip = active_chain.tip();
@@ -812,9 +818,9 @@ mod tests {
 
     #[test]
     fn test_nested_iteration() {
-        let (context, data_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup();
 
-        let chainman = setup_chainman_with_blocks(&context, &data_dir).unwrap();
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
         let active_chain = chainman.active_chain();
         let block_index = active_chain.at_height(1).unwrap();
@@ -834,9 +840,9 @@ mod tests {
 
     #[test]
     fn test_iterator_with_block_transactions() {
-        let (context, data_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup();
 
-        let chainman = setup_chainman_with_blocks(&context, &data_dir).unwrap();
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
         let active_chain = chainman.active_chain();
         let block_index = active_chain.at_height(1).unwrap();
