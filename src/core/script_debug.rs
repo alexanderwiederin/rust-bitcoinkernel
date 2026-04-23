@@ -4,12 +4,18 @@
 //! inspection of stack state at each opcode during script verification.
 
 use std::panic;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use libbitcoinkernel_sys::{
     btck_ScriptDebugState, btck_register_script_debug_callback,
     btck_unregister_script_debug_callback,
 };
+
+use crate::core::verify::{ScriptError, ScriptVerifyError};
+use crate::core::{verify, PrecomputedTransactionData};
+use crate::KernelError;
+use crate::ScriptPubkeyExt;
+use crate::TransactionExt;
 
 /// Script execution context (signature version).
 ///
@@ -63,6 +69,10 @@ pub struct ScriptDebugFrame {
     pub op_count: u32,
     /// Script execution context (legacy, segwit v0, tapscript, etc.).
     pub sig_version: SigVersion,
+    /// Tapleaf hash for tapscript execution, `None` for non-tapscript contexts.
+    pub tapleaf_hash: Option<[u8; 32]>,
+    /// Position of the last executed `OP_CODESEPARATOR`, or `0xFFFFFFFF` if none.
+    pub codeseparator_pos: u32,
 }
 
 /// Guard that keeps a script debug callback registered.
@@ -140,6 +150,15 @@ unsafe extern "C" fn trampoline(
 
         let sig_version = SigVersion::try_from(state.sig_version).unwrap_or(SigVersion::Base);
 
+        let tapleaf_hash = if state.tapleaf_hash.is_null() {
+            None
+        } else {
+            let bytes = unsafe { std::slice::from_raw_parts(state.tapleaf_hash, 32) };
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(bytes);
+            Some(hash)
+        };
+
         let frame = ScriptDebugFrame {
             stack,
             altstack,
@@ -149,6 +168,8 @@ unsafe extern "C" fn trampoline(
             opcode: state.opcode,
             op_count: state.op_count as u32,
             sig_version,
+            tapleaf_hash,
+            codeseparator_pos: state.codeseparator_pos,
         };
 
         let closure = unsafe { &mut **(user_data as *mut Box<dyn FnMut(ScriptDebugFrame)>) };
@@ -174,4 +195,100 @@ unsafe fn read_stack(items: *const *const u8, sizes: *const usize, count: usize)
             }
         })
         .collect()
+}
+
+/// A complete recording of script execution, captured by running verification
+/// and collecting every [`ScriptDebugFrame`] emitted by the interpreter.
+///
+/// Frames are indexed by step number (0-based). Verification failures are
+/// recorded in [`error()`](ScriptTrace::error), not propagated as `Err`.
+pub struct ScriptTrace {
+    frames: Vec<ScriptDebugFrame>,
+    script_error: Option<ScriptError>,
+}
+
+impl ScriptTrace {
+    /// Capture a trace by running script verification on a transaction input.
+    ///
+    /// Registers a temporary debug callback, runs [`verify()`], and collects
+    /// every frame. Returns the complete trace regardless of whether
+    /// verification passed or failed.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if a debugger is already registered or if `verify()`
+    /// encounters a setup error (invalid flags, bad input index, etc.).
+    /// Script execution failure is **not** an error — it produces a trace
+    /// with [`error()`](Self::error) returning `Some`.
+    pub fn from_verify(
+        script_pubkey: &impl ScriptPubkeyExt,
+        amount: Option<i64>,
+        tx_to: &impl TransactionExt,
+        input_index: usize,
+        flags: Option<u32>,
+        precomputed_txdata: &PrecomputedTransactionData,
+    ) -> Result<Self, KernelError> {
+        let frames: Arc<Mutex<Vec<ScriptDebugFrame>>> = Arc::new(Mutex::new(Vec::new()));
+        let frames_clone = frames.clone();
+
+        let debugger = ScriptDebugger::new(move |frame| {
+            frames_clone.lock().unwrap().push(frame);
+        })
+        .ok_or_else(|| {
+            KernelError::Internal("script debugger already registered".to_string())
+        })?;
+
+        let result = verify(script_pubkey, amount, tx_to, input_index, flags, precomputed_txdata);
+
+        // Drop the debugger to unregister the callback before extracting frames.
+        drop(debugger);
+
+        let collected = Arc::try_unwrap(frames)
+            .expect("debugger dropped, no other Arc refs")
+            .into_inner()
+            .unwrap();
+
+        let script_error = match result {
+            Ok(()) => None,
+            Err(KernelError::ScriptVerify(ScriptVerifyError::Script(se))) => Some(se),
+            Err(e) => return Err(e),
+        };
+
+        Ok(ScriptTrace {
+            frames: collected,
+            script_error,
+        })
+    }
+
+    /// Number of steps in the trace.
+    pub fn len(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Whether the trace is empty.
+    pub fn is_empty(&self) -> bool {
+        self.frames.is_empty()
+    }
+
+    /// Get the frame at step `index`, or `None` if out of bounds.
+    pub fn get(&self, index: usize) -> Option<&ScriptDebugFrame> {
+        self.frames.get(index)
+    }
+
+    /// Iterate over all frames in order.
+    pub fn iter(&self) -> impl Iterator<Item = &ScriptDebugFrame> {
+        self.frames.iter()
+    }
+
+    /// The full slice of frames.
+    pub fn frames(&self) -> &[ScriptDebugFrame] {
+        &self.frames
+    }
+
+    /// The script execution error, if verification failed.
+    ///
+    /// Returns `None` if verification passed.
+    pub fn error(&self) -> Option<&ScriptError> {
+        self.script_error.as_ref()
+    }
 }
