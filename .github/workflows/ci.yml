@@ -3,6 +3,8 @@ name: Rust CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 0 * * 1' # weekly on Monday at midnight UTC
 
 env:
   CARGO_TERM_COLOR: always
