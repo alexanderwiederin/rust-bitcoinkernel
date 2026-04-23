@@ -34,6 +34,16 @@ dependencies. Once setup, run:
 cargo b
 ```
 
+## MSRV (Minimum Supported Rust Version)
+
+The minimum supported Rust version is 1.71. Users on rustc older than
+1.77 should build with `--locked` to ensure a compatible dependency
+resolution:
+
+```bash
+cargo build --locked
+```
+
 ## Documentation
 
 You can find detailed information about the library on its
