@@ -234,11 +234,16 @@ impl ScriptTrace {
         let debugger = ScriptDebugger::new(move |frame| {
             frames_clone.lock().unwrap().push(frame);
         })
-        .ok_or_else(|| {
-            KernelError::Internal("script debugger already registered".to_string())
-        })?;
+        .ok_or_else(|| KernelError::Internal("script debugger already registered".to_string()))?;
 
-        let result = verify(script_pubkey, amount, tx_to, input_index, flags, precomputed_txdata);
+        let result = verify(
+            script_pubkey,
+            amount,
+            tx_to,
+            input_index,
+            flags,
+            precomputed_txdata,
+        );
 
         // Drop the debugger to unregister the callback before extracting frames.
         drop(debugger);

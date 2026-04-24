@@ -443,8 +443,13 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
             //
             // Read instruction
             //
-            if (!script.GetOp(pc, opcode, vchPushValue))
+            if (!script.GetOp(pc, opcode, vchPushValue)) {
+                DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, static_cast<uint8_t>(OP_INVALIDOPCODE), nOpCount, static_cast<uint8_t>(sigversion), execdata.m_tapleaf_hash_init ? execdata.m_tapleaf_hash.data() : nullptr, execdata.m_codeseparator_pos);
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+            }
+
+            DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, static_cast<uint8_t>(opcode), nOpCount, static_cast<uint8_t>(sigversion), execdata.m_tapleaf_hash_init ? execdata.m_tapleaf_hash.data() : nullptr, execdata.m_codeseparator_pos);
+
             if (vchPushValue.size() > MAX_SCRIPT_ELEMENT_SIZE)
                 return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
 
@@ -454,8 +459,6 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     return set_error(serror, SCRIPT_ERR_OP_COUNT);
                 }
             }
-
-            DEBUG_SCRIPT(stack, script, opcode_pos, altstack, fExec, static_cast<uint8_t>(opcode), nOpCount, static_cast<uint8_t>(sigversion), execdata.m_tapleaf_hash_init ? execdata.m_tapleaf_hash.data() : nullptr, execdata.m_codeseparator_pos);
 
             if (opcode == OP_CAT ||
                 opcode == OP_SUBSTR ||
