@@ -1020,6 +1020,7 @@ impl From<ChainType> for btck_ChainType {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_ChainType> for ChainType {
     fn from(value: btck_ChainType) -> Self {
         match value {

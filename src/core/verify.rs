@@ -480,6 +480,7 @@ impl From<ScriptVerifyStatus> for btck_ScriptVerifyStatus {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_ScriptVerifyStatus> for ScriptVerifyStatus {
     fn from(value: btck_ScriptVerifyStatus) -> Self {
         match value {
