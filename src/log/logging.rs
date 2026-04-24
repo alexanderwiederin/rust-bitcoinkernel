@@ -213,6 +213,7 @@ impl From<LogCategory> for btck_LogCategory {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_LogCategory> for LogCategory {
     fn from(value: btck_LogCategory) -> Self {
         match value {
@@ -253,6 +254,7 @@ impl From<LogLevel> for btck_LogLevel {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_LogLevel> for LogLevel {
     fn from(value: btck_LogLevel) -> Self {
         match value {
