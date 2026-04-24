@@ -179,8 +179,6 @@
 //!
 //! - Silent Payment Scanning
 
-#![allow(non_upper_case_globals)]
-
 use std::ffi::NulError;
 use std::{fmt, panic};
 
