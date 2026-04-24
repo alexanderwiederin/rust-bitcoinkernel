@@ -1,7 +1,5 @@
-use bindgen::RustEdition;
 use std::env;
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
@@ -75,26 +73,6 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     println!("cargo:rustc-link-lib=static=bitcoinkernel");
-
-    // Header path for bindgen
-    let include_path = install_dir.join("include");
-    let header = include_path.join("bitcoinkernel.h");
-
-    #[allow(deprecated)]
-    let bindings = bindgen::Builder::default()
-        .header(header.to_str().unwrap())
-        .clang_arg("-DBITCOINKERNEL_STATIC")
-        .rust_target(bindgen::RustTarget::Stable_1_71)
-        .rust_edition(RustEdition::Edition2021)
-        .generate()
-        .expect("Unable to generate bindings");
-
-    let out_path = PathBuf::from(
-        env::var("OUT_DIR").expect("OUT_DIR was not defined by the cargo environment!"),
-    );
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
 
     let compiler = cc::Build::new().get_compiler();
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
