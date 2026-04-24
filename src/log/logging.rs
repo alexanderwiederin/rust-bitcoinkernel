@@ -1,22 +1,17 @@
 use std::ffi::{c_char, c_void};
 
 use libbitcoinkernel_sys::{
-    btck_LogCategory, btck_LogLevel, btck_LoggingConnection, btck_LoggingOptions,
+    btck_LogCategory, btck_LogCategory_ALL, btck_LogCategory_BENCH, btck_LogCategory_BLOCKSTORAGE,
+    btck_LogCategory_COINDB, btck_LogCategory_KERNEL, btck_LogCategory_LEVELDB,
+    btck_LogCategory_MEMPOOL, btck_LogCategory_PRUNE, btck_LogCategory_RAND,
+    btck_LogCategory_REINDEX, btck_LogCategory_VALIDATION, btck_LogLevel, btck_LogLevel_DEBUG,
+    btck_LogLevel_INFO, btck_LogLevel_TRACE, btck_LoggingConnection, btck_LoggingOptions,
     btck_logging_connection_create, btck_logging_connection_destroy, btck_logging_disable,
     btck_logging_disable_category, btck_logging_enable_category, btck_logging_set_level_category,
     btck_logging_set_options,
 };
 
-use crate::{
-    ffi::{
-        c_helpers, BTCK_LOG_CATEGORY_ALL, BTCK_LOG_CATEGORY_BENCH, BTCK_LOG_CATEGORY_BLOCKSTORAGE,
-        BTCK_LOG_CATEGORY_COINDB, BTCK_LOG_CATEGORY_KERNEL, BTCK_LOG_CATEGORY_LEVELDB,
-        BTCK_LOG_CATEGORY_MEMPOOL, BTCK_LOG_CATEGORY_PRUNE, BTCK_LOG_CATEGORY_RAND,
-        BTCK_LOG_CATEGORY_REINDEX, BTCK_LOG_CATEGORY_VALIDATION, BTCK_LOG_LEVEL_DEBUG,
-        BTCK_LOG_LEVEL_INFO, BTCK_LOG_LEVEL_TRACE,
-    },
-    KernelError,
-};
+use crate::{ffi::c_helpers, KernelError};
 
 /// A function for handling log messages produced by the kernel library.
 pub trait Log {
@@ -189,27 +184,27 @@ impl Logger {
 #[repr(u8)]
 pub enum LogCategory {
     /// All logging categories enabled
-    All = BTCK_LOG_CATEGORY_ALL,
+    All = btck_LogCategory_ALL,
     /// Benchmark and performance logging
-    Bench = BTCK_LOG_CATEGORY_BENCH,
+    Bench = btck_LogCategory_BENCH,
     /// Block storage operations
-    BlockStorage = BTCK_LOG_CATEGORY_BLOCKSTORAGE,
+    BlockStorage = btck_LogCategory_BLOCKSTORAGE,
     /// Coin database operations
-    CoinDb = BTCK_LOG_CATEGORY_COINDB,
+    CoinDb = btck_LogCategory_COINDB,
     /// LevelDB operations
-    LevelDb = BTCK_LOG_CATEGORY_LEVELDB,
+    LevelDb = btck_LogCategory_LEVELDB,
     /// Memory pool operations
-    Mempool = BTCK_LOG_CATEGORY_MEMPOOL,
+    Mempool = btck_LogCategory_MEMPOOL,
     /// Block pruning operations
-    Prune = BTCK_LOG_CATEGORY_PRUNE,
+    Prune = btck_LogCategory_PRUNE,
     /// Random number generation
-    Rand = BTCK_LOG_CATEGORY_RAND,
+    Rand = btck_LogCategory_RAND,
     /// Block reindexing operations
-    Reindex = BTCK_LOG_CATEGORY_REINDEX,
+    Reindex = btck_LogCategory_REINDEX,
     /// Block and transaction validation
-    Validation = BTCK_LOG_CATEGORY_VALIDATION,
+    Validation = btck_LogCategory_VALIDATION,
     /// Kernel-specific operations
-    Kernel = BTCK_LOG_CATEGORY_KERNEL,
+    Kernel = btck_LogCategory_KERNEL,
 }
 
 impl From<LogCategory> for btck_LogCategory {
@@ -221,17 +216,17 @@ impl From<LogCategory> for btck_LogCategory {
 impl From<btck_LogCategory> for LogCategory {
     fn from(value: btck_LogCategory) -> Self {
         match value {
-            BTCK_LOG_CATEGORY_ALL => LogCategory::All,
-            BTCK_LOG_CATEGORY_BENCH => LogCategory::Bench,
-            BTCK_LOG_CATEGORY_BLOCKSTORAGE => LogCategory::BlockStorage,
-            BTCK_LOG_CATEGORY_COINDB => LogCategory::CoinDb,
-            BTCK_LOG_CATEGORY_LEVELDB => LogCategory::LevelDb,
-            BTCK_LOG_CATEGORY_MEMPOOL => LogCategory::Mempool,
-            BTCK_LOG_CATEGORY_PRUNE => LogCategory::Prune,
-            BTCK_LOG_CATEGORY_RAND => LogCategory::Rand,
-            BTCK_LOG_CATEGORY_REINDEX => LogCategory::Reindex,
-            BTCK_LOG_CATEGORY_VALIDATION => LogCategory::Validation,
-            BTCK_LOG_CATEGORY_KERNEL => LogCategory::Kernel,
+            btck_LogCategory_ALL => LogCategory::All,
+            btck_LogCategory_BENCH => LogCategory::Bench,
+            btck_LogCategory_BLOCKSTORAGE => LogCategory::BlockStorage,
+            btck_LogCategory_COINDB => LogCategory::CoinDb,
+            btck_LogCategory_LEVELDB => LogCategory::LevelDb,
+            btck_LogCategory_MEMPOOL => LogCategory::Mempool,
+            btck_LogCategory_PRUNE => LogCategory::Prune,
+            btck_LogCategory_RAND => LogCategory::Rand,
+            btck_LogCategory_REINDEX => LogCategory::Reindex,
+            btck_LogCategory_VALIDATION => LogCategory::Validation,
+            btck_LogCategory_KERNEL => LogCategory::Kernel,
             _ => panic!("Unknown log category: {}", value),
         }
     }
@@ -245,11 +240,11 @@ impl From<btck_LogCategory> for LogCategory {
 #[repr(u8)]
 pub enum LogLevel {
     /// Detailed trace information for debugging
-    Trace = BTCK_LOG_LEVEL_TRACE,
+    Trace = btck_LogLevel_TRACE,
     /// Debug information for development
-    Debug = BTCK_LOG_LEVEL_DEBUG,
+    Debug = btck_LogLevel_DEBUG,
     /// General informational messages
-    Info = BTCK_LOG_LEVEL_INFO,
+    Info = btck_LogLevel_INFO,
 }
 
 impl From<LogLevel> for btck_LogLevel {
@@ -261,9 +256,9 @@ impl From<LogLevel> for btck_LogLevel {
 impl From<btck_LogLevel> for LogLevel {
     fn from(value: btck_LogLevel) -> Self {
         match value {
-            BTCK_LOG_LEVEL_TRACE => LogLevel::Trace,
-            BTCK_LOG_LEVEL_DEBUG => LogLevel::Debug,
-            BTCK_LOG_LEVEL_INFO => LogLevel::Info,
+            btck_LogLevel_TRACE => LogLevel::Trace,
+            btck_LogLevel_DEBUG => LogLevel::Debug,
+            btck_LogLevel_INFO => LogLevel::Info,
             _ => panic!("Unknown log level: {}", value),
         }
     }

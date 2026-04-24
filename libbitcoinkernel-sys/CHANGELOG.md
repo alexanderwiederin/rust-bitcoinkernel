@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `btck_transaction_input_get_sequence` for retrieving a transaction input's `nSequence`
 - New `btck_block_tree_entry_get_ancestor` for retrieving the ancestor of a block tree entry at a given height
 - New `btck_block_header_to_bytes` for serializing a block header to its 80-byte consensus encoding
+- Named constants for all enum-like types (`btck_BlockValidationResult_*`, `btck_ChainType_*`, `btck_LogCategory_*`, `btck_LogLevel_*`, `btck_ScriptVerificationFlags_*`, `btck_ScriptVerifyStatus_*`, `btck_SynchronizationState_*`, `btck_ValidationMode_*`, `btck_Warning_*`) exported from `libbitcoinkernel-sys`
 
 ### Changed
 - Replaced bindgen-generated bindings with hand-written FFI bindings
