@@ -32,6 +32,8 @@ jobs:
       run: |
         # Ensure we're using the right version
         rustc --version
+        # Pin rustc-hash: 2.1.2+ requires rustc 1.77, incompatible with MSRV 1.71.
+        cargo update -p rustc-hash --precise 2.1.1
         # Build the project
         cargo build --all-features
 
