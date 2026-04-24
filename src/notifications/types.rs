@@ -39,6 +39,7 @@ impl From<SynchronizationState> for btck_SynchronizationState {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_SynchronizationState> for SynchronizationState {
     fn from(value: btck_SynchronizationState) -> Self {
         match value {
@@ -76,6 +77,7 @@ impl From<Warning> for btck_Warning {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_Warning> for Warning {
     fn from(value: btck_Warning) -> Self {
         match value {
@@ -120,6 +122,7 @@ impl From<ValidationMode> for btck_ValidationMode {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_ValidationMode> for ValidationMode {
     fn from(value: btck_ValidationMode) -> Self {
         match value {
@@ -164,6 +167,7 @@ impl From<BlockValidationResult> for btck_BlockValidationResult {
     }
 }
 
+#[allow(non_upper_case_globals)]
 impl From<btck_BlockValidationResult> for BlockValidationResult {
     fn from(value: btck_BlockValidationResult) -> Self {
         match value {
