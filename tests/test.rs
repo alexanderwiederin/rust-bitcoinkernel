@@ -705,6 +705,11 @@ mod tests {
 
         assert_eq!(last_height, tip_height as usize);
         assert_eq!(last_block_index.unwrap().block_hash(), tip_hash);
+
+        assert_eq!(tip.ancestor(tip_height).unwrap().block_hash(), tip_hash);
+        assert_eq!(tip.ancestor(0).unwrap().block_hash(), genesis_hash);
+        assert!(tip.ancestor(-1).is_none());
+        assert!(tip.ancestor(tip_height + 1).is_none());
     }
 
     #[test]

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `BlockTreeEntry::ancestor` to look up an ancestor block at a given height. Returns `None` if the height is out of range. This operation is O(log N).
+
 ## [0.2.0] 2026-01-26
 
 ### Added

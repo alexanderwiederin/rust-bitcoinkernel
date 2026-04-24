@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use libbitcoinkernel_sys::{
-    btck_BlockTreeEntry, btck_block_tree_entry_get_block_hash,
+    btck_BlockTreeEntry, btck_block_tree_entry_get_ancestor, btck_block_tree_entry_get_block_hash,
     btck_block_tree_entry_get_block_header, btck_block_tree_entry_get_height,
     btck_block_tree_entry_get_previous,
 };
@@ -54,6 +54,21 @@ impl<'a> BlockTreeEntry<'a> {
     pub fn block_hash(&self) -> BlockHashRef<'_> {
         let hash_ptr = unsafe { btck_block_tree_entry_get_block_hash(self.inner) };
         unsafe { BlockHashRef::from_ptr(hash_ptr) }
+    }
+
+    /// Returns the ancestor at `height`, or `None` if `height < 0` or
+    /// `height > self.height()`.
+    ///
+    /// This operation is O(log N).
+    pub fn ancestor(&self, height: i32) -> Option<BlockTreeEntry<'a>> {
+        if height < 0 || height > self.height() {
+            return None;
+        }
+        let ptr = unsafe { btck_block_tree_entry_get_ancestor(self.inner, height) };
+        if ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { BlockTreeEntry::from_ptr(ptr) })
     }
 }
 
