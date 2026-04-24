@@ -1,5 +1,5 @@
 #![no_std]
-#![allow(non_camel_case_types)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
 
@@ -15,6 +15,88 @@ pub type btck_ScriptVerifyStatus = u8;
 pub type btck_SynchronizationState = u8;
 pub type btck_ValidationMode = u8;
 pub type btck_Warning = u8;
+
+// btck_BlockValidationResult
+
+pub const btck_BlockValidationResult_UNSET: btck_BlockValidationResult = 0;
+pub const btck_BlockValidationResult_CONSENSUS: btck_BlockValidationResult = 1;
+pub const btck_BlockValidationResult_CACHED_INVALID: btck_BlockValidationResult = 2;
+pub const btck_BlockValidationResult_INVALID_HEADER: btck_BlockValidationResult = 3;
+pub const btck_BlockValidationResult_MUTATED: btck_BlockValidationResult = 4;
+pub const btck_BlockValidationResult_MISSING_PREV: btck_BlockValidationResult = 5;
+pub const btck_BlockValidationResult_INVALID_PREV: btck_BlockValidationResult = 6;
+pub const btck_BlockValidationResult_TIME_FUTURE: btck_BlockValidationResult = 7;
+pub const btck_BlockValidationResult_HEADER_LOW_WORK: btck_BlockValidationResult = 8;
+
+// btck_ChainType
+
+pub const btck_ChainType_MAINNET: btck_ChainType = 0;
+pub const btck_ChainType_TESTNET: btck_ChainType = 1;
+pub const btck_ChainType_TESTNET_4: btck_ChainType = 2;
+pub const btck_ChainType_SIGNET: btck_ChainType = 3;
+pub const btck_ChainType_REGTEST: btck_ChainType = 4;
+
+// btck_LogCategory
+
+pub const btck_LogCategory_ALL: btck_LogCategory = 0;
+pub const btck_LogCategory_BENCH: btck_LogCategory = 1;
+pub const btck_LogCategory_BLOCKSTORAGE: btck_LogCategory = 2;
+pub const btck_LogCategory_COINDB: btck_LogCategory = 3;
+pub const btck_LogCategory_LEVELDB: btck_LogCategory = 4;
+pub const btck_LogCategory_MEMPOOL: btck_LogCategory = 5;
+pub const btck_LogCategory_PRUNE: btck_LogCategory = 6;
+pub const btck_LogCategory_RAND: btck_LogCategory = 7;
+pub const btck_LogCategory_REINDEX: btck_LogCategory = 8;
+pub const btck_LogCategory_VALIDATION: btck_LogCategory = 9;
+pub const btck_LogCategory_KERNEL: btck_LogCategory = 10;
+
+// btck_LogLevel
+
+pub const btck_LogLevel_TRACE: btck_LogLevel = 0;
+pub const btck_LogLevel_DEBUG: btck_LogLevel = 1;
+pub const btck_LogLevel_INFO: btck_LogLevel = 2;
+
+// btck_ScriptVerificationFlags
+
+pub const btck_ScriptVerificationFlags_NONE: btck_ScriptVerificationFlags = 0;
+pub const btck_ScriptVerificationFlags_P2SH: btck_ScriptVerificationFlags = 1 << 0;
+pub const btck_ScriptVerificationFlags_DERSIG: btck_ScriptVerificationFlags = 1 << 2;
+pub const btck_ScriptVerificationFlags_NULLDUMMY: btck_ScriptVerificationFlags = 1 << 4;
+pub const btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY: btck_ScriptVerificationFlags = 1 << 9;
+pub const btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY: btck_ScriptVerificationFlags = 1 << 10;
+pub const btck_ScriptVerificationFlags_WITNESS: btck_ScriptVerificationFlags = 1 << 11;
+pub const btck_ScriptVerificationFlags_TAPROOT: btck_ScriptVerificationFlags = 1 << 17;
+pub const btck_ScriptVerificationFlags_ALL: btck_ScriptVerificationFlags =
+    btck_ScriptVerificationFlags_P2SH
+        | btck_ScriptVerificationFlags_DERSIG
+        | btck_ScriptVerificationFlags_NULLDUMMY
+        | btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY
+        | btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY
+        | btck_ScriptVerificationFlags_WITNESS
+        | btck_ScriptVerificationFlags_TAPROOT;
+
+// btck_ScriptVerifyStatus
+
+pub const btck_ScriptVerifyStatus_OK: btck_ScriptVerifyStatus = 0;
+pub const btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION: btck_ScriptVerifyStatus = 1;
+pub const btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED: btck_ScriptVerifyStatus = 2;
+
+// btck_SynchronizationState
+
+pub const btck_SynchronizationState_INIT_REINDEX: btck_SynchronizationState = 0;
+pub const btck_SynchronizationState_INIT_DOWNLOAD: btck_SynchronizationState = 1;
+pub const btck_SynchronizationState_POST_INIT: btck_SynchronizationState = 2;
+
+// btck_ValidationMode
+
+pub const btck_ValidationMode_VALID: btck_ValidationMode = 0;
+pub const btck_ValidationMode_INVALID: btck_ValidationMode = 1;
+pub const btck_ValidationMode_INTERNAL_ERROR: btck_ValidationMode = 2;
+
+// btck_Warning
+
+pub const btck_Warning_UNKNOWN_NEW_RULES_ACTIVATED: btck_Warning = 0;
+pub const btck_Warning_LARGE_WORK_INVALID_CHAIN: btck_Warning = 1;
 
 // Opaque types - alphabetical order
 
