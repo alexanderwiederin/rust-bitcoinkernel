@@ -1245,13 +1245,27 @@ mod tests {
         assert!(!trace.is_empty(), "trace should have frames");
 
         // Verification passed, so no error
-        assert!(trace.error().is_none(), "successful verification should have no error");
+        assert!(
+            trace.error().is_none(),
+            "successful verification should have no error"
+        );
 
         // Accessors should work
         assert!(trace.get(0).is_some(), "get(0) should return a frame");
-        assert!(trace.get(trace.len()).is_none(), "get(len) should return None");
-        assert_eq!(trace.frames().len(), trace.len(), "frames() and len() should agree");
-        assert_eq!(trace.iter().count(), trace.len(), "iter() count should match len()");
+        assert!(
+            trace.get(trace.len()).is_none(),
+            "get(len) should return None"
+        );
+        assert_eq!(
+            trace.frames().len(),
+            trace.len(),
+            "frames() and len() should agree"
+        );
+        assert_eq!(
+            trace.iter().count(),
+            trace.len(),
+            "iter() count should match len()"
+        );
 
         // First scriptPubKey frame should start with OP_DUP (0x76)
         let p2pkh_script =
@@ -1261,7 +1275,10 @@ mod tests {
             .filter(|f| f.script == p2pkh_script && f.opcode != 0xff)
             .collect();
         assert!(!p2pkh_frames.is_empty(), "should have P2PKH frames");
-        assert_eq!(p2pkh_frames[0].opcode, 0x76, "first P2PKH opcode should be OP_DUP");
+        assert_eq!(
+            p2pkh_frames[0].opcode, 0x76,
+            "first P2PKH opcode should be OP_DUP"
+        );
     }
 
     #[cfg(feature = "script_debug")]
@@ -1274,7 +1291,7 @@ mod tests {
         // different scriptPubKey (OP_1 OP_EQUAL), which will fail with EvalFalse
         // since the scriptSig pushes a signature, not 0x01.
         let spent_script_pubkey = ScriptPubkey::try_from(
-            hex::decode("5187").unwrap().as_slice() // OP_1 OP_EQUAL
+            hex::decode("5187").unwrap().as_slice(), // OP_1 OP_EQUAL
         )
         .unwrap();
         let spending_tx = Transaction::new(
@@ -1298,10 +1315,16 @@ mod tests {
         .expect("from_verify should succeed even when verification fails");
 
         // Should have captured frames (scriptSig pushes + scriptPubKey execution)
-        assert!(!trace.is_empty(), "trace should have frames even on failure");
+        assert!(
+            !trace.is_empty(),
+            "trace should have frames even on failure"
+        );
 
         // Verification failed, so error should be present
-        assert!(trace.error().is_some(), "failed verification should have an error");
+        assert!(
+            trace.error().is_some(),
+            "failed verification should have an error"
+        );
         assert_eq!(
             *trace.error().unwrap(),
             ScriptError::EvalFalse,
@@ -1344,7 +1367,10 @@ mod tests {
         assert!(!trace.is_empty(), "trace should not be empty");
 
         // get out of bounds
-        assert!(trace.get(usize::MAX).is_none(), "way out of bounds should be None");
+        assert!(
+            trace.get(usize::MAX).is_none(),
+            "way out of bounds should be None"
+        );
 
         // frames() slice length matches len()
         assert_eq!(trace.frames().len(), trace.len());
