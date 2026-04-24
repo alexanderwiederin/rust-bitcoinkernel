@@ -1,24 +1,22 @@
 use std::marker::PhantomData;
 
 use libbitcoinkernel_sys::{
-    btck_BlockValidationResult, btck_BlockValidationState, btck_SynchronizationState,
-    btck_ValidationMode, btck_Warning, btck_block_validation_state_copy,
+    btck_BlockValidationResult, btck_BlockValidationResult_CACHED_INVALID,
+    btck_BlockValidationResult_CONSENSUS, btck_BlockValidationResult_HEADER_LOW_WORK,
+    btck_BlockValidationResult_INVALID_HEADER, btck_BlockValidationResult_INVALID_PREV,
+    btck_BlockValidationResult_MISSING_PREV, btck_BlockValidationResult_MUTATED,
+    btck_BlockValidationResult_TIME_FUTURE, btck_BlockValidationResult_UNSET,
+    btck_BlockValidationState, btck_SynchronizationState, btck_SynchronizationState_INIT_DOWNLOAD,
+    btck_SynchronizationState_INIT_REINDEX, btck_SynchronizationState_POST_INIT,
+    btck_ValidationMode, btck_ValidationMode_INTERNAL_ERROR, btck_ValidationMode_INVALID,
+    btck_ValidationMode_VALID, btck_Warning, btck_Warning_LARGE_WORK_INVALID_CHAIN,
+    btck_Warning_UNKNOWN_NEW_RULES_ACTIVATED, btck_block_validation_state_copy,
     btck_block_validation_state_create, btck_block_validation_state_destroy,
     btck_block_validation_state_get_block_validation_result,
     btck_block_validation_state_get_validation_mode,
 };
 
-use crate::{
-    ffi::sealed::{AsPtr, FromMutPtr, FromPtr},
-    BTCK_BLOCK_VALIDATION_RESULT_CACHED_INVALID, BTCK_BLOCK_VALIDATION_RESULT_CONSENSUS,
-    BTCK_BLOCK_VALIDATION_RESULT_HEADER_LOW_WORK, BTCK_BLOCK_VALIDATION_RESULT_INVALID_HEADER,
-    BTCK_BLOCK_VALIDATION_RESULT_INVALID_PREV, BTCK_BLOCK_VALIDATION_RESULT_MISSING_PREV,
-    BTCK_BLOCK_VALIDATION_RESULT_MUTATED, BTCK_BLOCK_VALIDATION_RESULT_TIME_FUTURE,
-    BTCK_BLOCK_VALIDATION_RESULT_UNSET, BTCK_SYNCHRONIZATION_STATE_INIT_DOWNLOAD,
-    BTCK_SYNCHRONIZATION_STATE_INIT_REINDEX, BTCK_SYNCHRONIZATION_STATE_POST_INIT,
-    BTCK_VALIDATION_MODE_INTERNAL_ERROR, BTCK_VALIDATION_MODE_INVALID, BTCK_VALIDATION_MODE_VALID,
-    BTCK_WARNING_LARGE_WORK_INVALID_CHAIN, BTCK_WARNING_UNKNOWN_NEW_RULES_ACTIVATED,
-};
+use crate::ffi::sealed::{AsPtr, FromMutPtr, FromPtr};
 
 /// Current synchronization state of the blockchain.
 ///
@@ -28,11 +26,11 @@ use crate::{
 #[repr(u8)]
 pub enum SynchronizationState {
     /// Currently reindexing the blockchain from disk
-    InitReindex = BTCK_SYNCHRONIZATION_STATE_INIT_REINDEX,
+    InitReindex = btck_SynchronizationState_INIT_REINDEX,
     /// Initial block download - syncing from network peers
-    InitDownload = BTCK_SYNCHRONIZATION_STATE_INIT_DOWNLOAD,
+    InitDownload = btck_SynchronizationState_INIT_DOWNLOAD,
     /// Synchronization complete - processing new blocks
-    PostInit = BTCK_SYNCHRONIZATION_STATE_POST_INIT,
+    PostInit = btck_SynchronizationState_POST_INIT,
 }
 
 impl From<SynchronizationState> for btck_SynchronizationState {
@@ -44,9 +42,9 @@ impl From<SynchronizationState> for btck_SynchronizationState {
 impl From<btck_SynchronizationState> for SynchronizationState {
     fn from(value: btck_SynchronizationState) -> Self {
         match value {
-            BTCK_SYNCHRONIZATION_STATE_INIT_REINDEX => SynchronizationState::InitReindex,
-            BTCK_SYNCHRONIZATION_STATE_INIT_DOWNLOAD => SynchronizationState::InitDownload,
-            BTCK_SYNCHRONIZATION_STATE_POST_INIT => SynchronizationState::PostInit,
+            btck_SynchronizationState_INIT_REINDEX => SynchronizationState::InitReindex,
+            btck_SynchronizationState_INIT_DOWNLOAD => SynchronizationState::InitDownload,
+            btck_SynchronizationState_POST_INIT => SynchronizationState::PostInit,
             _ => panic!("Unknown synchronization state: {}", value),
         }
     }
@@ -63,13 +61,13 @@ pub enum Warning {
     ///
     /// This typically means the software is out of date and doesn't
     /// recognize new consensus rules that have activated on the network.
-    UnknownNewRulesActivated = BTCK_WARNING_UNKNOWN_NEW_RULES_ACTIVATED,
+    UnknownNewRulesActivated = btck_Warning_UNKNOWN_NEW_RULES_ACTIVATED,
 
     /// A chain with significant work contains invalid blocks
     ///
     /// This warning indicates that a substantial amount of computational
     /// work has been expended on a chain that contains invalid blocks.
-    LargeWorkInvalidChain = BTCK_WARNING_LARGE_WORK_INVALID_CHAIN,
+    LargeWorkInvalidChain = btck_Warning_LARGE_WORK_INVALID_CHAIN,
 }
 
 impl From<Warning> for btck_Warning {
@@ -81,8 +79,8 @@ impl From<Warning> for btck_Warning {
 impl From<btck_Warning> for Warning {
     fn from(value: btck_Warning) -> Self {
         match value {
-            BTCK_WARNING_UNKNOWN_NEW_RULES_ACTIVATED => Warning::UnknownNewRulesActivated,
-            BTCK_WARNING_LARGE_WORK_INVALID_CHAIN => Warning::LargeWorkInvalidChain,
+            btck_Warning_UNKNOWN_NEW_RULES_ACTIVATED => Warning::UnknownNewRulesActivated,
+            btck_Warning_LARGE_WORK_INVALID_CHAIN => Warning::LargeWorkInvalidChain,
             _ => panic!("Unknown warning: {}", value),
         }
     }
@@ -109,11 +107,11 @@ impl std::fmt::Display for Warning {
 #[repr(u8)]
 pub enum ValidationMode {
     /// The data structure is valid according to consensus rules
-    Valid = BTCK_VALIDATION_MODE_VALID,
+    Valid = btck_ValidationMode_VALID,
     /// The data structure is invalid according to consensus rules
-    Invalid = BTCK_VALIDATION_MODE_INVALID,
+    Invalid = btck_ValidationMode_INVALID,
     /// An internal error occurred during validation
-    InternalError = BTCK_VALIDATION_MODE_INTERNAL_ERROR,
+    InternalError = btck_ValidationMode_INTERNAL_ERROR,
 }
 
 impl From<ValidationMode> for btck_ValidationMode {
@@ -125,9 +123,9 @@ impl From<ValidationMode> for btck_ValidationMode {
 impl From<btck_ValidationMode> for ValidationMode {
     fn from(value: btck_ValidationMode) -> Self {
         match value {
-            BTCK_VALIDATION_MODE_VALID => ValidationMode::Valid,
-            BTCK_VALIDATION_MODE_INVALID => ValidationMode::Invalid,
-            BTCK_VALIDATION_MODE_INTERNAL_ERROR => ValidationMode::InternalError,
+            btck_ValidationMode_VALID => ValidationMode::Valid,
+            btck_ValidationMode_INVALID => ValidationMode::Invalid,
+            btck_ValidationMode_INTERNAL_ERROR => ValidationMode::InternalError,
             _ => panic!("Unknown validation mode: {}", value),
         }
     }
@@ -141,23 +139,23 @@ impl From<btck_ValidationMode> for ValidationMode {
 #[repr(u32)]
 pub enum BlockValidationResult {
     /// Initial value - block has not yet been validated
-    Unset = BTCK_BLOCK_VALIDATION_RESULT_UNSET,
+    Unset = btck_BlockValidationResult_UNSET,
     /// Block is valid according to consensus rules
-    Consensus = BTCK_BLOCK_VALIDATION_RESULT_CONSENSUS,
+    Consensus = btck_BlockValidationResult_CONSENSUS,
     /// Block was cached as invalid (reason not stored)
-    CachedInvalid = BTCK_BLOCK_VALIDATION_RESULT_CACHED_INVALID,
+    CachedInvalid = btck_BlockValidationResult_CACHED_INVALID,
     /// Block header is invalid (proof of work or timestamp)
-    InvalidHeader = BTCK_BLOCK_VALIDATION_RESULT_INVALID_HEADER,
+    InvalidHeader = btck_BlockValidationResult_INVALID_HEADER,
     /// Block data doesn't match the proof of work commitment
-    Mutated = BTCK_BLOCK_VALIDATION_RESULT_MUTATED,
+    Mutated = btck_BlockValidationResult_MUTATED,
     /// Previous block is not available
-    MissingPrev = BTCK_BLOCK_VALIDATION_RESULT_MISSING_PREV,
+    MissingPrev = btck_BlockValidationResult_MISSING_PREV,
     /// Previous block is invalid
-    InvalidPrev = BTCK_BLOCK_VALIDATION_RESULT_INVALID_PREV,
+    InvalidPrev = btck_BlockValidationResult_INVALID_PREV,
     /// Block timestamp is too far in the future
-    TimeFuture = BTCK_BLOCK_VALIDATION_RESULT_TIME_FUTURE,
+    TimeFuture = btck_BlockValidationResult_TIME_FUTURE,
     /// Block header indicates insufficient work
-    HeaderLowWork = BTCK_BLOCK_VALIDATION_RESULT_HEADER_LOW_WORK,
+    HeaderLowWork = btck_BlockValidationResult_HEADER_LOW_WORK,
 }
 
 impl From<BlockValidationResult> for btck_BlockValidationResult {
@@ -169,15 +167,15 @@ impl From<BlockValidationResult> for btck_BlockValidationResult {
 impl From<btck_BlockValidationResult> for BlockValidationResult {
     fn from(value: btck_BlockValidationResult) -> Self {
         match value {
-            BTCK_BLOCK_VALIDATION_RESULT_UNSET => BlockValidationResult::Unset,
-            BTCK_BLOCK_VALIDATION_RESULT_CONSENSUS => BlockValidationResult::Consensus,
-            BTCK_BLOCK_VALIDATION_RESULT_CACHED_INVALID => BlockValidationResult::CachedInvalid,
-            BTCK_BLOCK_VALIDATION_RESULT_INVALID_HEADER => BlockValidationResult::InvalidHeader,
-            BTCK_BLOCK_VALIDATION_RESULT_MUTATED => BlockValidationResult::Mutated,
-            BTCK_BLOCK_VALIDATION_RESULT_MISSING_PREV => BlockValidationResult::MissingPrev,
-            BTCK_BLOCK_VALIDATION_RESULT_INVALID_PREV => BlockValidationResult::InvalidPrev,
-            BTCK_BLOCK_VALIDATION_RESULT_TIME_FUTURE => BlockValidationResult::TimeFuture,
-            BTCK_BLOCK_VALIDATION_RESULT_HEADER_LOW_WORK => BlockValidationResult::HeaderLowWork,
+            btck_BlockValidationResult_UNSET => BlockValidationResult::Unset,
+            btck_BlockValidationResult_CONSENSUS => BlockValidationResult::Consensus,
+            btck_BlockValidationResult_CACHED_INVALID => BlockValidationResult::CachedInvalid,
+            btck_BlockValidationResult_INVALID_HEADER => BlockValidationResult::InvalidHeader,
+            btck_BlockValidationResult_MUTATED => BlockValidationResult::Mutated,
+            btck_BlockValidationResult_MISSING_PREV => BlockValidationResult::MissingPrev,
+            btck_BlockValidationResult_INVALID_PREV => BlockValidationResult::InvalidPrev,
+            btck_BlockValidationResult_TIME_FUTURE => BlockValidationResult::TimeFuture,
+            btck_BlockValidationResult_HEADER_LOW_WORK => BlockValidationResult::HeaderLowWork,
             _ => panic!("Unknown block validation result: {}", value),
         }
     }
@@ -314,15 +312,15 @@ mod tests {
     fn test_synchronization_state_values() {
         assert_eq!(
             SynchronizationState::InitReindex as u8,
-            BTCK_SYNCHRONIZATION_STATE_INIT_REINDEX
+            btck_SynchronizationState_INIT_REINDEX
         );
         assert_eq!(
             SynchronizationState::InitDownload as u8,
-            BTCK_SYNCHRONIZATION_STATE_INIT_DOWNLOAD
+            btck_SynchronizationState_INIT_DOWNLOAD
         );
         assert_eq!(
             SynchronizationState::PostInit as u8,
-            BTCK_SYNCHRONIZATION_STATE_POST_INIT
+            btck_SynchronizationState_POST_INIT
         );
     }
 
@@ -367,11 +365,11 @@ mod tests {
     fn test_warning_values() {
         assert_eq!(
             Warning::UnknownNewRulesActivated as u8,
-            BTCK_WARNING_UNKNOWN_NEW_RULES_ACTIVATED
+            btck_Warning_UNKNOWN_NEW_RULES_ACTIVATED
         );
         assert_eq!(
             Warning::LargeWorkInvalidChain as u8,
-            BTCK_WARNING_LARGE_WORK_INVALID_CHAIN
+            btck_Warning_LARGE_WORK_INVALID_CHAIN
         );
     }
 
@@ -415,11 +413,11 @@ mod tests {
 
     #[test]
     fn test_validation_mode_values() {
-        assert_eq!(ValidationMode::Valid as u8, BTCK_VALIDATION_MODE_VALID);
-        assert_eq!(ValidationMode::Invalid as u8, BTCK_VALIDATION_MODE_INVALID);
+        assert_eq!(ValidationMode::Valid as u8, btck_ValidationMode_VALID);
+        assert_eq!(ValidationMode::Invalid as u8, btck_ValidationMode_INVALID);
         assert_eq!(
             ValidationMode::InternalError as u8,
-            BTCK_VALIDATION_MODE_INTERNAL_ERROR
+            btck_ValidationMode_INTERNAL_ERROR
         );
     }
 
@@ -490,39 +488,39 @@ mod tests {
     fn test_block_validation_result_values() {
         assert_eq!(
             BlockValidationResult::Unset as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_UNSET
+            btck_BlockValidationResult_UNSET
         );
         assert_eq!(
             BlockValidationResult::Consensus as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_CONSENSUS
+            btck_BlockValidationResult_CONSENSUS
         );
         assert_eq!(
             BlockValidationResult::CachedInvalid as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_CACHED_INVALID
+            btck_BlockValidationResult_CACHED_INVALID
         );
         assert_eq!(
             BlockValidationResult::InvalidHeader as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_INVALID_HEADER
+            btck_BlockValidationResult_INVALID_HEADER
         );
         assert_eq!(
             BlockValidationResult::Mutated as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_MUTATED
+            btck_BlockValidationResult_MUTATED
         );
         assert_eq!(
             BlockValidationResult::MissingPrev as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_MISSING_PREV
+            btck_BlockValidationResult_MISSING_PREV
         );
         assert_eq!(
             BlockValidationResult::InvalidPrev as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_INVALID_PREV
+            btck_BlockValidationResult_INVALID_PREV
         );
         assert_eq!(
             BlockValidationResult::TimeFuture as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_TIME_FUTURE
+            btck_BlockValidationResult_TIME_FUTURE
         );
         assert_eq!(
             BlockValidationResult::HeaderLowWork as u32,
-            BTCK_BLOCK_VALIDATION_RESULT_HEADER_LOW_WORK
+            btck_BlockValidationResult_HEADER_LOW_WORK
         );
     }
 

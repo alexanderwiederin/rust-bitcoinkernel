@@ -154,55 +154,51 @@ use std::{
 };
 
 use libbitcoinkernel_sys::{
-    btck_PrecomputedTransactionData, btck_ScriptVerificationFlags, btck_ScriptVerifyStatus,
+    btck_PrecomputedTransactionData, btck_ScriptVerificationFlags,
+    btck_ScriptVerificationFlags_ALL, btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY,
+    btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY, btck_ScriptVerificationFlags_DERSIG,
+    btck_ScriptVerificationFlags_NONE, btck_ScriptVerificationFlags_NULLDUMMY,
+    btck_ScriptVerificationFlags_P2SH, btck_ScriptVerificationFlags_TAPROOT,
+    btck_ScriptVerificationFlags_WITNESS, btck_ScriptVerifyStatus,
+    btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION,
+    btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED, btck_ScriptVerifyStatus_OK,
     btck_TransactionOutput, btck_precomputed_transaction_data_copy,
     btck_precomputed_transaction_data_create, btck_precomputed_transaction_data_destroy,
     btck_script_pubkey_verify,
 };
 
 use crate::{
-    c_helpers,
-    ffi::{
-        sealed::AsPtr, BTCK_SCRIPT_VERIFICATION_FLAGS_ALL,
-        BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKLOCKTIMEVERIFY,
-        BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKSEQUENCEVERIFY, BTCK_SCRIPT_VERIFICATION_FLAGS_DERSIG,
-        BTCK_SCRIPT_VERIFICATION_FLAGS_NONE, BTCK_SCRIPT_VERIFICATION_FLAGS_NULLDUMMY,
-        BTCK_SCRIPT_VERIFICATION_FLAGS_P2SH, BTCK_SCRIPT_VERIFICATION_FLAGS_TAPROOT,
-        BTCK_SCRIPT_VERIFICATION_FLAGS_WITNESS,
-        BTCK_SCRIPT_VERIFY_STATUS_ERROR_INVALID_FLAGS_COMBINATION,
-        BTCK_SCRIPT_VERIFY_STATUS_ERROR_SPENT_OUTPUTS_REQUIRED, BTCK_SCRIPT_VERIFY_STATUS_OK,
-    },
-    KernelError, ScriptPubkeyExt, TransactionExt, TxOutExt,
+    c_helpers, ffi::sealed::AsPtr, KernelError, ScriptPubkeyExt, TransactionExt, TxOutExt,
 };
 
 /// No verification flags.
-pub const VERIFY_NONE: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_NONE;
+pub const VERIFY_NONE: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_NONE;
 
 /// Validate Pay-to-Script-Hash (BIP 16).
-pub const VERIFY_P2SH: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_P2SH;
+pub const VERIFY_P2SH: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_P2SH;
 
 /// Require strict DER encoding for ECDSA signatures (BIP 66).
-pub const VERIFY_DERSIG: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_DERSIG;
+pub const VERIFY_DERSIG: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_DERSIG;
 
 /// Require the dummy element in OP_CHECKMULTISIG to be empty (BIP 147).
-pub const VERIFY_NULLDUMMY: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_NULLDUMMY;
+pub const VERIFY_NULLDUMMY: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_NULLDUMMY;
 
 /// Enable OP_CHECKLOCKTIMEVERIFY (BIP 65).
 pub const VERIFY_CHECKLOCKTIMEVERIFY: btck_ScriptVerificationFlags =
-    BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKLOCKTIMEVERIFY;
+    btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY;
 
 /// Enable OP_CHECKSEQUENCEVERIFY (BIP 112).
 pub const VERIFY_CHECKSEQUENCEVERIFY: btck_ScriptVerificationFlags =
-    BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKSEQUENCEVERIFY;
+    btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY;
 
 /// Validate Segregated Witness programs (BIP 141/143).
-pub const VERIFY_WITNESS: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_WITNESS;
+pub const VERIFY_WITNESS: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_WITNESS;
 
 /// Validate Taproot spends (BIP 341/342). Requires spent outputs.
-pub const VERIFY_TAPROOT: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_TAPROOT;
+pub const VERIFY_TAPROOT: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_TAPROOT;
 
 /// All consensus rules.
-pub const VERIFY_ALL: btck_ScriptVerificationFlags = BTCK_SCRIPT_VERIFICATION_FLAGS_ALL;
+pub const VERIFY_ALL: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_ALL;
 
 /// All consensus rules except Taproot.
 pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
@@ -455,7 +451,7 @@ pub fn verify(
 #[repr(u8)]
 enum ScriptVerifyStatus {
     /// Script verification completed successfully
-    Ok = BTCK_SCRIPT_VERIFY_STATUS_OK,
+    Ok = btck_ScriptVerifyStatus_OK,
 
     /// Invalid or inconsistent verification flags were provided.
     ///
@@ -468,14 +464,14 @@ enum ScriptVerifyStatus {
     ///
     /// These combinations are considered invalid and result in an immediate
     /// verification setup failure rather than a script execution failure.
-    ErrorInvalidFlagsCombination = BTCK_SCRIPT_VERIFY_STATUS_ERROR_INVALID_FLAGS_COMBINATION,
+    ErrorInvalidFlagsCombination = btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION,
 
     /// Spent outputs are required but were not provided.
     ///
     /// Taproot scripts require the complete set of outputs being spent to properly
     /// validate witness data. This occurs when the TAPROOT flag is set but no spent
     /// outputs were provided.
-    ErrorSpentOutputsRequired = BTCK_SCRIPT_VERIFY_STATUS_ERROR_SPENT_OUTPUTS_REQUIRED,
+    ErrorSpentOutputsRequired = btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED,
 }
 
 impl From<ScriptVerifyStatus> for btck_ScriptVerifyStatus {
@@ -487,11 +483,11 @@ impl From<ScriptVerifyStatus> for btck_ScriptVerifyStatus {
 impl From<btck_ScriptVerifyStatus> for ScriptVerifyStatus {
     fn from(value: btck_ScriptVerifyStatus) -> Self {
         match value {
-            BTCK_SCRIPT_VERIFY_STATUS_OK => ScriptVerifyStatus::Ok,
-            BTCK_SCRIPT_VERIFY_STATUS_ERROR_INVALID_FLAGS_COMBINATION => {
+            btck_ScriptVerifyStatus_OK => ScriptVerifyStatus::Ok,
+            btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION => {
                 ScriptVerifyStatus::ErrorInvalidFlagsCombination
             }
-            BTCK_SCRIPT_VERIFY_STATUS_ERROR_SPENT_OUTPUTS_REQUIRED => {
+            btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED => {
                 ScriptVerifyStatus::ErrorSpentOutputsRequired
             }
             _ => panic!("Unknown script verify status: {}", value),
@@ -554,21 +550,21 @@ mod tests {
 
     #[test]
     fn test_verify_constants() {
-        assert_eq!(VERIFY_NONE, BTCK_SCRIPT_VERIFICATION_FLAGS_NONE);
-        assert_eq!(VERIFY_P2SH, BTCK_SCRIPT_VERIFICATION_FLAGS_P2SH);
-        assert_eq!(VERIFY_DERSIG, BTCK_SCRIPT_VERIFICATION_FLAGS_DERSIG);
-        assert_eq!(VERIFY_NULLDUMMY, BTCK_SCRIPT_VERIFICATION_FLAGS_NULLDUMMY);
+        assert_eq!(VERIFY_NONE, btck_ScriptVerificationFlags_NONE);
+        assert_eq!(VERIFY_P2SH, btck_ScriptVerificationFlags_P2SH);
+        assert_eq!(VERIFY_DERSIG, btck_ScriptVerificationFlags_DERSIG);
+        assert_eq!(VERIFY_NULLDUMMY, btck_ScriptVerificationFlags_NULLDUMMY);
         assert_eq!(
             VERIFY_CHECKLOCKTIMEVERIFY,
-            BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKLOCKTIMEVERIFY
+            btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY
         );
         assert_eq!(
             VERIFY_CHECKSEQUENCEVERIFY,
-            BTCK_SCRIPT_VERIFICATION_FLAGS_CHECKSEQUENCEVERIFY
+            btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY
         );
-        assert_eq!(VERIFY_WITNESS, BTCK_SCRIPT_VERIFICATION_FLAGS_WITNESS);
-        assert_eq!(VERIFY_TAPROOT, BTCK_SCRIPT_VERIFICATION_FLAGS_TAPROOT);
-        assert_eq!(VERIFY_ALL, BTCK_SCRIPT_VERIFICATION_FLAGS_ALL);
+        assert_eq!(VERIFY_WITNESS, btck_ScriptVerificationFlags_WITNESS);
+        assert_eq!(VERIFY_TAPROOT, btck_ScriptVerificationFlags_TAPROOT);
+        assert_eq!(VERIFY_ALL, btck_ScriptVerificationFlags_ALL);
     }
 
     #[test]
@@ -607,18 +603,18 @@ mod tests {
 
     #[test]
     fn test_script_verify_status_from_kernel() {
-        let ok: ScriptVerifyStatus = BTCK_SCRIPT_VERIFY_STATUS_OK.into();
+        let ok: ScriptVerifyStatus = btck_ScriptVerifyStatus_OK.into();
         assert_eq!(ok, ScriptVerifyStatus::Ok);
 
         let invalid_flags: ScriptVerifyStatus =
-            BTCK_SCRIPT_VERIFY_STATUS_ERROR_INVALID_FLAGS_COMBINATION.into();
+            btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION.into();
         assert_eq!(
             invalid_flags,
             ScriptVerifyStatus::ErrorInvalidFlagsCombination
         );
 
         let spent_required: ScriptVerifyStatus =
-            BTCK_SCRIPT_VERIFY_STATUS_ERROR_SPENT_OUTPUTS_REQUIRED.into();
+            btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED.into();
         assert_eq!(
             spent_required,
             ScriptVerifyStatus::ErrorSpentOutputsRequired
@@ -628,20 +624,20 @@ mod tests {
     #[test]
     fn test_script_verify_status_to_kernel() {
         let ok: btck_ScriptVerifyStatus = ScriptVerifyStatus::Ok.into();
-        assert_eq!(ok, BTCK_SCRIPT_VERIFY_STATUS_OK);
+        assert_eq!(ok, btck_ScriptVerifyStatus_OK);
 
         let invalid_flags: btck_ScriptVerifyStatus =
             ScriptVerifyStatus::ErrorInvalidFlagsCombination.into();
         assert_eq!(
             invalid_flags,
-            BTCK_SCRIPT_VERIFY_STATUS_ERROR_INVALID_FLAGS_COMBINATION
+            btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION
         );
 
         let spent_required: btck_ScriptVerifyStatus =
             ScriptVerifyStatus::ErrorSpentOutputsRequired.into();
         assert_eq!(
             spent_required,
-            BTCK_SCRIPT_VERIFY_STATUS_ERROR_SPENT_OUTPUTS_REQUIRED
+            btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED
         );
     }
 

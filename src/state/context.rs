@@ -56,8 +56,9 @@
 use std::ffi::c_void;
 
 use libbitcoinkernel_sys::{
-    btck_ChainParameters, btck_ChainType, btck_Context, btck_ContextOptions,
-    btck_NotificationInterfaceCallbacks, btck_ValidationInterfaceCallbacks,
+    btck_ChainParameters, btck_ChainType, btck_ChainType_MAINNET, btck_ChainType_REGTEST,
+    btck_ChainType_SIGNET, btck_ChainType_TESTNET, btck_ChainType_TESTNET_4, btck_Context,
+    btck_ContextOptions, btck_NotificationInterfaceCallbacks, btck_ValidationInterfaceCallbacks,
     btck_chain_parameters_create, btck_chain_parameters_destroy, btck_context_create,
     btck_context_destroy, btck_context_interrupt, btck_context_options_create,
     btck_context_options_destroy, btck_context_options_set_chainparams,
@@ -83,8 +84,7 @@ use crate::{
             BlockDisconnectedCallback, NewPoWValidBlockCallback, ValidationCallbackRegistry,
         },
     },
-    KernelError, BTCK_CHAIN_TYPE_MAINNET, BTCK_CHAIN_TYPE_REGTEST, BTCK_CHAIN_TYPE_SIGNET,
-    BTCK_CHAIN_TYPE_TESTNET, BTCK_CHAIN_TYPE_TESTNET_4,
+    KernelError,
 };
 
 /// Chain parameters for configuring a [`Context`].
@@ -1003,15 +1003,15 @@ impl Drop for ContextBuilder {
 #[repr(u8)]
 pub enum ChainType {
     /// Bitcoin mainnet - production network with economic value
-    Mainnet = BTCK_CHAIN_TYPE_MAINNET,
+    Mainnet = btck_ChainType_MAINNET,
     /// Bitcoin testnet3 - test network for development and testing
-    Testnet = BTCK_CHAIN_TYPE_TESTNET,
+    Testnet = btck_ChainType_TESTNET,
     /// Bitcoin testnet4 - newer test network with tweaked block production
-    Testnet4 = BTCK_CHAIN_TYPE_TESTNET_4,
+    Testnet4 = btck_ChainType_TESTNET_4,
     /// Bitcoin signet - test network with controlled, regular block production
-    Signet = BTCK_CHAIN_TYPE_SIGNET,
+    Signet = btck_ChainType_SIGNET,
     /// Regression test network for local development
-    Regtest = BTCK_CHAIN_TYPE_REGTEST,
+    Regtest = btck_ChainType_REGTEST,
 }
 
 impl From<ChainType> for btck_ChainType {
@@ -1023,11 +1023,11 @@ impl From<ChainType> for btck_ChainType {
 impl From<btck_ChainType> for ChainType {
     fn from(value: btck_ChainType) -> Self {
         match value {
-            BTCK_CHAIN_TYPE_MAINNET => ChainType::Mainnet,
-            BTCK_CHAIN_TYPE_TESTNET => ChainType::Testnet,
-            BTCK_CHAIN_TYPE_TESTNET_4 => ChainType::Testnet4,
-            BTCK_CHAIN_TYPE_SIGNET => ChainType::Signet,
-            BTCK_CHAIN_TYPE_REGTEST => ChainType::Regtest,
+            btck_ChainType_MAINNET => ChainType::Mainnet,
+            btck_ChainType_TESTNET => ChainType::Testnet,
+            btck_ChainType_TESTNET_4 => ChainType::Testnet4,
+            btck_ChainType_SIGNET => ChainType::Signet,
+            btck_ChainType_REGTEST => ChainType::Regtest,
             _ => panic!("Unknown chain type: {}", value),
         }
     }
