@@ -52,4 +52,3 @@ publish = true
 
 [build-dependencies]
 cc = "1.2"
-bindgen = "0.72"

@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `btck_block_header_to_bytes` for serializing a block header to its 80-byte consensus encoding
 
 ### Changed
+- Replaced bindgen-generated bindings with hand-written FFI bindings
 - `btck_chain_get_by_height` `block_height` parameter type changed from `int` to `int32_t`
 - `btck_chain_get_height` return type changed from `int` to `int32_t`
 - `btck_block_validation_state_destroy` now accepts a null pointer (removed `NONNULL` annotation)
