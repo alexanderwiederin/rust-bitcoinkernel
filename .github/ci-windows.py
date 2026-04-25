@@ -8,7 +8,11 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent / "test"))
+from download_utils import download_script_assets
 
 
 def run(cmd, **kwargs):
@@ -38,19 +42,52 @@ GENERATE_OPTIONS = {
 }
 
 
+def github_import_vs_env(_ci_type):
+    vswhere_path = Path(os.environ["ProgramFiles(x86)"]) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    installation_path = run(
+        [str(vswhere_path), "-latest", "-property", "installationPath"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    vsdevcmd = Path(installation_path) / "Common7" / "Tools" / "vsdevcmd.bat"
+    comspec = os.environ["COMSPEC"]
+    output = run(
+        f'"{comspec}" /s /c ""{vsdevcmd}" -arch=x64 -no_logo && set"',
+        capture_output=True,
+        text=True,
+    ).stdout
+    github_env = os.environ["GITHUB_ENV"]
+    with open(github_env, "a") as env_file:
+        for line in output.splitlines():
+            if "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            env_file.write(f"{name}={value}\n")
+
+
 def generate(ci_type):
     command = [
         "cmake",
         "-B",
         "build",
         "-Werror=dev",
-        "--preset",
-        "vs2026",
+        "--preset=vs2026",
+        # Using x64-windows-release for both host and target triplets
+        # to ensure vcpkg builds only release packages, thereby optimizing
+        # build time.
+        # See https://github.com/microsoft/vcpkg/issues/50927.
+        "-DVCPKG_HOST_TRIPLET=x64-windows-release",
+        "-DVCPKG_TARGET_TRIPLET=x64-windows-release",
     ] + GENERATE_OPTIONS[ci_type]
-    run(command)
+    if run(command, check=False).returncode != 0:
+        print("=== ⚠️ ===")
+        print("Generate failure! Network issue? Retry once ...")
+        time.sleep(12)
+        print("=== ⚠️ ===")
+        run(command)
 
 
-def build():
+def build(_ci_type):
     command = [
         "cmake",
         "--build",
@@ -83,7 +120,6 @@ def check_manifests(ci_type):
         "fuzz.exe",
         "bench_bitcoin.exe",
         "test_bitcoin-qt.exe",
-        "test_kernel.exe",
         "bitcoin-chainstate.exe",
     }
     for entry in release_dir.iterdir():
@@ -103,10 +139,13 @@ def check_manifests(ci_type):
 
 
 def prepare_tests(ci_type):
+    workspace = Path.cwd()
     if ci_type == "standard":
         run([sys.executable, "-m", "pip", "install", "pyzmq"])
+        dest = workspace / "unit_test_data"
+        download_script_assets(dest)
     elif ci_type == "fuzz":
-        repo_dir = str(Path.cwd() / "qa-assets")
+        repo_dir = str(workspace / "qa-assets")
         clone_cmd = [
             "git",
             "clone",
@@ -120,11 +159,13 @@ def prepare_tests(ci_type):
 
 
 def run_tests(ci_type):
-    build_dir = Path.cwd() / "build"
+    workspace = Path.cwd()
+    build_dir = workspace / "build"
     num_procs = str(os.process_cpu_count())
     release_bin = build_dir / "bin" / "Release"
 
     if ci_type == "standard":
+        os.environ["DIR_UNIT_TEST_DATA"] = str(workspace / "unit_test_data")
         test_envs = {
             "BITCOIN_BIN": "bitcoin.exe",
             "BITCOIND": "bitcoind.exe",
@@ -157,7 +198,7 @@ def run_tests(ci_type):
             "--jobs",
             num_procs,
             "--quiet",
-            f"--tmpdirprefix={Path.cwd()}",
+            f"--tmpdirprefix={workspace}",
             "--combinedlogslen=99999999",
             *shlex.split(os.environ.get("TEST_RUNNER_EXTRA", "").strip()),
         ]
@@ -172,7 +213,7 @@ def run_tests(ci_type):
             num_procs,
             "--loglevel",
             "DEBUG",
-            str(Path.cwd() / "qa-assets" / "fuzz_corpora"),
+            str(workspace / "qa-assets" / "fuzz_corpora"),
         ]
         run(fuzz_cmd)
 
@@ -180,26 +221,18 @@ def run_tests(ci_type):
 def main():
     parser = argparse.ArgumentParser(description="Utility to run Windows CI steps.")
     parser.add_argument("ci_type", choices=GENERATE_OPTIONS, help="CI type to run.")
-    steps = [
-        "generate",
-        "build",
-        "check_manifests",
-        "prepare_tests",
-        "run_tests",
-    ]
+    steps = list(map(lambda f: f.__name__, [
+        github_import_vs_env,
+        generate,
+        build,
+        check_manifests,
+        prepare_tests,
+        run_tests,
+    ]))
     parser.add_argument("step", choices=steps, help="CI step to perform.")
     args = parser.parse_args()
 
-    if args.step == "generate":
-        generate(args.ci_type)
-    elif args.step == "build":
-        build()
-    elif args.step == "check_manifests":
-        check_manifests(args.ci_type)
-    elif args.step == "prepare_tests":
-        prepare_tests(args.ci_type)
-    elif args.step == "run_tests":
-        run_tests(args.ci_type)
+    exec(f'{args.step}("{args.ci_type}")')
 
 
 if __name__ == "__main__":

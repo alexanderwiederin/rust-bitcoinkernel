@@ -77,18 +77,7 @@ public:
     {
         // Nothing must modify cacheCoins other than BatchWrite.
         assert(ComputeCacheCoinsSnapshot() == m_expected_snapshot);
-        try {
-            CCoinsViewCache::BatchWrite(cursor, block_hash);
-        } catch (const std::logic_error& e) {
-            // This error is thrown if the cursor contains a fresh entry for an outpoint that we already have a fresh
-            // entry for. This can happen if the fuzzer calls AddCoin -> Flush -> AddCoin -> Flush on the child cache.
-            // There's not an easy way to prevent the fuzzer from reaching this, so we handle it here.
-            // Since it is thrown in the middle of the write, we reset our own state and iterate through
-            // the cursor so the caller's state is also reset.
-            assert(e.what() == std::string{"FRESH flag misapplied to coin that exists in parent cache"});
-            Reset();
-            for (auto it{cursor.Begin()}; it != cursor.End(); it = cursor.NextAndMaybeErase(*it)) {}
-        }
+        CCoinsViewCache::BatchWrite(cursor, block_hash);
         m_expected_snapshot = ComputeCacheCoinsSnapshot();
     }
 
@@ -101,9 +90,11 @@ void initialize_coins_view()
     static const auto testing_setup = MakeNoLogFileContext<>();
 }
 
-void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& coins_view_cache, CCoinsView& backend_coins_view, bool is_db)
+void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& coins_view_cache, CCoinsView* backend_coins_view)
 {
+    const bool is_db{dynamic_cast<CCoinsViewDB*>(backend_coins_view) != nullptr};
     bool good_data{true};
+    auto* original_backend{backend_coins_view};
 
     if (is_db) coins_view_cache.SetBestBlock(uint256::ONE);
     COutPoint random_out_point;
@@ -120,13 +111,9 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
                 COutPoint outpoint{random_out_point};
                 Coin coin{random_coin};
                 if (fuzzed_data_provider.ConsumeBool()) {
-                    const bool possible_overwrite{fuzzed_data_provider.ConsumeBool()};
-                    try {
-                        coins_view_cache.AddCoin(outpoint, std::move(coin), possible_overwrite);
-                    } catch (const std::logic_error& e) {
-                        assert(e.what() == std::string{"Attempted to overwrite an unspent coin (when possible_overwrite is false)"});
-                        assert(!possible_overwrite);
-                    }
+                    // We can only skip the check if no unspent coin exists for this outpoint.
+                    const bool possible_overwrite{coins_view_cache.PeekCoin(outpoint) || fuzzed_data_provider.ConsumeBool()};
+                    coins_view_cache.AddCoin(outpoint, std::move(coin), possible_overwrite);
                 } else {
                     coins_view_cache.EmplaceCoinInternalDANGER(std::move(outpoint), std::move(coin));
                 }
@@ -139,15 +126,13 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
             },
             [&] {
                 uint256 best_block{ConsumeUInt256(fuzzed_data_provider)};
-                // Set best block hash to non-null to satisfy the assertion in CCoinsViewDB::BatchWrite().
+                // `CCoinsViewDB::BatchWrite()` requires a non-null best block.
                 if (is_db && best_block.IsNull()) best_block = uint256::ONE;
                 coins_view_cache.SetBestBlock(best_block);
             },
             [&] {
-                {
-                    const auto reset_guard{coins_view_cache.CreateResetGuard()};
-                }
-                // Set best block hash to non-null to satisfy the assertion in CCoinsViewDB::BatchWrite().
+                (void)coins_view_cache.CreateResetGuard();
+                // Reset() clears the best block, so reseed db-backed caches.
                 if (is_db) {
                     const uint256 best_block{ConsumeUInt256(fuzzed_data_provider)};
                     if (best_block.IsNull()) {
@@ -165,10 +150,16 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
                 coins_view_cache.Uncache(random_out_point);
             },
             [&] {
-                if (fuzzed_data_provider.ConsumeBool()) {
-                    backend_coins_view = CCoinsView{};
+                const bool use_original_backend{fuzzed_data_provider.ConsumeBool()};
+                if (use_original_backend && backend_coins_view != original_backend) {
+                    // FRESH flags valid against the empty backend may be invalid
+                    // against the original backend, so reset before restoring it.
+                    (void)coins_view_cache.CreateResetGuard();
+                    // Reset() clears the best block; db backends require a non-null hash.
+                    if (is_db) coins_view_cache.SetBestBlock(uint256::ONE);
                 }
-                coins_view_cache.SetBackend(backend_coins_view);
+                backend_coins_view = use_original_backend ? original_backend : &CoinsViewEmpty::Get();
+                coins_view_cache.SetBackend(*backend_coins_view);
             },
             [&] {
                 const std::optional<COutPoint> opt_out_point = ConsumeDeserializable<COutPoint>(fuzzed_data_provider);
@@ -203,8 +194,6 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
                 LIMITED_WHILE(good_data && fuzzed_data_provider.ConsumeBool(), 10'000)
                 {
                     CCoinsCacheEntry coins_cache_entry;
-                    const auto dirty{fuzzed_data_provider.ConsumeBool()};
-                    const auto fresh{fuzzed_data_provider.ConsumeBool()};
                     if (fuzzed_data_provider.ConsumeBool()) {
                         coins_cache_entry.coin = random_coin;
                     } else {
@@ -215,26 +204,20 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
                         }
                         coins_cache_entry.coin = *opt_coin;
                     }
+                    // Avoid setting FRESH for an outpoint that already exists unspent in the parent view.
+                    bool fresh{!coins_view_cache.PeekCoin(random_out_point) && fuzzed_data_provider.ConsumeBool()};
+                    bool dirty{fresh || fuzzed_data_provider.ConsumeBool()};
                     auto it{coins_map.emplace(random_out_point, std::move(coins_cache_entry)).first};
                     if (dirty) CCoinsCacheEntry::SetDirty(*it, sentinel);
                     if (fresh) CCoinsCacheEntry::SetFresh(*it, sentinel);
                     dirty_count += dirty;
                 }
-                bool expected_code_path = false;
-                try {
-                    auto cursor{CoinsViewCacheCursor(dirty_count, sentinel, coins_map, /*will_erase=*/true)};
-                    uint256 best_block{coins_view_cache.GetBestBlock()};
-                    if (fuzzed_data_provider.ConsumeBool()) best_block = ConsumeUInt256(fuzzed_data_provider);
-                    // Set best block hash to non-null to satisfy the assertion in CCoinsViewDB::BatchWrite().
-                    if (is_db && best_block.IsNull()) best_block = uint256::ONE;
-                    coins_view_cache.BatchWrite(cursor, best_block);
-                    expected_code_path = true;
-                } catch (const std::logic_error& e) {
-                    if (e.what() == std::string{"FRESH flag misapplied to coin that exists in parent cache"}) {
-                        expected_code_path = true;
-                    }
-                }
-                assert(expected_code_path);
+                auto cursor{CoinsViewCacheCursor(dirty_count, sentinel, coins_map, /*will_erase=*/true)};
+                uint256 best_block{coins_view_cache.GetBestBlock()};
+                if (fuzzed_data_provider.ConsumeBool()) best_block = ConsumeUInt256(fuzzed_data_provider);
+                // Set best block hash to non-null to satisfy the assertion in CCoinsViewDB::BatchWrite().
+                if (is_db && best_block.IsNull()) best_block = uint256::ONE;
+                coins_view_cache.BatchWrite(cursor, best_block);
             });
     }
 
@@ -255,13 +238,12 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
     }
 
     {
-        if (is_db) {
-            std::unique_ptr<CCoinsViewCursor> coins_view_cursor = backend_coins_view.Cursor();
-            assert(!!coins_view_cursor);
+        if (is_db && backend_coins_view == original_backend) {
+            assert(backend_coins_view->Cursor());
         }
-        (void)backend_coins_view.EstimateSize();
-        (void)backend_coins_view.GetBestBlock();
-        (void)backend_coins_view.GetHeadBlocks();
+        (void)backend_coins_view->EstimateSize();
+        (void)backend_coins_view->GetBestBlock();
+        (void)backend_coins_view->GetHeadBlocks();
     }
 
     if (fuzzed_data_provider.ConsumeBool()) {
@@ -280,22 +262,17 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
                     // coins.cpp:69: void CCoinsViewCache::AddCoin(const COutPoint &, Coin &&, bool): Assertion `!coin.IsSpent()' failed.
                     return;
                 }
-                bool expected_code_path = false;
                 const int height{int(fuzzed_data_provider.ConsumeIntegral<uint32_t>() >> 1)};
-                const bool possible_overwrite = fuzzed_data_provider.ConsumeBool();
-                try {
-                    AddCoins(coins_view_cache, transaction, height, possible_overwrite);
-                    expected_code_path = true;
-                } catch (const std::logic_error& e) {
-                    if (e.what() == std::string{"Attempted to overwrite an unspent coin (when possible_overwrite is false)"}) {
-                        assert(!possible_overwrite);
-                        expected_code_path = true;
+                const bool check_for_overwrite{transaction.IsCoinBase() || [&] {
+                    for (uint32_t i{0}; i < transaction.vout.size(); ++i) {
+                        if (coins_view_cache.PeekCoin(COutPoint{transaction.GetHash(), i})) return true;
                     }
-                }
-                assert(expected_code_path);
+                    return fuzzed_data_provider.ConsumeBool();
+                }()}; // We can only skip the check if the current txid has no unspent outputs
+                AddCoins(coins_view_cache, transaction, height, check_for_overwrite);
             },
             [&] {
-                (void)AreInputsStandard(CTransaction{random_mutable_transaction}, coins_view_cache);
+                (void)ValidateInputsStandardness(CTransaction{random_mutable_transaction}, coins_view_cache);
             },
             [&] {
                 TxValidationState state;
@@ -356,11 +333,11 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
             assert(!exists_using_access_coin && !exists_using_have_coin_in_cache && !exists_using_have_coin);
         }
         // If HaveCoin on the backend is true, it must also be on the cache if the coin wasn't spent.
-        const bool exists_using_have_coin_in_backend = backend_coins_view.HaveCoin(random_out_point);
+        const bool exists_using_have_coin_in_backend = backend_coins_view->HaveCoin(random_out_point);
         if (!coin_using_access_coin.IsSpent() && exists_using_have_coin_in_backend) {
             assert(exists_using_have_coin);
         }
-        if (auto coin{backend_coins_view.GetCoin(random_out_point)}) {
+        if (auto coin{backend_coins_view->GetCoin(random_out_point)}) {
             assert(exists_using_have_coin_in_backend);
             // Note we can't assert that `coin_using_get_coin == *coin` because the coin in
             // the cache may have been modified but not yet flushed.
@@ -373,9 +350,8 @@ void TestCoinsView(FuzzedDataProvider& fuzzed_data_provider, CCoinsViewCache& co
 FUZZ_TARGET(coins_view, .init = initialize_coins_view)
 {
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
-    CCoinsView backend_coins_view;
-    CCoinsViewCache coins_view_cache{&backend_coins_view, /*deterministic=*/true};
-    TestCoinsView(fuzzed_data_provider, coins_view_cache, backend_coins_view, /*is_db=*/false);
+    CCoinsViewCache coins_view_cache{&CoinsViewEmpty::Get(), /*deterministic=*/true};
+    TestCoinsView(fuzzed_data_provider, coins_view_cache, &CoinsViewEmpty::Get());
 }
 
 FUZZ_TARGET(coins_view_db, .init = initialize_coins_view)
@@ -388,7 +364,7 @@ FUZZ_TARGET(coins_view_db, .init = initialize_coins_view)
     };
     CCoinsViewDB backend_coins_view{std::move(db_params), CoinsViewOptions{}};
     CCoinsViewCache coins_view_cache{&backend_coins_view, /*deterministic=*/true};
-    TestCoinsView(fuzzed_data_provider, coins_view_cache, backend_coins_view, /*is_db=*/true);
+    TestCoinsView(fuzzed_data_provider, coins_view_cache, &backend_coins_view);
 }
 
 // Creates a CoinsViewOverlay and a MutationGuardCoinsViewCache as the base.
@@ -398,8 +374,7 @@ FUZZ_TARGET(coins_view_db, .init = initialize_coins_view)
 FUZZ_TARGET(coins_view_overlay, .init = initialize_coins_view)
 {
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
-    CCoinsView backend_base_coins_view;
-    MutationGuardCoinsViewCache backend_cache{&backend_base_coins_view, /*deterministic=*/true};
+    MutationGuardCoinsViewCache backend_cache{&CoinsViewEmpty::Get(), /*deterministic=*/true};
     CoinsViewOverlay coins_view_cache{&backend_cache, /*deterministic=*/true};
-    TestCoinsView(fuzzed_data_provider, coins_view_cache, backend_cache, /*is_db=*/false);
+    TestCoinsView(fuzzed_data_provider, coins_view_cache, &backend_cache);
 }

@@ -12,11 +12,13 @@
 #include <rpc/blockchain.h>
 #include <sync.h>
 #include <test/util/chainstate.h>
+#include <test/util/common.h>
 #include <test/util/logging.h>
 #include <test/util/random.h>
 #include <test/util/setup_common.h>
 #include <test/util/validation.h>
 #include <uint256.h>
+#include <util/byte_units.h>
 #include <util/result.h>
 #include <util/vector.h>
 #include <validation.h>
@@ -71,13 +73,18 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager, TestChain100Setup)
     const uint256 snapshot_blockhash = active_tip->GetBlockHash();
     Chainstate& c2{WITH_LOCK(::cs_main, return manager.AddChainstate(std::make_unique<Chainstate>(nullptr, manager.m_blockman, manager, snapshot_blockhash)))};
     c2.InitCoinsDB(
-        /*cache_size_bytes=*/1 << 23, /*in_memory=*/true, /*should_wipe=*/false);
+        /*cache_size_bytes=*/8_MiB, /*in_memory=*/true, /*should_wipe=*/false);
     {
         LOCK(::cs_main);
-        c2.InitCoinsCache(1 << 23);
+        c2.InitCoinsCache(8_MiB);
         c2.CoinsTip().SetBestBlock(active_tip->GetBlockHash());
-        c2.setBlockIndexCandidates.insert(manager.m_blockman.LookupBlockIndex(active_tip->GetBlockHash()));
+        for (const auto& cs : manager.m_chainstates) {
+            cs->ClearBlockIndexCandidates();
+        }
         c2.LoadChainTip();
+        for (const auto& cs : manager.m_chainstates) {
+            cs->PopulateBlockIndexCandidates();
+        }
     }
     BlockValidationState _;
     BOOST_CHECK(c2.ActivateBestChain(_, nullptr));
@@ -127,7 +134,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_rebalance_caches, TestChain100Setup)
     chainstates.push_back(&c1);
     {
         LOCK(::cs_main);
-        c1.InitCoinsCache(1 << 23);
+        c1.InitCoinsCache(8_MiB);
         manager.MaybeRebalanceCaches();
     }
 
@@ -140,7 +147,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_rebalance_caches, TestChain100Setup)
     Chainstate& c2{WITH_LOCK(::cs_main, return manager.AddChainstate(std::make_unique<Chainstate>(nullptr, manager.m_blockman, manager, *snapshot_base->phashBlock)))};
     chainstates.push_back(&c2);
     c2.InitCoinsDB(
-        /*cache_size_bytes=*/1 << 23, /*in_memory=*/true, /*should_wipe=*/false);
+        /*cache_size_bytes=*/8_MiB, /*in_memory=*/true, /*should_wipe=*/false);
 
     // Reset IBD state so IsInitialBlockDownload() returns true and causes
     // MaybeRebalanceCaches() to prioritize the snapshot chainstate, giving it
@@ -153,7 +160,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_rebalance_caches, TestChain100Setup)
 
     {
         LOCK(::cs_main);
-        c2.InitCoinsCache(1 << 23);
+        c2.InitCoinsCache(8_MiB);
         manager.MaybeRebalanceCaches();
     }
 
@@ -492,6 +499,9 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
             BOOST_CHECK(cs->setBlockIndexCandidates.empty());
         }
         chainman.LoadBlockIndex();
+        for (const auto& cs : chainman.m_chainstates) {
+            cs->PopulateBlockIndexCandidates();
+        }
     };
 
     // Ensure that without any assumed-valid BlockIndex entries, only the current tip is
@@ -542,8 +552,8 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
     // check contents below.
     reload_all_block_indexes();
 
-    // The fully validated chain should only have the current validated tip and
-    // the assumed valid base as candidates, blocks 90 and 110. Specifically:
+    // The fully validated chain should only have the current validated tip
+    // as a candidate (block 90). Specifically:
     //
     // - It does not have blocks 0-89 because they contain less work than the
     //   chain tip.
@@ -551,20 +561,13 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
     // - It has block 90 because it has data and equal work to the chain tip,
     //   (since it is the chain tip).
     //
-    // - It does not have blocks 91-109 because they do not contain data.
-    //
-    // - It has block 110 even though it does not have data, because
-    //   LoadBlockIndex has a special case to always add the snapshot block as a
-    //   candidate. The special case is only actually intended to apply to the
-    //   snapshot chainstate cs2, not the background chainstate cs1, but it is
-    //   written broadly and applies to both.
+    // - It does not have blocks 91-110 because they do not contain data.
     //
     // - It does not have any blocks after height 110 because cs1 is a background
-    //   chainstate, and only blocks where are ancestors of the snapshot block
+    //   chainstate, and only blocks that are ancestors of the snapshot block
     //   are added as candidates for the background chainstate.
-    BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.size(), 2);
+    BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.size(), 1);
     BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.count(validated_tip), 1);
-    BOOST_CHECK_EQUAL(cs1.setBlockIndexCandidates.count(assumed_base), 1);
 
     // The assumed-valid tolerant chain has the assumed valid base as a
     // candidate, but otherwise has none of the assumed-valid (which do not
@@ -614,6 +617,94 @@ BOOST_FIXTURE_TEST_CASE(loadblockindex_invalid_descendants, TestChain100Setup)
     BOOST_CHECK(grand_parent->nStatus & BLOCK_FAILED_VALID);
     BOOST_CHECK(parent->nStatus & BLOCK_FAILED_VALID);
     BOOST_CHECK(child->nStatus & BLOCK_FAILED_VALID);
+}
+
+//! Verify that ReconsiderBlock clears failure flags for the target block, its ancestors, and descendants,
+//! but not for sibling forks that diverge from a shared ancestor.
+BOOST_FIXTURE_TEST_CASE(invalidate_block_and_reconsider_fork, TestChain100Setup)
+{
+    ChainstateManager& chainman = *Assert(m_node.chainman);
+    Chainstate& chainstate = chainman.ActiveChainstate();
+
+    // we have a chain of 100 blocks: genesis(0) <- ... <- block98 <- block99 <- block100
+    CBlockIndex* block98;
+    CBlockIndex* block99;
+    CBlockIndex* block100;
+    {
+        LOCK(chainman.GetMutex());
+        block98 = chainman.ActiveChain()[98];
+        block99 = chainman.ActiveChain()[99];
+        block100 = chainman.ActiveChain()[100];
+    }
+
+    // create the following block constellation:
+    // genesis(0) <- ... <- block98 <- block99  <- block100
+    //                              <- block99' <- block100'
+    // by temporarily invalidating block99. the chain tip now falls to block98,
+    // mine 2 new blocks on top of block 98 (block99' and block100') and then restore block99 and block 100.
+    BlockValidationState state;
+    BOOST_REQUIRE(chainstate.InvalidateBlock(state, block99));
+    BOOST_REQUIRE(WITH_LOCK(cs_main, return chainman.ActiveChain().Tip()) == block98);
+    CScript coinbase_script = CScript() << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
+    for (int i = 0; i < 2; ++i) {
+        CreateAndProcessBlock({}, coinbase_script);
+    }
+    const CBlockIndex* fork_block99;
+    const CBlockIndex* fork_block100;
+    {
+        LOCK(chainman.GetMutex());
+        fork_block99 = chainman.ActiveChain()[99];
+        BOOST_REQUIRE(fork_block99->pprev == block98);
+        fork_block100 = chainman.ActiveChain()[100];
+        BOOST_REQUIRE(fork_block100->pprev == fork_block99);
+    }
+    // Restore original block99 and block100
+    {
+        LOCK(chainman.GetMutex());
+        chainstate.ResetBlockFailureFlags(block99);
+        chainman.RecalculateBestHeader();
+    }
+    chainstate.ActivateBestChain(state);
+    BOOST_REQUIRE(WITH_LOCK(cs_main, return chainman.ActiveChain().Tip()) == block100);
+
+    {
+        LOCK(chainman.GetMutex());
+        BOOST_CHECK(!(block100->nStatus & BLOCK_FAILED_VALID));
+        BOOST_CHECK(!(block99->nStatus & BLOCK_FAILED_VALID));
+        BOOST_CHECK(!(fork_block100->nStatus & BLOCK_FAILED_VALID));
+        BOOST_CHECK(!(fork_block99->nStatus & BLOCK_FAILED_VALID));
+    }
+
+    // Invalidate block98
+    BOOST_REQUIRE(chainstate.InvalidateBlock(state, block98));
+
+    {
+        LOCK(chainman.GetMutex());
+        // block98 and all descendants of block98 are marked BLOCK_FAILED_VALID
+        BOOST_CHECK(block98->nStatus & BLOCK_FAILED_VALID);
+        BOOST_CHECK(block99->nStatus & BLOCK_FAILED_VALID);
+        BOOST_CHECK(block100->nStatus & BLOCK_FAILED_VALID);
+        BOOST_CHECK(fork_block99->nStatus & BLOCK_FAILED_VALID);
+        BOOST_CHECK(fork_block100->nStatus & BLOCK_FAILED_VALID);
+    }
+
+    // Reconsider block99. ResetBlockFailureFlags clears BLOCK_FAILED_VALID from
+    // block99 and its ancestors (block98) and descendants (block100)
+    // but NOT from block99' and block100' (not a direct ancestor/descendant)
+    {
+        LOCK(chainman.GetMutex());
+        chainstate.ResetBlockFailureFlags(block99);
+        chainman.RecalculateBestHeader();
+    }
+    chainstate.ActivateBestChain(state);
+    {
+        LOCK(chainman.GetMutex());
+        BOOST_CHECK(!(block98->nStatus & BLOCK_FAILED_VALID));
+        BOOST_CHECK(!(block99->nStatus & BLOCK_FAILED_VALID));
+        BOOST_CHECK(!(block100->nStatus & BLOCK_FAILED_VALID));
+        BOOST_CHECK(fork_block99->nStatus & BLOCK_FAILED_VALID);
+        BOOST_CHECK(fork_block100->nStatus & BLOCK_FAILED_VALID);
+    }
 }
 
 //! Ensure that snapshot chainstate can be loaded when found on disk after a

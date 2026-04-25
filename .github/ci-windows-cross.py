@@ -10,6 +10,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parent.parent / "test"))
+from download_utils import download_script_assets
+
 
 def run(cmd, **kwargs):
     print("+ " + shlex.join(cmd), flush=True)
@@ -41,7 +44,6 @@ def check_manifests():
     skipped = {  # Skip as they currently do not have manifests
         "fuzz.exe",
         "bench_bitcoin.exe",
-        "test_kernel.exe",
     }
     for entry in release_dir.iterdir():
         if entry.suffix.lower() != ".exe":
@@ -81,6 +83,9 @@ def prepare_tests():
     run(cmd_download_prev_rel)
     run([sys.executable, "-m", "pip", "install", "pyzmq"])
 
+    dest = workspace / "unit_test_data"
+    download_script_assets(dest)
+
 
 def run_functional_tests():
     workspace = Path.cwd()
@@ -97,9 +102,6 @@ def run_functional_tests():
         # feature_unsupported_utxo_db.py fails on Windows because of emojis in the test data directory.
         "--exclude",
         "feature_unsupported_utxo_db.py",
-        # See https://github.com/bitcoin/bitcoin/issues/31409.
-        "--exclude",
-        "wallet_multiwallet.py",
     ]
     run(test_runner_cmd)
 
@@ -117,6 +119,8 @@ def run_functional_tests():
 
 
 def run_unit_tests():
+    workspace = Path.cwd()
+    os.environ["DIR_UNIT_TEST_DATA"] = str(workspace / "unit_test_data")
     # Can't use ctest here like other jobs as we don't have a CMake build tree.
     commands = [
         ["./bin/test_bitcoin-qt.exe"],
@@ -134,13 +138,13 @@ def run_unit_tests():
 
 def main():
     parser = argparse.ArgumentParser(description="Utility to run Windows CI steps.")
-    steps = [
-        "print_version",
-        "check_manifests",
-        "prepare_tests",
-        "run_unit_tests",
-        "run_functional_tests",
-    ]
+    steps = list(map(lambda f: f.__name__, [
+        print_version,
+        check_manifests,
+        prepare_tests,
+        run_unit_tests,
+        run_functional_tests,
+    ]))
     parser.add_argument("step", choices=steps, help="CI step to perform.")
     args = parser.parse_args()
 
@@ -149,16 +153,7 @@ def main():
         str(Path.cwd() / "previous_releases"),
     )
 
-    if args.step == "print_version":
-        print_version()
-    elif args.step == "check_manifests":
-        check_manifests()
-    elif args.step == "prepare_tests":
-        prepare_tests()
-    elif args.step == "run_unit_tests":
-        run_unit_tests()
-    elif args.step == "run_functional_tests":
-        run_functional_tests()
+    exec(f'{args.step}()')
 
 
 if __name__ == "__main__":

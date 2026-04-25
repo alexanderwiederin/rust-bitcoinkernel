@@ -21,6 +21,7 @@
 #include <test/fuzz/util.h>
 #include <test/util/mining.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
 #include <uint256.h>
 #include <util/check.h>
 #include <util/fs.h>
@@ -103,7 +104,7 @@ void utxo_snapshot_fuzz(FuzzBufferType buffer)
 {
     SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
-    SetMockTime(ConsumeTime(fuzzed_data_provider, /*min=*/1296688602)); // regtest genesis block timestamp
+    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider, /*min=*/1296688602)}; // regtest genesis block timestamp
     auto& setup{*g_setup};
     bool dirty_chainman{false}; // Reuse the global chainman, but reset it when it is dirty
     auto& chainman{*setup.m_node.chainman};
@@ -137,7 +138,7 @@ void utxo_snapshot_fuzz(FuzzBufferType buffer)
                 outfile << coinbase->GetHash();
                 WriteCompactSize(outfile, 1); // number of coins for the hash
                 WriteCompactSize(outfile, 0); // index of coin
-                outfile << Coin(coinbase->vout[0], height, /*fCoinBaseIn=*/1);
+                outfile << Coin(coinbase->vout[0], height, /*fCoinBaseIn=*/true);
                 height++;
             }
         }
@@ -149,7 +150,7 @@ void utxo_snapshot_fuzz(FuzzBufferType buffer)
             outfile << coinbase->GetHash();
             WriteCompactSize(outfile, 1);   // number of coins for the hash
             WriteCompactSize(outfile, 999); // index of coin
-            outfile << Coin{coinbase->vout[0], /*nHeightIn=*/999, /*fCoinBaseIn=*/0};
+            outfile << Coin{coinbase->vout[0], /*nHeightIn=*/999, /*fCoinBaseIn=*/false};
         }
         assert(outfile.fclose() == 0);
     }
