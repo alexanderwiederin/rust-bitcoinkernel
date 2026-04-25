@@ -12,6 +12,7 @@
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
 #include <test/util/validation.h>
 #include <validation.h>
 
@@ -41,7 +42,7 @@ void initialize_block_index_tree()
 FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
 {
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
-    SetMockTime(ConsumeTime(fuzzed_data_provider));
+    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider)};
     auto& chainman = static_cast<TestChainstateManager&>(*g_setup->m_node.chainman);
     auto& blockman = static_cast<TestBlockManager&>(chainman.m_blockman);
     CBlockIndex* genesis = chainman.ActiveChainstate().m_chain[0];
@@ -101,7 +102,7 @@ FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
                     assert(best_tip);                   // Should at least return current tip
                     if (best_tip == chain.Tip()) break; // Nothing to do
                     // Rewind chain to forking point
-                    const CBlockIndex* fork = chain.FindFork(best_tip);
+                    const CBlockIndex* fork = chain.FindFork(*best_tip);
                     // If we can't go back to the fork point due to pruned data, abort this run. In reality, a pruned node would also currently just crash in this scenario.
                     // This is very unlikely to happen due to the minimum pruning threshold of 550MiB.
                     CBlockIndex* it = chain.Tip();

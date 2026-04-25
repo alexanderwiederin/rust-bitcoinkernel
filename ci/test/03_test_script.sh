@@ -6,7 +6,12 @@
 
 export LC_ALL=C.UTF-8
 
-set -ex
+set -o errexit -o xtrace
+
+if [ "${DANGER_RUN_CI_ON_HOST}" != "1" ]; then
+  echo "This script will make unsafe local and global modifications, so it can only be run inside a container and requires DANGER_RUN_CI_ON_HOST=1"
+  exit 1
+fi
 
 cd "${BASE_ROOT_DIR}"
 
@@ -43,6 +48,19 @@ export HOST=${HOST:-$("$BASE_ROOT_DIR/depends/config.guess")}
 echo "=== BEGIN env ==="
 env
 echo "=== END env ==="
+
+# The CI framework should be flexible where it is run from. For example, from
+# a git-archive, a git-worktree, or a normal git repo.
+# The iwyu task requires a working git repo, which may not always be
+# available, so initialize one with force.
+if [[ "${RUN_IWYU}" == true ]]; then
+  mv .git .git_ci_backup || true
+  git init
+  git add ./src  # the git diff command used later for iwyu only cares about ./src
+  git config user.email "ci@ci"
+  git config user.name "CI"
+  git commit -m "dummy CI ./src init for IWYU"
+fi
 
 if [ "$RUN_FUZZ_TESTS" = "true" ]; then
   export DIR_FUZZ_IN=${DIR_QA_ASSETS}/fuzz_corpora/
@@ -137,6 +155,14 @@ if [ "$RUN_CHECK_DEPS" = "true" ]; then
   "${BASE_ROOT_DIR}/contrib/devtools/check-deps.sh" "${BASE_BUILD_DIR}"
 fi
 
+if [[ "$CI_OS_NAME" == "macos" && "${GOAL}" = "install deploy" ]]; then
+  unzip "${BASE_BUILD_DIR}/bitcoin-macos-app.zip" -d "${BASE_BUILD_DIR}/deploy"
+  if ! ( codesign --verify "${BASE_BUILD_DIR}/deploy/Bitcoin-Qt.app" ); then
+    echo "Codesigning failed."
+    false
+  fi
+fi
+
 if [ "$RUN_UNIT_TESTS" = "true" ]; then
   DIR_UNIT_TEST_DATA="${DIR_UNIT_TEST_DATA}" \
   LD_LIBRARY_PATH="${DEPENDS_DIR}/${HOST}/lib" \
@@ -174,7 +200,7 @@ if [ "${RUN_TIDY}" = "true" ]; then
   mv tmp.json "${BASE_BUILD_DIR}/compile_commands.json"
 
   cd "${BASE_BUILD_DIR}/src/"
-  if ! ( run-clang-tidy-"${TIDY_LLVM_V}" -quiet -load="/tidy-build/libbitcoin-tidy.so" "${MAKEJOBS}" | tee tmp.tidy-out.txt ); then
+  if ! ( run-clang-tidy-"${TIDY_LLVM_V}" -config-file="${BASE_ROOT_DIR}/src/.clang-tidy" -quiet -load="/tidy-build/libbitcoin-tidy.so" "${MAKEJOBS}" | tee tmp.tidy-out.txt ); then
     grep -C5 "error: " tmp.tidy-out.txt
     echo "^^^ ⚠️ Failure generated from clang-tidy"
     false
@@ -183,7 +209,7 @@ fi
 
 if [[ "${RUN_IWYU}" == true ]]; then
   # TODO: Consider enforcing IWYU across the entire codebase.
-  FILES_WITH_ENFORCED_IWYU="/src/((crypto|index|kernel|primitives|univalue/(lib|test)|zmq)/.*\\.cpp|node/blockstorage\\.cpp|node/utxo_snapshot\\.cpp|core_io\\.cpp|signet\\.cpp)"
+  FILES_WITH_ENFORCED_IWYU="/src/(((crypto|index|kernel|primitives|univalue/(lib|test)|util|zmq)/.*|common/license_info|node/blockstorage|node/utxo_snapshot|clientversion|core_io|signet)\\.cpp)"
   jq --arg patterns "$FILES_WITH_ENFORCED_IWYU" 'map(select(.file | test($patterns)))' "${BASE_BUILD_DIR}/compile_commands.json" > "${BASE_BUILD_DIR}/compile_commands_iwyu_errors.json"
   jq --arg patterns "$FILES_WITH_ENFORCED_IWYU" 'map(select(.file | test($patterns) | not))' "${BASE_BUILD_DIR}/compile_commands.json" > "${BASE_BUILD_DIR}/compile_commands_iwyu_warnings.json"
 
@@ -198,7 +224,7 @@ if [[ "${RUN_IWYU}" == true ]]; then
              -Xiwyu --check_also="*/primitives/*.h" \
              2>&1 | tee /tmp/iwyu_ci.out
     python3 "/include-what-you-use/fix_includes.py" --nosafe_headers < /tmp/iwyu_ci.out
-    git diff -U1 | ./contrib/devtools/clang-format-diff.py -binary="clang-format-${TIDY_LLVM_V}" -p1 -i -v
+    git diff -U1 | ./contrib/devtools/clang-format-diff.py -binary="clang-format-${IWYU_LLVM_V}" -p1 -i -v
   }
 
   run_iwyu "compile_commands_iwyu_errors.json"

@@ -9,7 +9,6 @@
 #include <core_io.h>
 #include <streams.h>
 #include <sync.h>
-#include <threadsafety.h>
 #include <util/fs.h>
 #include <validation.h>
 
@@ -48,7 +47,7 @@ UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex
 void CalculatePercentilesByWeight(CAmount result[NUM_GETBLOCKSTATS_PERCENTILES], std::vector<std::pair<CAmount, int64_t>>& scores, int64_t total_weight);
 
 /**
- * Test-only helper to create UTXO snapshots given a chainstate and a file handle.
+ * Helper to create UTXO snapshots given a chainstate and a file handle.
  * @return a UniValue map containing metadata about the snapshot.
  */
 UniValue CreateUTXOSnapshot(

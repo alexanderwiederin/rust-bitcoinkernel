@@ -11,10 +11,7 @@
 #include <consensus/validation.h>
 #include <crypto/hex_base.h>
 #include <key_io.h>
-// IWYU incorrectly suggests replacing this header
-// with forward declarations.
-// See https://github.com/include-what-you-use/include-what-you-use/issues/1886.
-#include <primitives/block.h> // IWYU pragma: keep
+#include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <script/descriptor.h>
 #include <script/interpreter.h>
@@ -480,7 +477,7 @@ void TxToUniv(const CTransaction& tx, const uint256& block_hash, UniValue& entry
                 ScriptToUniv(prev_txout.scriptPubKey, /*out=*/o_script_pub_key, /*include_hex=*/true, /*include_address=*/true);
 
                 UniValue p(UniValue::VOBJ);
-                p.pushKV("generated", static_cast<bool>(prev_coin.fCoinBase));
+                p.pushKV("generated", prev_coin.IsCoinBase());
                 p.pushKV("height", prev_coin.nHeight);
                 p.pushKV("value", ValueFromAmount(prev_txout.nValue));
                 p.pushKV("scriptPubKey", std::move(o_script_pub_key));

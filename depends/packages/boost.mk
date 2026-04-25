@@ -6,7 +6,7 @@ $(package)_sha256_hash = 913ca43d49e93d1b158c9862009add1518a4c665e7853b349a6492d
 $(package)_build_subdir = build
 
 define $(package)_set_vars
-  $(package)_config_opts = -DBOOST_INCLUDE_LIBRARIES="multi_index;signals2;test"
+  $(package)_config_opts = -DBOOST_INCLUDE_LIBRARIES="multi_index;test"
   $(package)_config_opts += -DBOOST_TEST_HEADERS_ONLY=ON
   $(package)_config_opts += -DBOOST_ENABLE_MPI=OFF
   $(package)_config_opts += -DBOOST_ENABLE_PYTHON=OFF
@@ -23,4 +23,8 @@ endef
 
 define $(package)_stage_cmds
   $(MAKE) DESTDIR=$($(package)_staging_dir) install
+endef
+
+define $(package)_postprocess_cmds
+  rm -rf share
 endef

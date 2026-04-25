@@ -7,8 +7,8 @@
 
 #include <sync.h>
 #include <tinyformat.h>
-#include <util/expected.h>
 #include <util/check.h>
+#include <util/expected.h>
 #include <util/thread.h>
 
 #include <algorithm>
@@ -16,6 +16,7 @@
 #include <functional>
 #include <future>
 #include <queue>
+#include <ranges>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -105,8 +106,8 @@ public:
     {
         assert(num_workers > 0);
         LOCK(m_mutex);
+        if (m_interrupt) throw std::runtime_error("Thread pool has been interrupted or is stopping");
         if (!m_workers.empty()) throw std::runtime_error("Thread pool already started");
-        m_interrupt = false; // Reset
 
         // Create workers
         m_workers.reserve(num_workers);
@@ -122,6 +123,7 @@ public:
      * Any remaining tasks in the queue will be processed before returning.
      *
      * Must be called from a controller (non-worker) thread.
+     * Concurrent calls to Start() will be rejected while Stop() is in progress.
      */
     void Stop() EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
     {
@@ -138,16 +140,31 @@ public:
             threads_to_join.swap(m_workers);
         }
         m_cv.notify_all();
+        // Help draining queue
+        while (ProcessTask()) {}
+        // Free resources
         for (auto& worker : threads_to_join) worker.join();
+
         // Since we currently wait for tasks completion, sanity-check empty queue
-        WITH_LOCK(m_mutex, Assume(m_work_queue.empty()));
-        // Note: m_interrupt is left true until next Start()
+        LOCK(m_mutex);
+        Assume(m_work_queue.empty());
+        // Re-allow Start() now that all workers have exited
+        m_interrupt = false;
     }
 
     enum class SubmitError {
         Inactive,
         Interrupted,
     };
+
+    template <class F>
+    using Future = std::future<std::invoke_result_t<F>>;
+
+    template <class R>
+    using RangeFuture = Future<std::ranges::range_reference_t<R>>;
+
+    template <class F>
+    using PackagedTask = std::packaged_task<std::invoke_result_t<F>()>;
 
     /**
      * @brief Enqueues a new task for asynchronous execution.
@@ -164,9 +181,9 @@ public:
      *          uncaught exceptions, as they would otherwise be silently discarded.
      */
     template <class F>
-    [[nodiscard]] util::Expected<std::future<std::invoke_result_t<F>>, SubmitError> Submit(F&& fn) noexcept EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    [[nodiscard]] util::Expected<Future<F>, SubmitError> Submit(F&& fn) noexcept EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
     {
-        std::packaged_task<std::invoke_result_t<F>()> task{std::forward<F>(fn)};
+        PackagedTask<F> task{std::forward<F>(fn)};
         auto future{task.get_future()};
         {
             LOCK(m_mutex);
@@ -180,21 +197,62 @@ public:
     }
 
     /**
+     * @brief Enqueues a range of tasks for asynchronous execution.
+     *
+     * @param  fns Callables to execute asynchronously.
+     * @return On success, a vector of futures containing each element of fns's result in order.
+     *         On failure, an error indicating why the range was rejected:
+     *         - SubmitError::Inactive: Pool has no workers (never started or already stopped).
+     *         - SubmitError::Interrupted: Pool task acceptance has been interrupted.
+     *
+     * This is more efficient when submitting many tasks at once, since
+     * the queue lock is only taken once internally and all worker threads are
+     * notified. For single tasks, Submit() is preferred since only one worker
+     * thread is notified.
+     *
+     * Thread-safe: Can be called from any thread, including within submitted callables.
+     *
+     * @warning Ignoring the returned futures requires guarding tasks against
+     *          uncaught exceptions, as they would otherwise be silently discarded.
+     */
+    template <std::ranges::sized_range R>
+        requires(!std::is_lvalue_reference_v<R>)
+    [[nodiscard]] util::Expected<std::vector<RangeFuture<R>>, SubmitError> Submit(R&& fns) noexcept EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    {
+        std::vector<RangeFuture<R>> futures;
+        futures.reserve(std::ranges::size(fns));
+
+        {
+            LOCK(m_mutex);
+            if (m_workers.empty()) return util::Unexpected{SubmitError::Inactive};
+            if (m_interrupt) return util::Unexpected{SubmitError::Interrupted};
+            for (auto&& fn : fns) {
+                PackagedTask<std::ranges::range_reference_t<R>> task{std::move(fn)};
+                futures.emplace_back(task.get_future());
+                m_work_queue.emplace(std::move(task));
+            }
+        }
+        m_cv.notify_all();
+        return {std::move(futures)};
+    }
+
+    /**
      * @brief Execute a single queued task synchronously.
      * Removes one task from the queue and executes it on the calling thread.
      */
-    void ProcessTask() EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    bool ProcessTask() EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
     {
         std::packaged_task<void()> task;
         {
             LOCK(m_mutex);
-            if (m_work_queue.empty()) return;
+            if (m_work_queue.empty()) return false;
 
             // Pop the task
             task = std::move(m_work_queue.front());
             m_work_queue.pop();
         }
         task();
+        return true;
     }
 
     /**
@@ -202,6 +260,10 @@ public:
      *
      * Wakes all worker threads so they can drain the queue and exit.
      * Unlike Stop(), this function does not wait for threads to finish.
+     *
+     * Note: The next step in the pool lifecycle is calling Stop(), which
+     *       releases any dangling resources and resets the pool state
+     *       for shutdown or restart.
      */
     void Interrupt() EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
     {
