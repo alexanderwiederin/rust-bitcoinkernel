@@ -7,6 +7,7 @@
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <random.h>
+#include <test/util/common.h>
 #include <test/util/setup_common.h>
 #include <util/translation.h>
 #include <wallet/coincontrol.h>
@@ -43,7 +44,7 @@ static void add_coin(const CAmount& nValue, int nInput, SelectionResult& result)
     tx.nLockTime = nextLockTime++;        // so all transactions get different hashes
     COutput output(COutPoint(tx.GetHash(), nInput), tx.vout.at(nInput), /*depth=*/1, /*input_bytes=*/-1, /*solvable=*/true, /*safe=*/true, /*time=*/0, /*from_me=*/false, /*fees=*/ 0);
     OutputGroup group;
-    group.Insert(std::make_shared<COutput>(output), /*ancestors=*/ 0, /*descendants=*/ 0);
+    group.Insert(std::make_shared<COutput>(output), /*ancestors=*/ 0, /*cluster_count=*/ 0);
     result.AddInput(group);
 }
 
@@ -55,7 +56,7 @@ static void add_coin(const CAmount& nValue, int nInput, SelectionResult& result,
     tx.nLockTime = nextLockTime++;        // so all transactions get different hashes
     std::shared_ptr<COutput> coin = std::make_shared<COutput>(COutPoint(tx.GetHash(), nInput), tx.vout.at(nInput), /*depth=*/1, /*input_bytes=*/148, /*solvable=*/true, /*safe=*/true, /*time=*/0, /*from_me=*/false, fee);
     OutputGroup group;
-    group.Insert(coin, /*ancestors=*/ 0, /*descendants=*/ 0);
+    group.Insert(coin, /*ancestors=*/ 0, /*cluster_count=*/ 0);
     coin->long_term_fee = long_term_fee; // group.Insert() will modify long_term_fee, so we need to set it afterwards
     result.AddInput(group);
 }
@@ -129,7 +130,7 @@ inline std::vector<OutputGroup>& GroupCoins(const std::vector<COutput>& availabl
     for (auto& coin : available_coins) {
         static_groups.emplace_back();
         OutputGroup& group = static_groups.back();
-        group.Insert(std::make_shared<COutput>(coin), /*ancestors=*/ 0, /*descendants=*/ 0);
+        group.Insert(std::make_shared<COutput>(coin), /*ancestors=*/ 0, /*cluster_count=*/ 0);
         group.m_subtract_fee_outputs = subtract_fee_outputs;
     }
     return static_groups;
@@ -1181,96 +1182,6 @@ BOOST_AUTO_TEST_CASE(coin_grinder_tests)
             return doppelgangers;
         });
         BOOST_CHECK(!result_b);
-    }
-}
-
-static util::Result<SelectionResult> SelectCoinsSRD(const CAmount& target,
-                                                    const CoinSelectionParams& cs_params,
-                                                    const node::NodeContext& m_node,
-                                                    int max_selection_weight,
-                                                    std::function<CoinsResult(CWallet&)> coin_setup)
-{
-    std::unique_ptr<CWallet> wallet = NewWallet(m_node);
-    CoinEligibilityFilter filter(0, 0, 0); // accept all coins without ancestors
-    Groups group = GroupOutputs(*wallet, coin_setup(*wallet), cs_params, {{filter}})[filter].all_groups;
-    return SelectCoinsSRD(group.positive_group, target, cs_params.m_change_fee, cs_params.rng_fast, max_selection_weight);
-}
-
-BOOST_AUTO_TEST_CASE(srd_tests)
-{
-    // Test SRD:
-    // 1) Insufficient funds, select all provided coins and fail.
-    // 2) Exceeded max weight, coin selection always surpasses the max allowed weight.
-    // 3) Select coins without surpassing the max weight (some coins surpasses the max allowed weight, some others not)
-
-    FastRandomContext rand;
-    CoinSelectionParams dummy_params{ // Only used to provide the 'avoid_partial' flag.
-            rand,
-            /*change_output_size=*/34,
-            /*change_spend_size=*/68,
-            /*min_change_target=*/CENT,
-            /*effective_feerate=*/CFeeRate(0),
-            /*long_term_feerate=*/CFeeRate(0),
-            /*discard_feerate=*/CFeeRate(0),
-            /*tx_noinputs_size=*/10 + 34, // static header size + output size
-            /*avoid_partial=*/false,
-    };
-
-    {
-        // #########################################################
-        // 1) Insufficient funds, select all provided coins and fail
-        // #########################################################
-        CAmount target = 49.5L * COIN;
-        int max_selection_weight = 10000; // high enough to not fail for this reason.
-        const auto& res = SelectCoinsSRD(target, dummy_params, m_node, max_selection_weight, [&](CWallet& wallet) {
-            CoinsResult available_coins;
-            for (int j = 0; j < 10; ++j) {
-                add_coin(available_coins, wallet, CAmount(1 * COIN));
-                add_coin(available_coins, wallet, CAmount(2 * COIN));
-            }
-            return available_coins;
-        });
-        BOOST_CHECK(!res);
-        BOOST_CHECK(util::ErrorString(res).empty()); // empty means "insufficient funds"
-    }
-
-    {
-        // ###########################
-        // 2) Test max weight exceeded
-        // ###########################
-        CAmount target = 49.5L * COIN;
-        int max_selection_weight = 3000;
-        const auto& res = SelectCoinsSRD(target, dummy_params, m_node, max_selection_weight, [&](CWallet& wallet) {
-            CoinsResult available_coins;
-            for (int j = 0; j < 10; ++j) {
-                /* 10 × 1 BTC + 10 × 2 BTC = 30 BTC. 20 × 272 WU = 5440 WU */
-                add_coin(available_coins, wallet, CAmount(1 * COIN), CFeeRate(0), 144, false, 0, true);
-                add_coin(available_coins, wallet, CAmount(2 * COIN), CFeeRate(0), 144, false, 0, true);
-            }
-            return available_coins;
-        });
-        BOOST_CHECK(!res);
-        BOOST_CHECK(util::ErrorString(res).original.find("The inputs size exceeds the maximum weight") != std::string::npos);
-    }
-
-    {
-        // ################################################################################################################
-        // 3) Test that SRD result does not exceed the max weight
-        // ################################################################################################################
-        CAmount target = 25.33L * COIN;
-        int max_selection_weight = 10000; // WU
-        const auto& res = SelectCoinsSRD(target, dummy_params, m_node, max_selection_weight, [&](CWallet& wallet) {
-            CoinsResult available_coins;
-            for (int j = 0; j < 60; ++j) { // 60 UTXO --> 19,8 BTC total --> 60 × 272 WU = 16320 WU
-                add_coin(available_coins, wallet, CAmount(0.33 * COIN), CFeeRate(0), 144, false, 0, true);
-            }
-            for (int i = 0; i < 10; i++) { // 10 UTXO --> 20 BTC total --> 10 × 272 WU = 2720 WU
-                add_coin(available_coins, wallet, CAmount(2 * COIN), CFeeRate(0), 144, false, 0, true);
-            }
-            return available_coins;
-        });
-        BOOST_CHECK(res);
-        BOOST_CHECK(res->GetWeight() <= max_selection_weight);
     }
 }
 

@@ -4,7 +4,8 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test utxo-to-sqlite conversion tool"""
 from itertools import product
-import os.path
+import os
+import platform
 try:
     import sqlite3
 except ImportError:
@@ -76,7 +77,7 @@ class UtxoToSqliteTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         # we want to create some UTXOs with non-standard output scripts
-        self.extra_args = [['-acceptnonstdtxn=1']]
+        self.extra_args = [['-acceptnonstdtxn=1', '-coinstatsindex=1']]
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_py_sqlite3()
@@ -134,6 +135,21 @@ class UtxoToSqliteTest(BitcoinTestFramework):
             muhash_compact_serialized = node.gettxoutsetinfo('muhash')['muhash']
             assert_equal(muhash_sqlite, muhash_compact_serialized)
             self.log.info('')
+
+        if platform.system() != "Windows":  # FIFOs are not available on Windows
+            self.log.info('Convert UTXO set directly (without intermediate dump) via named pipe')
+            fifo_filename = os.path.join(self.options.tmpdir, "utxos.fifo")
+            os.mkfifo(fifo_filename)
+            output_direct_filename = os.path.join(self.options.tmpdir, "utxos_direct.sqlite")
+            p = subprocess.Popen([sys.executable, utxo_to_sqlite_path, fifo_filename, output_direct_filename],
+                                 stderr=subprocess.STDOUT)
+            target_height = node.getblockcount() - 10
+            node.dumptxoutset(fifo_filename, "rollback", {"rollback": target_height})
+            p.wait(timeout=10)
+            muhash_direct_sqlite = calculate_muhash_from_sqlite_utxos(output_direct_filename, "hex", "hex")
+            muhash_index = node.gettxoutsetinfo('muhash', target_height)['muhash']
+            assert_equal(muhash_index, muhash_direct_sqlite)
+            os.remove(fifo_filename)
 
 
 if __name__ == "__main__":

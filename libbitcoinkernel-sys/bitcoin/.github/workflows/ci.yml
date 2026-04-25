@@ -59,6 +59,8 @@ jobs:
     name: 'test ancestor commits'
     needs: runners
     runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md' || 'ubuntu-24.04' }}
+    env:
+      TEST_RUNNER_PORT_MIN: "14000"  # Use a larger port, to avoid colliding with CIRRUS_CACHE_HOST port 12321.
     if: github.event_name == 'pull_request' && github.event.pull_request.commits != 1
     timeout-minutes: 360  # Use maximum time, see https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes.
     steps:
@@ -184,7 +186,7 @@ jobs:
 
       - name: Restore Ccache cache
         id: ccache-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.job }}-${{ matrix.job-type }}-ccache-${{ github.run_id }}
@@ -204,12 +206,12 @@ jobs:
           FILE_ENV: ${{ matrix.file-env }}
 
       - name: Save Ccache cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch && steps.ccache-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
           # https://github.com/actions/cache/blob/main/tips-and-workarounds.md#update-a-cache
-          key: ${{ github.job }}-${{ matrix.job-type }}-ccache-${{ github.run_id }}
+          key: ${{ steps.ccache-cache.outputs.cache-primary-key }}
 
   windows-native-dll:
     name: ${{ matrix.job-name }}
@@ -236,70 +238,57 @@ jobs:
 
       - *CHECKOUT
 
-      - &SET_UP_VS
-        name: Set up VS Developer Prompt
-        shell: pwsh -Command "$PSVersionTable; $PSNativeCommandUseErrorActionPreference = $true; $ErrorActionPreference = 'Stop'; & '{0}'"
-        run: |
-          $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $installationPath = & $vswherePath -latest -property installationPath
-          & "${env:COMSPEC}" /s /c "`"$installationPath\Common7\Tools\vsdevcmd.bat`" -arch=x64 -no_logo && set" | foreach-object {
-            $name, $value = $_ -split '=', 2
-            echo "$name=$value" >> $env:GITHUB_ENV
-          }
+      - &IMPORT_VS_ENV
+        name: Import Visual Studio env vars
+        run: py -3 .github/ci-windows.py "standard" github_import_vs_env
 
       - name: Get tool information
-        shell: pwsh
         run: |
-          cmake -version | Tee-Object -FilePath "cmake_version"
-          Write-Output "---"
-          msbuild -version | Tee-Object -FilePath "msbuild_version"
-          $env:VCToolsVersion | Tee-Object -FilePath "toolset_version"
+          set -o errexit -o pipefail -o xtrace -o nounset
+
+          cmake -version | tee cmake_version
+          echo '---'
+          msbuild.exe -version | tee msbuild_version
+          echo "${VCToolsVersion-}" | tee toolset_version
           py -3 --version
-          Write-Host "PowerShell version $($PSVersionTable.PSVersion.ToString())"
           bash --version
 
-      - name: Using vcpkg with MSBuild
-        run: |
-          echo "set(VCPKG_BUILD_TYPE release)" >> "${VCPKG_INSTALLATION_ROOT}/triplets/x64-windows.cmake"
-          # Workaround for libevent, which requires CMake 3.1 but is incompatible with CMake >= 4.0.
-          sed -i '1s/^/set(ENV{CMAKE_POLICY_VERSION_MINIMUM} 3.5)\n/' "${VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake"
-
-      - name: Set VCPKG_ROOT
-        run: |
-          echo "VCPKG_ROOT=${VCPKG_INSTALLATION_ROOT}" >> "$GITHUB_ENV"
-
-      - name: Restore vcpkg tools cache
-        id: vcpkg-tools-cache
+      - name: Restore vcpkg downloads cache
+        id: vcpkg-downloads-cache
         uses: actions/cache/restore@v5
         with:
-          path: C:/vcpkg/downloads/tools
-          key: ${{ github.job }}-vcpkg-tools-${{ github.run_id }}
-          restore-keys: ${{ github.job }}-vcpkg-tools-
+          path: |
+            ~/AppData/Local/vcpkg/downloads/*
+            !~/AppData/Local/vcpkg/downloads/tools
+          key: ${{ github.job }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: vcpkg-binary-cache
         with:
           path: ~/AppData/Local/vcpkg/archives
-          key: ${{ github.job }}-vcpkg-binary-${{ hashFiles('cmake_version', 'msbuild_version', 'toolset_version', 'vcpkg.json') }}
+          key: ${{ github.job }}-vcpkg-binary-release-${{ hashFiles('cmake_version', 'msbuild_version', 'toolset_version', 'vcpkg.json') }}
 
       - name: Generate build system
         run: |
           py -3 .github/ci-windows.py ${{ matrix.job-type }} generate
 
       - name: Save vcpkg binary cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch && steps.vcpkg-binary-cache.outputs.cache-hit != 'true' && matrix.job-type == 'standard'
         with:
           path: ~/AppData/Local/vcpkg/archives
-          key: ${{ github.job }}-vcpkg-binary-${{ hashFiles('cmake_version', 'msbuild_version', 'toolset_version', 'vcpkg.json') }}
+          key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
 
-      - name: Save vcpkg tools cache
+      - name: Save vcpkg downloads cache
         uses: actions/cache/save@v5
-        if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch && steps.vcpkg-tools-cache.outputs.cache-hit != 'true'
+        # Only save cache from the 'standard' job, as it includes the necessary downloads for other jobs in the matrix. If the matrix is modified, this may need amending.
+        if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch && steps.vcpkg-binary-cache.outputs.cache-hit != 'true' && steps.vcpkg-downloads-cache.outputs.cache-hit != 'true' && matrix.job-type == 'standard'
         with:
-          path: C:/vcpkg/downloads/tools
-          key: ${{ github.job }}-vcpkg-tools-${{ github.run_id }}
+          path: |
+            ~/AppData/Local/vcpkg/downloads/*
+            !~/AppData/Local/vcpkg/downloads/tools  # Cache the tools once as archives, but not redundantly in extracted form.
+          key: ${{ steps.vcpkg-downloads-cache.outputs.cache-primary-key }}
 
       - name: Build
         run: |
@@ -382,7 +371,7 @@ jobs:
         uses: ./.github/actions/save-caches
 
       - name: Upload built executables
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact-name }}-${{ github.run_id }}
           path: |
@@ -420,24 +409,23 @@ jobs:
           ref: ${{ needs.record-frozen-commit.outputs.commit }}
 
       - name: Download built executables
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact-name }}-${{ github.run_id }}
 
       - name: Run bitcoind.exe
         run: py -3 .github/ci-windows-cross.py print_version
 
-      - *SET_UP_VS
+      - *IMPORT_VS_ENV
 
       - name: Check executable manifests
         run: py -3 .github/ci-windows-cross.py check_manifests
 
+      - name: Prepare Windows test environment
+        run: py -3 .github/ci-windows-cross.py prepare_tests
+
       - name: Run unit tests
         run: py -3 .github/ci-windows-cross.py run_unit_tests
-
-      - name: Prepare Windows test environment
-        run: |
-          py -3 .github/ci-windows-cross.py prepare_tests
 
       - name: Run functional tests
         env:
@@ -490,6 +478,12 @@ jobs:
             fallback-runner: 'ubuntu-24.04'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_mac_cross_intel.sh'
+
+          - name: 'FreeBSD Cross'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_freebsd_cross.sh'
 
           - name: 'No wallet'
             cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm'

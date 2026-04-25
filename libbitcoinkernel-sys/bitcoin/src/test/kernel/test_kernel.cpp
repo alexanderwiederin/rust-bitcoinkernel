@@ -4,16 +4,17 @@
 
 #include <kernel/bitcoinkernel.h>
 #include <kernel/bitcoinkernel_wrapper.h>
+#include <util/fs.h>
 
 #define BOOST_TEST_MODULE Bitcoin Kernel Test Suite
 #include <boost/test/included/unit_test.hpp>
 
 #include <test/kernel/block_data.h>
+#include <test/util/common.h>
 
 #include <charconv>
 #include <cstdint>
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -98,16 +99,16 @@ public:
 };
 
 struct TestDirectory {
-    std::filesystem::path m_directory;
+    fs::path m_directory;
     TestDirectory(std::string directory_name)
-        : m_directory{std::filesystem::temp_directory_path() / (directory_name + random_string(16))}
+        : m_directory{fs::path{fs::temp_directory_path()} / fs::u8path(directory_name + "_🌽_" + random_string(16))}
     {
-        std::filesystem::create_directories(m_directory);
+        fs::create_directories(m_directory);
     }
 
     ~TestDirectory()
     {
-        std::filesystem::remove_all(m_directory);
+        fs::remove_all(m_directory);
     }
 };
 
@@ -265,7 +266,9 @@ void run_verify_test(
 }
 
 template <typename T>
-concept HasToBytes = requires(T t) { t.ToBytes(); };
+concept HasToBytes = requires(T t) {
+    { t.ToBytes() } -> std::convertible_to<std::span<const std::byte>>;
+};
 
 template <typename T>
 void CheckHandle(T object, T distinct_object)
@@ -401,8 +404,11 @@ BOOST_AUTO_TEST_CASE(btck_transaction_tests)
 
     BOOST_CHECK_EQUAL(tx.CountOutputs(), 2);
     BOOST_CHECK_EQUAL(tx.CountInputs(), 1);
+    BOOST_CHECK_EQUAL(tx.GetLocktime(), 510826);
     auto broken_tx_data{std::span<std::byte>{tx_data.begin(), tx_data.begin() + 10}};
     BOOST_CHECK_THROW(Transaction{broken_tx_data}, std::runtime_error);
+    auto input{tx.GetInput(0)};
+    BOOST_CHECK_EQUAL(input.GetSequence(), 0xfffffffe);
     auto output{tx.GetOutput(tx.CountOutputs() - 1)};
     BOOST_CHECK_EQUAL(output.Amount(), 42130042);
     auto script_pubkey{output.GetScriptPubkey()};
@@ -682,6 +688,10 @@ BOOST_AUTO_TEST_CASE(btck_block_header_tests)
     auto prev_hash = header.PrevHash();
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(prev_hash.ToBytes()), "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
 
+    // Test round-trip serialization of block header
+    auto header_roundtrip{BlockHeader{header.ToBytes()}};
+    check_equal(header_roundtrip.ToBytes(), mainnet_block_1_header);
+
     auto raw_block = hex_string_to_byte_vec("010000006fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000982051fd1e4ba744bbbe680e1fee14677ba1a3c3540bf7b1cdb606e857233e0e61bc6649ffff001d01e362990101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d0104ffffffff0100f2052a0100000043410496b538e853519c726a2c91e61ec11600ae1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c858eeac00000000");
     Block block{raw_block};
     BlockHeader block_header{block.GetHeader()};
@@ -690,6 +700,11 @@ BOOST_AUTO_TEST_CASE(btck_block_header_tests)
     BOOST_CHECK_EQUAL(block_header.Bits(), 0x1d00ffff);
     BOOST_CHECK_EQUAL(block_header.Nonce(), 2573394689);
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(block_header.Hash().ToBytes()), "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048");
+
+    // Verify header from block serializes to first 80 bytes of raw block
+    auto block_header_bytes = block_header.ToBytes();
+    BOOST_CHECK_EQUAL(block_header_bytes.size(), 80);
+    check_equal(block_header_bytes, std::span<const std::byte>(raw_block.data(), 80));
 }
 
 BOOST_AUTO_TEST_CASE(btck_block)
@@ -725,19 +740,19 @@ BOOST_AUTO_TEST_CASE(btck_chainman_tests)
 
     { // test with default context
         Context context{};
-        ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+        ChainstateManagerOptions chainman_opts{context, PathToString(test_directory.m_directory), PathToString(test_directory.m_directory / "blocks")};
         ChainMan chainman{context, chainman_opts};
     }
 
     { // test with default context options
         ContextOptions options{};
         Context context{options};
-        ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+        ChainstateManagerOptions chainman_opts{context, PathToString(test_directory.m_directory), PathToString(test_directory.m_directory / "blocks")};
         ChainMan chainman{context, chainman_opts};
     }
     { // null or empty data_directory or blocks_directory are not allowed
         Context context{};
-        auto valid_dir{test_directory.m_directory.string()};
+        auto valid_dir{PathToString(test_directory.m_directory)};
         std::vector<std::pair<std::string_view, std::string_view>> illegal_cases{
             {"", valid_dir},
             {valid_dir, {nullptr, 0}},
@@ -753,7 +768,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_tests)
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto context{create_context(notifications, ChainType::MAINNET)};
 
-    ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+    ChainstateManagerOptions chainman_opts{context, PathToString(test_directory.m_directory), PathToString(test_directory.m_directory / "blocks")};
     chainman_opts.SetWorkerThreads(4);
     BOOST_CHECK(!chainman_opts.SetWipeDbs(/*wipe_block_tree=*/true, /*wipe_chainstate=*/false));
     BOOST_CHECK(chainman_opts.SetWipeDbs(/*wipe_block_tree=*/true, /*wipe_chainstate=*/true));
@@ -769,7 +784,7 @@ std::unique_ptr<ChainMan> create_chainman(TestDirectory& test_directory,
                                           bool chainstate_db_in_memory,
                                           Context& context)
 {
-    ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+    ChainstateManagerOptions chainman_opts{context, PathToString(test_directory.m_directory), PathToString(test_directory.m_directory / "blocks")};
 
     if (reindex) {
         chainman_opts.SetWipeDbs(/*wipe_block_tree=*/reindex, /*wipe_chainstate=*/reindex);
@@ -842,7 +857,7 @@ void chainman_reindex_chainstate_test(TestDirectory& test_directory)
         /*block_tree_db_in_memory=*/false, /*chainstate_db_in_memory=*/false, context)};
 
     std::vector<std::string> import_files;
-    import_files.push_back((test_directory.m_directory / "blocks" / "blk00000.dat").string());
+    import_files.push_back(PathToString(test_directory.m_directory / "blocks" / "blk00000.dat"));
     BOOST_CHECK(chainman->ImportBlocks(import_files));
 }
 
@@ -910,6 +925,65 @@ void chainman_mainnet_validation_test(TestDirectory& test_directory)
     BOOST_CHECK(!new_block);
 }
 
+BOOST_AUTO_TEST_CASE(btck_check_block_context_free)
+{
+    constexpr size_t MERKLE_ROOT_OFFSET{4 + 32};
+    constexpr size_t NBITS_OFFSET{4 + 32 + 32 + 4};
+    constexpr size_t COINBASE_PREVOUT_N_OFFSET{4 + 32 + 32 + 4 + 4 + 4 + 1 + 4 + 1 + 32};
+
+    // Mainnet block 1
+    auto raw_block = hex_string_to_byte_vec("010000006fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000982051fd1e4ba744bbbe680e1fee14677ba1a3c3540bf7b1cdb606e857233e0e61bc6649ffff001d01e362990101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d0104ffffffff0100f2052a0100000043410496b538e853519c726a2c91e61ec11600ae1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c858eeac00000000");
+
+    // Context-free block checks still need consensus params for the optional
+    // proof-of-work validation path.
+    ChainParams mainnet_params{ChainType::MAINNET};
+    auto consensus_params = mainnet_params.GetConsensusParams();
+
+    Block block{raw_block};
+    BlockValidationState state;
+
+    BOOST_CHECK(block.Check(consensus_params, BlockCheckFlags::BASE, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+
+    BOOST_CHECK(block.Check(consensus_params, BlockCheckFlags::ALL, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+
+    auto bad_merkle_block_data = raw_block;
+    bad_merkle_block_data[MERKLE_ROOT_OFFSET] ^= std::byte{0x01};
+    Block bad_merkle_block{bad_merkle_block_data};
+
+    BOOST_CHECK(!bad_merkle_block.Check(consensus_params, BlockCheckFlags::MERKLE, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::INVALID);
+    BOOST_CHECK(state.GetBlockValidationResult() == BlockValidationResult::MUTATED);
+
+    BOOST_CHECK(bad_merkle_block.Check(consensus_params, BlockCheckFlags::BASE, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+
+    auto bad_pow_block_data = raw_block;
+    bad_pow_block_data[NBITS_OFFSET + 3] = std::byte{0x1c};
+    Block bad_pow_block{bad_pow_block_data};
+
+    BOOST_CHECK(!bad_pow_block.Check(consensus_params, BlockCheckFlags::POW, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::INVALID);
+    BOOST_CHECK(state.GetBlockValidationResult() == BlockValidationResult::INVALID_HEADER);
+
+    BOOST_CHECK(bad_pow_block.Check(consensus_params, BlockCheckFlags::MERKLE, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+
+    auto bad_base_block_data = raw_block;
+    bad_base_block_data[COINBASE_PREVOUT_N_OFFSET] = std::byte{0x00};
+    Block bad_base_block{bad_base_block_data};
+
+    BOOST_CHECK(!bad_base_block.Check(consensus_params, BlockCheckFlags::BASE, state));
+    BOOST_CHECK(state.GetValidationMode() == ValidationMode::INVALID);
+    BOOST_CHECK(state.GetBlockValidationResult() == BlockValidationResult::CONSENSUS);
+
+    // Test with invalid truncated block data.
+    auto truncated_block_data = hex_string_to_byte_vec("010000006fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000982051fd1e4ba744bbbe680e1fee14677ba1a3c3540bf7b1cdb606e857233e0e61bc6649ffff001d01e36299");
+    BOOST_CHECK_EXCEPTION(Block{truncated_block_data}, std::runtime_error,
+                          HasReason{"failed to instantiate btck object"});
+}
+
 BOOST_AUTO_TEST_CASE(btck_chainman_mainnet_tests)
 {
     auto test_directory{TestDirectory{"mainnet_test_bitcoin_kernel"}};
@@ -973,6 +1047,11 @@ BOOST_AUTO_TEST_CASE(btck_block_tree_entry_tests)
     auto prev{entry_1.GetPrevious()};
     BOOST_CHECK(prev.has_value());
     BOOST_CHECK(prev.value() == entry_0);
+
+    // Test GetAncestor
+    BOOST_CHECK(entry_2.GetAncestor(2) == entry_2);
+    BOOST_CHECK(entry_2.GetAncestor(1) == entry_1);
+    BOOST_CHECK(entry_2.GetAncestor(0) == entry_0);
 }
 
 BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
@@ -992,9 +1071,9 @@ BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
         BOOST_CHECK(new_block);
     }
 
-    BOOST_CHECK(std::filesystem::exists(in_memory_test_directory.m_directory / "blocks"));
-    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "blocks" / "index"));
-    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "chainstate"));
+    BOOST_CHECK(fs::exists(in_memory_test_directory.m_directory / "blocks"));
+    BOOST_CHECK(!fs::exists(in_memory_test_directory.m_directory / "blocks" / "index"));
+    BOOST_CHECK(!fs::exists(in_memory_test_directory.m_directory / "chainstate"));
 
     BOOST_CHECK(context.interrupt());
 }
@@ -1172,8 +1251,8 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     BOOST_CHECK_EQUAL(count, chain.CountEntries());
 
 
-    std::filesystem::remove_all(test_directory.m_directory / "blocks" / "blk00000.dat");
+    fs::remove(test_directory.m_directory / "blocks" / "blk00000.dat");
     BOOST_CHECK(!chainman->ReadBlock(tip_2).has_value());
-    std::filesystem::remove_all(test_directory.m_directory / "blocks" / "rev00000.dat");
+    fs::remove(test_directory.m_directory / "blocks" / "rev00000.dat");
     BOOST_CHECK_THROW(chainman->ReadBlockSpentOutputs(tip), std::runtime_error);
 }

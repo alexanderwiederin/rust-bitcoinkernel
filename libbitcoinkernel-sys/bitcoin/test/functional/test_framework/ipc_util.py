@@ -13,6 +13,9 @@ import shutil
 from typing import Optional
 
 from test_framework.messages import CBlock
+from test_framework.util import (
+    assert_equal
+)
 
 # Test may be skipped and not have capnp installed
 try:
@@ -148,3 +151,14 @@ async def mining_get_coinbase_tx(block_template, ctx) -> CoinbaseTxData:
         requiredOutputs=[bytes(output) for output in template_capnp.requiredOutputs],
         lockTime=int(template_capnp.lockTime),
     )
+
+async def make_mining_ctx(self):
+    """Create IPC context and Mining proxy object."""
+    ctx, init = await make_capnp_init_ctx(self)
+    self.log.debug("Create Mining proxy object")
+    mining = init.makeMining(ctx).result
+    return ctx, mining
+
+def assert_capnp_failed(e, description_prefix):
+    assert e.description.startswith(description_prefix), f"Expected description starting with '{description_prefix}', got '{e.description}'"
+    assert_equal(e.type, "FAILED")
