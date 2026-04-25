@@ -54,7 +54,6 @@ add_library(bitcoinkernel
   ../script/solver.cpp
   ../signet.cpp
   ../streams.cpp
-  ../support/lockedpool.cpp
   ../sync.cpp
   ../txdb.cpp
   ../txgraph.cpp
@@ -69,7 +68,6 @@ add_library(bitcoinkernel
   ../util/hasher.cpp
   ../util/moneystr.cpp
   ../util/rbf.cpp
-  ../util/serfloat.cpp
   ../util/signalinterrupt.cpp
   ../util/syserror.cpp
   ../util/threadnames.cpp

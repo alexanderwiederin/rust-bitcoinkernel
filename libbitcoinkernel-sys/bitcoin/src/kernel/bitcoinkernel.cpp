@@ -50,6 +50,10 @@
 #include <utility>
 #include <vector>
 
+namespace Consensus {
+struct Params;
+} // namespace Consensus
+
 using kernel::ChainstateRole;
 using util::ImmediateTaskRunner;
 
@@ -496,6 +500,7 @@ struct btck_TransactionOutPoint: Handle<btck_TransactionOutPoint, COutPoint> {};
 struct btck_Txid: Handle<btck_Txid, Txid> {};
 struct btck_PrecomputedTransactionData : Handle<btck_PrecomputedTransactionData, PrecomputedTransactionData> {};
 struct btck_BlockHeader: Handle<btck_BlockHeader, CBlockHeader> {};
+struct btck_ConsensusParams: Handle<btck_ConsensusParams, Consensus::Params> {};
 
 btck_Transaction* btck_transaction_create(const void* raw_transaction, size_t raw_transaction_len)
 {
@@ -531,6 +536,11 @@ const btck_TransactionInput* btck_transaction_get_input_at(const btck_Transactio
 {
     assert(input_index < btck_Transaction::get(transaction)->vin.size());
     return btck_TransactionInput::ref(&btck_Transaction::get(transaction)->vin[input_index]);
+}
+
+uint32_t btck_transaction_get_locktime(const btck_Transaction* transaction)
+{
+    return btck_Transaction::get(transaction)->nLockTime;
 }
 
 const btck_Txid* btck_transaction_get_txid(const btck_Transaction* transaction)
@@ -692,6 +702,11 @@ const btck_TransactionOutPoint* btck_transaction_input_get_out_point(const btck_
     return btck_TransactionOutPoint::ref(&btck_TransactionInput::get(input).prevout);
 }
 
+uint32_t btck_transaction_input_get_sequence(const btck_TransactionInput* input)
+{
+    return btck_TransactionInput::get(input).nSequence;
+}
+
 void btck_transaction_input_destroy(btck_TransactionInput* input)
 {
     delete input;
@@ -813,6 +828,11 @@ btck_ChainParameters* btck_chain_parameters_copy(const btck_ChainParameters* cha
     return btck_ChainParameters::copy(chain_parameters);
 }
 
+const btck_ConsensusParams* btck_chain_parameters_get_consensus_params(const btck_ChainParameters* chain_parameters)
+{
+    return btck_ConsensusParams::ref(&btck_ChainParameters::get(chain_parameters).GetConsensus());
+}
+
 void btck_chain_parameters_destroy(btck_ChainParameters* chain_parameters)
 {
     delete chain_parameters;
@@ -883,6 +903,13 @@ const btck_BlockTreeEntry* btck_block_tree_entry_get_previous(const btck_BlockTr
     }
 
     return btck_BlockTreeEntry::ref(btck_BlockTreeEntry::get(entry).pprev);
+}
+
+const btck_BlockTreeEntry* btck_block_tree_entry_get_ancestor(const btck_BlockTreeEntry* block_tree_entry, int32_t height)
+{
+    const auto* ancestor{btck_BlockTreeEntry::get(block_tree_entry).GetAncestor(height)};
+    assert(ancestor);
+    return btck_BlockTreeEntry::ref(ancestor);
 }
 
 btck_BlockValidationState* btck_block_validation_state_create()
@@ -1109,6 +1136,19 @@ btck_Block* btck_block_copy(const btck_Block* block)
     return btck_Block::copy(block);
 }
 
+int btck_block_check(const btck_Block* block, const btck_ConsensusParams* consensus_params, btck_BlockCheckFlags flags, btck_BlockValidationState* validation_state)
+{
+    auto& state = btck_BlockValidationState::get(validation_state);
+    state = BlockValidationState{};
+
+    const bool check_pow    = (flags & btck_BlockCheckFlags_POW) != 0;
+    const bool check_merkle = (flags & btck_BlockCheckFlags_MERKLE) != 0;
+
+    const bool result = CheckBlock(*btck_Block::get(block), state, btck_ConsensusParams::get(consensus_params), /*fCheckPOW=*/check_pow, /*fCheckMerkleRoot=*/check_merkle);
+
+    return result ? 1 : 0;
+}
+
 size_t btck_block_count_transactions(const btck_Block* block)
 {
     return btck_Block::get(block)->vtx.size();
@@ -1319,13 +1359,13 @@ const btck_Chain* btck_chainstate_manager_get_active_chain(const btck_Chainstate
     return btck_Chain::ref(&WITH_LOCK(btck_ChainstateManager::get(chainman).m_chainman->GetMutex(), return btck_ChainstateManager::get(chainman).m_chainman->ActiveChain()));
 }
 
-int btck_chain_get_height(const btck_Chain* chain)
+int32_t btck_chain_get_height(const btck_Chain* chain)
 {
     LOCK(::cs_main);
     return btck_Chain::get(chain).Height();
 }
 
-const btck_BlockTreeEntry* btck_chain_get_by_height(const btck_Chain* chain, int height)
+const btck_BlockTreeEntry* btck_chain_get_by_height(const btck_Chain* chain, int32_t height)
 {
     LOCK(::cs_main);
     return btck_BlockTreeEntry::ref(btck_Chain::get(chain)[height]);
@@ -1334,7 +1374,7 @@ const btck_BlockTreeEntry* btck_chain_get_by_height(const btck_Chain* chain, int
 int btck_chain_contains(const btck_Chain* chain, const btck_BlockTreeEntry* entry)
 {
     LOCK(::cs_main);
-    return btck_Chain::get(chain).Contains(&btck_BlockTreeEntry::get(entry)) ? 1 : 0;
+    return btck_Chain::get(chain).Contains(btck_BlockTreeEntry::get(entry)) ? 1 : 0;
 }
 
 btck_BlockHeader* btck_block_header_create(const void* raw_block_header, size_t raw_block_header_len)
@@ -1388,6 +1428,16 @@ int32_t btck_block_header_get_version(const btck_BlockHeader* header)
 uint32_t btck_block_header_get_nonce(const btck_BlockHeader* header)
 {
     return btck_BlockHeader::get(header).nNonce;
+}
+
+int btck_block_header_to_bytes(const btck_BlockHeader* header, unsigned char output[80])
+{
+    try {
+        SpanWriter{std::as_writable_bytes(std::span{output, 80})} << btck_BlockHeader::get(header);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
 }
 
 void btck_block_header_destroy(btck_BlockHeader* header)

@@ -11,7 +11,6 @@ from enum import Enum
 import json
 import logging
 import os
-import pathlib
 import platform
 import re
 import subprocess
@@ -20,7 +19,6 @@ import time
 import urllib.parse
 import collections
 import shlex
-import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -92,7 +90,27 @@ class TestNode():
     To make things easier for the test writer, any unrecognised messages will
     be dispatched to the RPC connection."""
 
-    def __init__(self, i, datadir_path, *, chain, rpchost, timewait, timeout_factor, binaries, coverage_dir, cwd, extra_conf=None, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, v2transport=False, uses_wallet=False, ipcbind=False):
+    def __init__(
+        self,
+        i,
+        datadir_path,
+        *,
+        chain,
+        rpchost,
+        timewait,
+        timeout_factor,
+        binaries,
+        coverage_dir,
+        cwd,
+        extra_conf=None,
+        extra_args=None,
+        use_cli=False,
+        start_perf=False,
+        version=None,
+        v2transport=False,
+        uses_wallet=False,
+        ipcbind=False,
+    ):
         """
         Kwargs:
             start_perf (bool): If True, begin profiling the node with `perf` as soon as
@@ -100,7 +118,6 @@ class TestNode():
         """
 
         self.index = i
-        self.p2p_conn_index = 1
         self.datadir_path = datadir_path
         self.bitcoinconf = self.datadir_path / "bitcoin.conf"
         self.stdout_dir = self.datadir_path / "stdout"
@@ -144,18 +161,9 @@ class TestNode():
                 self.args.append("-ipcbind=unix")
             else:
                 # Work around default CI path exceeding maximum socket path length.
-                self.ipc_tmp_dir = pathlib.Path(tempfile.mkdtemp(prefix="test-ipc-"))
-                self.ipc_socket_path = self.ipc_tmp_dir / "node.sock"
+                self.ipc_tmp_dir = tempfile.TemporaryDirectory(prefix="test-ipc-")
+                self.ipc_socket_path = Path(self.ipc_tmp_dir.name) / "node.sock"
                 self.args.append(f"-ipcbind=unix:{self.ipc_socket_path}")
-
-        # Use valgrind, expect for previous release binaries
-        if use_valgrind and version is None:
-            default_suppressions_file = Path(__file__).parents[3] / "contrib" / "valgrind.supp"
-            suppressions_file = os.getenv("VALGRIND_SUPPRESSIONS_FILE",
-                                          default_suppressions_file)
-            self.args = ["valgrind", "--suppressions={}".format(suppressions_file),
-                         "--gen-suppressions=all", "--exit-on-first-error=yes",
-                         "--error-exitcode=1", "--quiet"] + self.args
 
         if self.version_is_at_least(190000):
             self.args.append("-logthreadnames")
@@ -218,7 +226,7 @@ class TestNode():
 
     def get_deterministic_priv_key(self):
         """Return a deterministic priv key in base58, that only depends on the node's index"""
-        assert len(self.PRIV_KEYS) == MAX_NODES
+        assert_equal(len(self.PRIV_KEYS), MAX_NODES)
         return self.PRIV_KEYS[self.index]
 
     def _node_msg(self, msg: str) -> str:
@@ -238,9 +246,6 @@ class TestNode():
             # this destructor is called.
             print(self._node_msg("Cleaning up leftover process"), file=sys.stderr)
             self.process.kill()
-        if self.ipc_tmp_dir:
-            print(self._node_msg(f"Cleaning up ipc directory {str(self.ipc_tmp_dir)!r}"))
-            shutil.rmtree(self.ipc_tmp_dir)
 
     def __getattr__(self, name):
         """Dispatches any unrecognised messages to the RPC connection or a CLI instance."""
@@ -908,6 +913,11 @@ class TestNode():
         del self.p2ps[:]
 
         self.wait_until(lambda: self.num_test_p2p_connections() == 0)
+
+    def is_connected_to(self, other):
+        assert isinstance(other, TestNode)
+        other_subver = other.getnetworkinfo()["subversion"]
+        return any(peer["subver"] == other_subver for peer in self.getpeerinfo())
 
     def bumpmocktime(self, seconds):
         """Fast forward using setmocktime to self.mocktime + seconds. Requires setmocktime to have
