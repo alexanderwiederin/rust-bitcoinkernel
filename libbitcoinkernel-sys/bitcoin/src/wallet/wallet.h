@@ -7,6 +7,7 @@
 #define BITCOIN_WALLET_WALLET_H
 
 #include <addresstype.h>
+#include <btcsignals.h>
 #include <consensus/amount.h>
 #include <interfaces/chain.h>
 #include <interfaces/handler.h>
@@ -50,8 +51,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include <boost/signals2/signal.hpp>
 
 class CKey;
 class CKeyID;
@@ -283,7 +282,7 @@ inline std::string PurposeToString(AddressPurpose p)
     case AddressPurpose::RECEIVE: return "receive";
     case AddressPurpose::SEND: return "send";
     case AddressPurpose::REFUND: return "refund";
-    } // no default case so the compiler will warn when a new enum as added
+    } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
 
@@ -554,6 +553,13 @@ public:
     int GetTxBlocksToMaturity(const CWalletTx& wtx) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     bool IsTxImmatureCoinBase(const CWalletTx& wtx) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
+    enum class SpendType {
+        UNSPENT,
+        CONFIRMED,
+        MEMPOOL,
+        NONMEMPOOL,
+    };
+    SpendType HowSpent(const COutPoint& outpoint) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     bool IsSpent(const COutPoint& outpoint) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     // Whether this or any known scriptPubKey with the same single key has been spent.
@@ -824,13 +830,13 @@ public:
     void Close();
 
     /** Wallet is about to be unloaded */
-    boost::signals2::signal<void ()> NotifyUnload;
+    btcsignals::signal<void ()> NotifyUnload;
 
     /**
      * Address book entry changed.
      * @note called without lock cs_wallet held.
      */
-    boost::signals2::signal<void(const CTxDestination& address,
+    btcsignals::signal<void(const CTxDestination& address,
                                  const std::string& label, bool isMine,
                                  AddressPurpose purpose, ChangeType status)>
         NotifyAddressBookChanged;
@@ -839,19 +845,19 @@ public:
      * Wallet transaction added, removed or updated.
      * @note called with lock cs_wallet held.
      */
-    boost::signals2::signal<void(const Txid& hashTx, ChangeType status)> NotifyTransactionChanged;
+    btcsignals::signal<void(const Txid& hashTx, ChangeType status)> NotifyTransactionChanged;
 
     /** Show progress e.g. for rescan */
-    boost::signals2::signal<void (const std::string &title, int nProgress)> ShowProgress;
+    btcsignals::signal<void (const std::string &title, int nProgress)> ShowProgress;
 
     /** Keypool has new keys */
-    boost::signals2::signal<void ()> NotifyCanGetAddressesChanged;
+    btcsignals::signal<void ()> NotifyCanGetAddressesChanged;
 
     /**
      * Wallet status (encrypted, locked) changed.
      * Note: Called without locks held.
      */
-    boost::signals2::signal<void (CWallet* wallet)> NotifyStatusChanged;
+    btcsignals::signal<void (CWallet* wallet)> NotifyStatusChanged;
 
     /** Inquire whether this wallet broadcasts transactions. */
     bool GetBroadcastTransactions() const { return fBroadcastTransactions; }
@@ -1072,6 +1078,9 @@ public:
     //! Find the private key for the given key id from the wallet's descriptors, if available
     //! Returns nullopt when no descriptor has the key or if the wallet is locked.
     std::optional<CKey> GetKey(const CKeyID& keyid) const;
+
+    //! Disconnect chain notifications and wait for all notifications to be processed
+    void DisconnectChainNotifications();
 };
 
 /**
