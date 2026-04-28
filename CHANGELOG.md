@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Transaction::locktime()` to retrieve a transaction's `nLockTime` value as a `u32`.
 - Added `TxIn::sequence()` to retrieve an input's `nSequence` value as a `u32`.
 - Added `TryFrom<&[u8]>` for `BlockHeader` to align with the exisitng `TryFrom<&[u8]>` implementation for `Block`.
+- Added `BlockHeaderExt::consensus_encode` to serialize a block header to its Bitcoin wire format, returning a fixed `[u8; 80]` array.
+- Added `From<BlockHeader>` and `From<&BlockHeader>` for `[u8; 80]` to align with existing block conversions.
 
 ## [0.2.0] 2026-01-26
 

@@ -136,10 +136,11 @@ use libbitcoinkernel_sys::{
     btck_block_header_copy, btck_block_header_create, btck_block_header_destroy,
     btck_block_header_get_bits, btck_block_header_get_hash, btck_block_header_get_nonce,
     btck_block_header_get_prev_hash, btck_block_header_get_timestamp,
-    btck_block_header_get_version, btck_block_spent_outputs_copy, btck_block_spent_outputs_count,
-    btck_block_spent_outputs_destroy, btck_block_spent_outputs_get_transaction_spent_outputs_at,
-    btck_block_to_bytes, btck_coin_confirmation_height, btck_coin_copy, btck_coin_destroy,
-    btck_coin_get_output, btck_coin_is_coinbase, btck_transaction_spent_outputs_copy,
+    btck_block_header_get_version, btck_block_header_to_bytes, btck_block_spent_outputs_copy,
+    btck_block_spent_outputs_count, btck_block_spent_outputs_destroy,
+    btck_block_spent_outputs_get_transaction_spent_outputs_at, btck_block_to_bytes,
+    btck_coin_confirmation_height, btck_coin_copy, btck_coin_destroy, btck_coin_get_output,
+    btck_coin_is_coinbase, btck_transaction_spent_outputs_copy,
     btck_transaction_spent_outputs_count, btck_transaction_spent_outputs_destroy,
     btck_transaction_spent_outputs_get_coin_at,
 };
@@ -474,6 +475,35 @@ pub trait BlockHeaderExt: AsPtr<btck_BlockHeader> {
     fn nonce(&self) -> u32 {
         unsafe { btck_block_header_get_nonce(self.as_ptr()) }
     }
+
+    /// Serializes the block header to Bitcoin wire format.
+    ///
+    /// Encodes the 8o-byte block header according to Bitcoin consensus rules.
+    /// The resulting data can be trasnmitted over the newtork or stored to disk.
+    ///
+    /// # Errors [`KernelError::Internal`] if serialization fails.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, BlockHeader, KernelError};
+    /// # fn example(header: &BlockHeader) -> Result<(), Box<dyn std::error::Error>> {
+    /// let serialized = header.consensus_encode()?;
+    /// assert_eq!(serialized.len(), 80);
+    /// std::fs::write("header.dat", &serialized)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn consensus_encode(&self) -> Result<[u8; 80], KernelError> {
+        let mut output = [0u8; 80];
+        let ret = unsafe { btck_block_header_to_bytes(self.as_ptr(), output.as_mut_ptr()) };
+        if ret != 0 {
+            Err(KernelError::Internal(
+                "Failed to serialize block header".to_string(),
+            ))
+        } else {
+            Ok(output)
+        }
+    }
 }
 
 /// A Bitcoin block header.
@@ -598,6 +628,22 @@ impl Clone for BlockHeader {
 impl Drop for BlockHeader {
     fn drop(&mut self) {
         unsafe { btck_block_header_destroy(self.inner) }
+    }
+}
+
+impl From<BlockHeader> for [u8; 80] {
+    fn from(header: BlockHeader) -> Self {
+        header
+            .consensus_encode()
+            .expect("valid header should always serialize")
+    }
+}
+
+impl From<&BlockHeader> for [u8; 80] {
+    fn from(header: &BlockHeader) -> Self {
+        header
+            .consensus_encode()
+            .expect("valid header should always serialize")
     }
 }
 
@@ -2038,6 +2084,46 @@ mod tests {
         let block_data = read_block_data();
         let header = BlockHeader::try_from(block_data[0].as_slice());
         assert!(header.is_ok());
+    }
+
+    #[test]
+    fn test_block_header_consensus_encode() {
+        let block_data = read_block_data();
+        let header = Block::new(&block_data[0]).unwrap().header();
+        let encoded = header.consensus_encode();
+        assert!(encoded.is_ok());
+        let encoded_bytes = encoded.unwrap();
+        assert_eq!(encoded_bytes.len(), 80);
+    }
+
+    #[test]
+    fn test_block_header_multiple_consensus_encode() {
+        let block_data = read_block_data();
+        let header = Block::new(&block_data[0]).unwrap().header();
+
+        let bytes1 = header.consensus_encode().unwrap();
+        let bytes2 = header.consensus_encode().unwrap();
+        let bytes3 = header.consensus_encode().unwrap();
+
+        assert_eq!(bytes1, &block_data[0][..80]);
+        assert_eq!(bytes2, &block_data[0][..80]);
+        assert_eq!(bytes3, &block_data[0][..80]);
+    }
+
+    #[test]
+    fn test_block_header_into_array() {
+        let block_data = read_block_data();
+        let header = Block::new(&block_data[0]).unwrap().header();
+        let bytes: [u8; 80] = header.into();
+        assert_eq!(bytes, block_data[0][..80]);
+    }
+
+    #[test]
+    fn test_block_header_ref_into_array() {
+        let block_data = read_block_data();
+        let header = Block::new(&block_data[0]).unwrap().header();
+        let bytes: [u8; 80] = (&header).into();
+        assert_eq!(bytes, block_data[0][..80]);
     }
 
     #[test]
