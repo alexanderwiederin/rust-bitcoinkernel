@@ -601,6 +601,14 @@ impl Drop for BlockHeader {
     }
 }
 
+impl TryFrom<&[u8]> for BlockHeader {
+    type Error = KernelError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        BlockHeader::new(bytes)
+    }
+}
+
 /// A borrowed reference to a block header.
 ///
 /// Provides zero-copy access to block header data. It implements [`Copy`],
@@ -2023,6 +2031,13 @@ mod tests {
         let block = Block::new(&block_data[0]).unwrap();
         let header = BlockHeader::new(&block_data[0]).unwrap();
         assert_eq!(block.hash(), header.hash());
+    }
+
+    #[test]
+    fn test_block_header_try_from() {
+        let block_data = read_block_data();
+        let header = BlockHeader::try_from(block_data[0].as_slice());
+        assert!(header.is_ok());
     }
 
     #[test]
