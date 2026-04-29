@@ -30,7 +30,7 @@ unsafe impl Sync for BlockTreeEntry<'_> {}
 impl<'a> BlockTreeEntry<'a> {
     /// Move to the previous entry in the block tree. E.g. from height n to
     /// height n-1.
-    pub fn prev(self) -> Option<BlockTreeEntry<'a>> {
+    pub fn prev(&self) -> Option<BlockTreeEntry<'a>> {
         let inner = unsafe { btck_block_tree_entry_get_previous(self.inner) };
 
         if inner.is_null() {
