@@ -44,6 +44,17 @@ resolution:
 cargo build --locked
 ```
 
+## Lock files
+
+`Cargo-minimal.lock` and `Cargo-recent.lock` pin dependencies to their minimum
+and most recent compatible versions.
+
+To regenerate them run:
+
+```bash
+./contrib/update_lock_files.sh
+```
+
 ## Documentation
 
 You can find detailed information about the library on its

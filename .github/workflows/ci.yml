@@ -47,6 +47,20 @@ jobs:
     - name: Run tests with MSRV
       run: cargo test --all-features --locked
 
+  check-lock-files:
+    name: Check lock files
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust nightly
+      uses: dtolnay/rust-toolchain@nightly
+
+    - name: Check Cargo-minimal.lock
+      run: |
+        cargo +nightly update -Z minimal-versions
+        git diff --exit-code Cargo-minimal.lock
+
   build:
     name: Build and Test
     runs-on: ubuntu-latest
