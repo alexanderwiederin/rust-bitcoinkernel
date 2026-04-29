@@ -207,6 +207,9 @@ pub mod log;
 pub mod notifications;
 pub mod state;
 
+#[cfg(test)]
+pub mod test_utils;
+
 /// Serializes data using a C callback function pattern.
 ///
 /// Takes a C function that writes data via a callback and returns the
