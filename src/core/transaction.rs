@@ -151,12 +151,12 @@ use libbitcoinkernel_sys::{
     btck_Transaction, btck_TransactionInput, btck_TransactionOutPoint, btck_TransactionOutput,
     btck_Txid, btck_transaction_copy, btck_transaction_count_inputs,
     btck_transaction_count_outputs, btck_transaction_create, btck_transaction_destroy,
-    btck_transaction_get_input_at, btck_transaction_get_output_at, btck_transaction_get_txid,
-    btck_transaction_input_copy, btck_transaction_input_destroy,
-    btck_transaction_input_get_out_point, btck_transaction_out_point_copy,
-    btck_transaction_out_point_destroy, btck_transaction_out_point_get_index,
-    btck_transaction_out_point_get_txid, btck_transaction_output_copy,
-    btck_transaction_output_create, btck_transaction_output_destroy,
+    btck_transaction_get_input_at, btck_transaction_get_locktime, btck_transaction_get_output_at,
+    btck_transaction_get_txid, btck_transaction_input_copy, btck_transaction_input_destroy,
+    btck_transaction_input_get_out_point, btck_transaction_input_get_sequence,
+    btck_transaction_out_point_copy, btck_transaction_out_point_destroy,
+    btck_transaction_out_point_get_index, btck_transaction_out_point_get_txid,
+    btck_transaction_output_copy, btck_transaction_output_create, btck_transaction_output_destroy,
     btck_transaction_output_get_amount, btck_transaction_output_get_script_pubkey,
     btck_transaction_to_bytes, btck_txid_copy, btck_txid_destroy, btck_txid_equals,
     btck_txid_to_bytes,
@@ -378,6 +378,26 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// ```
     fn outputs(&self) -> TxOutIter<'_> {
         TxOutIter::new(unsafe { TransactionRef::from_ptr(self.as_ptr()) })
+    }
+
+    /// Returns the transaction's `nLockTime` value.
+    ///
+    /// `nLockTime` is used to restrict when a transaction can be included in a block.
+    /// A value below `500_000_000` is interpreted as a block height; at or above that
+    /// threshold it is interpreted as a Unix timestamp.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction};
+    /// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+    /// # let tx_data = vec![0u8; 100]; // placeholder
+    /// # let tx = Transaction::new(&tx_data)?;
+    /// println!("nLockTime: {}", tx.locktime());
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn locktime(&self) -> u32 {
+        unsafe { btck_transaction_get_locktime(self.as_ptr()) }
     }
 }
 
@@ -1013,6 +1033,25 @@ pub trait TxInExt: AsPtr<btck_TransactionInput> {
     fn outpoint(&self) -> TxOutPointRef<'_> {
         let ptr = unsafe { btck_transaction_input_get_out_point(self.as_ptr()) };
         unsafe { TxOutPointRef::from_ptr(ptr) }
+    }
+
+    /// Returns the input's `nSequence` value.
+    ///
+    /// `nSequence` is used for opt-in RBF (BIP 125, any value < `0xFFFFFFFE`),
+    /// relative timelocks (BIP 68, when bit 31 is unset),
+    /// and to signal finality (`0xFFFFFFFF`).
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction, KernelError};
+    /// # fn example(tx: &Transaction) -> Result<(), KernelError> {
+    /// let input = tx.input(0)?;
+    /// println!("nSequence: 0x{:08x}", input.sequence());
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn sequence(&self) -> u32 {
+        unsafe { btck_transaction_input_get_sequence(self.as_ptr()) }
     }
 }
 
@@ -1909,6 +1948,18 @@ mod tests {
         assert_ne!(tx1.txid(), tx2.txid());
     }
 
+    #[test]
+    fn test_transaction_locktime() {
+        let (tx, _) = get_test_transactions();
+        assert_eq!(tx.locktime(), 204);
+    }
+
+    #[test]
+    fn test_transaction_locktime_zero() {
+        let (_, tx) = get_test_transactions();
+        assert_eq!(tx.locktime(), 0);
+    }
+
     // TxOut tests
     #[test]
     fn test_txout_new() {
@@ -2007,6 +2058,13 @@ mod tests {
         let owned_txin = txin_ref.to_owned();
 
         assert_eq!(txin.outpoint().index(), owned_txin.outpoint().index());
+    }
+
+    #[test]
+    fn test_txin_sequence() {
+        let (tx, _) = get_test_transactions();
+        let input = tx.input(0).unwrap();
+        assert_eq!(input.sequence(), 0xFFFFFFFD);
     }
 
     // TxOutPoint tests
@@ -2197,6 +2255,31 @@ mod tests {
         let bytes_from_ref = get_bytes(&txid_ref);
 
         assert_eq!(bytes_from_owned, bytes_from_ref);
+    }
+
+    #[test]
+    fn test_transaction_locktime_polymorphism() {
+        let (tx, _) = get_test_transactions();
+        let tx_ref = tx.as_ref();
+
+        fn get_locktime(transaction: &impl TransactionExt) -> u32 {
+            transaction.locktime()
+        }
+
+        assert_eq!(get_locktime(&tx), get_locktime(&tx_ref));
+    }
+
+    #[test]
+    fn test_txin_sequence_polymorphism() {
+        let (tx, _) = get_test_transactions();
+        let input_ref = tx.input(0).unwrap();
+        let input_owned = input_ref.to_owned();
+
+        fn get_sequence(input: &impl TxInExt) -> u32 {
+            input.sequence()
+        }
+
+        assert_eq!(get_sequence(&input_ref), get_sequence(&input_owned));
     }
 
     #[test]
