@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Verify CHANGELOG.md was modified
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
