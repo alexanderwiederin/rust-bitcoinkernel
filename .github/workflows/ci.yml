@@ -10,6 +10,59 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  android-kernel-check:
+    name: Check libbitcoinkernel builds for Android
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Android NDK
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r27c
+        add-to-path: true
+
+    - name: Install Boost
+      run: |
+        wget -q https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.gz
+        tar -xzf boost_1_88_0.tar.gz
+        cd boost_1_88_0
+        cmake -B build -DCMAKE_INSTALL_PREFIX=/opt/boost
+        cmake --build build
+        cmake --install build
+        echo "Boost_DIR=/opt/boost/lib/cmake/Boost-1.88.0" >> $GITHUB_ENV
+
+    - name: Configure
+      run: |
+        cd libbitcoinkernel-sys/bitcoin
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-21 \
+          -DBoost_DIR=${{ env.Boost_DIR }} \
+          -DBUILD_KERNEL_LIB=ON \
+          -DBUILD_TESTS=OFF \
+          -DBUILD_BENCH=OFF \
+          -DBUILD_KERNEL_TEST=OFF \
+          -DBUILD_TX=OFF \
+          -DBUILD_WALLET_TOOL=OFF \
+          -DENABLE_WALLET=OFF \
+          -DENABLE_EXTERNAL_SIGNER=OFF \
+          -DBUILD_UTIL=OFF \
+          -DBUILD_BITCOIN_BIN=OFF \
+          -DBUILD_DAEMON=OFF \
+          -DBUILD_UTIL_CHAINSTATE=OFF \
+          -DBUILD_CLI=OFF \
+          -DBUILD_FUZZ_BINARY=OFF \
+          -DBUILD_SHARED_LIBS=OFF \
+          -DCMAKE_INSTALL_LIBDIR=lib \
+          -DENABLE_IPC=OFF
+
+    - name: Build
+      run: cmake --build libbitcoinkernel-sys/bitcoin/build
+
   msrv-check:
     name: Build with MSRV - ${{ matrix.dep }} deps
     runs-on: ubuntu-latest
