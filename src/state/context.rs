@@ -143,6 +143,12 @@ impl Drop for ChainParams {
     }
 }
 
+impl AsPtr<btck_ChainParameters> for ChainParams {
+    fn as_ptr(&self) -> *const btck_ChainParameters {
+        self.inner as *const _
+    }
+}
+
 /// The main context for the Bitcoin Kernel library.
 ///
 /// The [`Context`] manages the global state of the Bitcoin Kernel library

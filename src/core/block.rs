@@ -128,31 +128,60 @@ use std::{
 };
 
 use libbitcoinkernel_sys::{
-    btck_Block, btck_BlockHash, btck_BlockHeader, btck_BlockSpentOutputs, btck_Coin,
-    btck_TransactionSpentOutputs, btck_block_copy, btck_block_count_transactions,
-    btck_block_create, btck_block_destroy, btck_block_get_hash, btck_block_get_header,
-    btck_block_get_transaction_at, btck_block_hash_copy, btck_block_hash_create,
-    btck_block_hash_destroy, btck_block_hash_equals, btck_block_hash_to_bytes,
-    btck_block_header_copy, btck_block_header_create, btck_block_header_destroy,
-    btck_block_header_get_bits, btck_block_header_get_hash, btck_block_header_get_nonce,
-    btck_block_header_get_prev_hash, btck_block_header_get_timestamp,
+    btck_Block, btck_BlockCheckFlags, btck_BlockCheckFlags_ALL, btck_BlockCheckFlags_BASE,
+    btck_BlockCheckFlags_MERKLE, btck_BlockCheckFlags_POW, btck_BlockHash, btck_BlockHeader,
+    btck_BlockSpentOutputs, btck_Coin, btck_TransactionSpentOutputs, btck_block_check,
+    btck_block_copy, btck_block_count_transactions, btck_block_create, btck_block_destroy,
+    btck_block_get_hash, btck_block_get_header, btck_block_get_transaction_at,
+    btck_block_hash_copy, btck_block_hash_create, btck_block_hash_destroy, btck_block_hash_equals,
+    btck_block_hash_to_bytes, btck_block_header_copy, btck_block_header_create,
+    btck_block_header_destroy, btck_block_header_get_bits, btck_block_header_get_hash,
+    btck_block_header_get_nonce, btck_block_header_get_prev_hash, btck_block_header_get_timestamp,
     btck_block_header_get_version, btck_block_header_to_bytes, btck_block_spent_outputs_copy,
     btck_block_spent_outputs_count, btck_block_spent_outputs_destroy,
     btck_block_spent_outputs_get_transaction_spent_outputs_at, btck_block_to_bytes,
-    btck_coin_confirmation_height, btck_coin_copy, btck_coin_destroy, btck_coin_get_output,
-    btck_coin_is_coinbase, btck_transaction_spent_outputs_copy,
-    btck_transaction_spent_outputs_count, btck_transaction_spent_outputs_destroy,
-    btck_transaction_spent_outputs_get_coin_at,
+    btck_chain_parameters_get_consensus_params, btck_coin_confirmation_height, btck_coin_copy,
+    btck_coin_destroy, btck_coin_get_output, btck_coin_is_coinbase,
+    btck_transaction_spent_outputs_copy, btck_transaction_spent_outputs_count,
+    btck_transaction_spent_outputs_destroy, btck_transaction_spent_outputs_get_coin_at,
 };
 
 use crate::{
     c_helpers, c_serialize,
     ffi::{
         c_helpers::present,
-        sealed::{AsPtr, FromMutPtr, FromPtr},
+        sealed::{AsMutPtr, AsPtr, FromMutPtr, FromPtr},
     },
+    notifications::types::BlockValidationState,
+    state::context::ChainParams,
     KernelError,
 };
+
+/// Bitmask of flags controlling which checks [`Block::check`] performs.
+pub type BlockCheckFlags = btck_BlockCheckFlags;
+
+/// Run only base context-free block checks (no PoW, no Merkle root).
+pub const BLOCK_CHECK_BASE: BlockCheckFlags = btck_BlockCheckFlags_BASE;
+
+/// Enable Proof-of-Work verification via the block header.
+pub const BLOCK_CHECK_POW: BlockCheckFlags = btck_BlockCheckFlags_POW;
+
+/// Enable Merkle-root verification (and mutation detection).
+pub const BLOCK_CHECK_MERKLE: BlockCheckFlags = btck_BlockCheckFlags_MERKLE;
+
+/// Enable all available context-free block checks (PoW + Merkle root).
+pub const BLOCK_CHECK_ALL: BlockCheckFlags = btck_BlockCheckFlags_ALL;
+
+/// Outcome of [`Block::check`].
+///
+/// On failure, the [`BlockValidationState`] carries details that can be
+/// inspected via [`BlockValidationStateExt`](crate::notifications::BlockValidationStateExt).
+pub enum BlockCheckResult {
+    /// The block passed the requested context-free checks.
+    Valid,
+    /// The block failed; the state holds the validation details.
+    Invalid(BlockValidationState),
+}
 
 use super::transaction::{TransactionRef, TxOutRef};
 
@@ -941,6 +970,51 @@ impl Block {
     /// ```
     pub fn transactions(&self) -> BlockTransactionIter<'_> {
         BlockTransactionIter::new(self)
+    }
+
+    /// Performs context-free validation checks on this block.
+    ///
+    /// Runs base structural checks (size, weight, coinbase, transactions,
+    /// sigops) without requiring chainstate or block index access.
+    /// Proof-of-work and merkle-root checks are optional and toggled via `flags`.
+    ///
+    /// # Arguments
+    /// * `chain_params` - Chain parameters providing consensus rules
+    /// * `flags` - Bitmask of [`BLOCK_CHECK_BASE`], [`BLOCK_CHECK_POW`],
+    ///   [`BLOCK_CHECK_MERKLE`], or [`BLOCK_CHECK_ALL`]
+    ///
+    /// # Returns
+    /// [`BlockCheckResult::Valid`] on success, otherwise
+    /// [`BlockCheckResult::Invalid`] carrying the validation state.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{
+    /// #     prelude::*, Block, BlockCheckResult, ChainParams, ChainType, BLOCK_CHECK_ALL,
+    /// # };
+    /// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+    /// # let block_data = vec![0u8; 100]; // placeholder
+    /// # let block = Block::new(&block_data)?;
+    /// let chain_params = ChainParams::new(ChainType::Mainnet);
+    ///
+    /// match block.check(&chain_params, BLOCK_CHECK_ALL) {
+    ///     BlockCheckResult::Valid => println!("ok"),
+    ///     BlockCheckResult::Invalid(state) => println!("failed: {:?}", state.result()),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn check(&self, chain_params: &ChainParams, flags: BlockCheckFlags) -> BlockCheckResult {
+        let state = BlockValidationState::new();
+        let consensus_params =
+            unsafe { btck_chain_parameters_get_consensus_params(chain_params.as_ptr()) };
+        let result =
+            unsafe { btck_block_check(self.inner, consensus_params, flags, state.as_mut_ptr()) };
+        if c_helpers::verification_passed(result) {
+            BlockCheckResult::Valid
+        } else {
+            BlockCheckResult::Invalid(state)
+        }
     }
 }
 
@@ -1865,6 +1939,8 @@ mod tests {
     use crate::ffi::test_utils::{
         test_owned_clone_and_send, test_owned_trait_requirements, test_ref_trait_requirements,
     };
+    use crate::prelude::*;
+    use crate::{BlockValidationResult, ChainType, ValidationMode};
     use std::{
         fs::File,
         io::{BufRead, BufReader},
@@ -1882,6 +1958,13 @@ mod tests {
 
     const VALID_HASH_BYTES1: [u8; 32] = [1u8; 32];
     const VALID_HASH_BYTES2: [u8; 32] = [2u8; 32];
+
+    const MAINNET_BLOCK_1_HEX: &str = "010000006fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c\
+        68d6190000000000982051fd1e4ba744bbbe680e1fee14677ba1a3c3540bf7b1cdb606e857233e0e61bc6649ff\
+        ff001d01e362990101000000010000000000000000000000000000000000000000000000000000000000000000\
+        ffffffff0704ffff001d0104ffffffff0100f2052a0100000043410496b538e853519c726a2c91e61ec11600ae\
+        1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c8\
+        58eeac00000000";
 
     test_owned_trait_requirements!(test_block_hash_requirements, BlockHash, btck_BlockHash);
     test_ref_trait_requirements!(
@@ -2287,5 +2370,109 @@ mod tests {
             format!("{block_hash_ref}"),
             "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
         );
+    }
+
+    #[test]
+    fn check_valid_block_passes_base_and_all() {
+        let raw_block = hex::decode(MAINNET_BLOCK_1_HEX).unwrap();
+        let chain_params = ChainParams::new(ChainType::Mainnet);
+        let block = Block::new(&raw_block).unwrap();
+
+        assert!(matches!(
+            block.check(&chain_params, BLOCK_CHECK_BASE),
+            BlockCheckResult::Valid
+        ));
+        assert!(matches!(
+            block.check(&chain_params, BLOCK_CHECK_ALL),
+            BlockCheckResult::Valid
+        ));
+    }
+
+    #[test]
+    fn check_mutated_merkle_root() {
+        const MERKLE_ROOT_OFFSET: usize = 4 // version
+            + 32; // prev_hash
+
+        let mut raw_block = hex::decode(MAINNET_BLOCK_1_HEX).unwrap();
+        raw_block[MERKLE_ROOT_OFFSET] ^= 0x01;
+        let chain_params = ChainParams::new(ChainType::Mainnet);
+        let block = Block::new(&raw_block).unwrap();
+
+        match block.check(&chain_params, BLOCK_CHECK_MERKLE) {
+            BlockCheckResult::Invalid(state) => {
+                assert_eq!(state.mode(), ValidationMode::Invalid);
+                assert_eq!(state.result(), BlockValidationResult::Mutated);
+            }
+            _ => unreachable!("expected BlockCheckResult::Invalid"),
+        }
+
+        // Mutating the merkle root also alters the block hash, so the
+        // combined ALL check fails on the PoW path before the merkle
+        // path runs.
+        match block.check(&chain_params, BLOCK_CHECK_ALL) {
+            BlockCheckResult::Invalid(state) => {
+                assert_eq!(state.mode(), ValidationMode::Invalid);
+                assert_eq!(state.result(), BlockValidationResult::InvalidHeader);
+            }
+            _ => unreachable!("expected BlockCheckResult::Invalid"),
+        }
+
+        assert!(matches!(
+            block.check(&chain_params, BLOCK_CHECK_BASE),
+            BlockCheckResult::Valid
+        ));
+    }
+
+    #[test]
+    fn check_invalid_pow() {
+        const NBITS_OFFSET: usize = 4 // version
+            + 32 // prev_hash
+            + 32 // merkle_root
+            + 4; // timestamp
+
+        let mut raw_block = hex::decode(MAINNET_BLOCK_1_HEX).unwrap();
+        raw_block[NBITS_OFFSET + 3] = 0x1c;
+        let chain_params = ChainParams::new(ChainType::Mainnet);
+        let block = Block::new(&raw_block).unwrap();
+
+        match block.check(&chain_params, BLOCK_CHECK_POW) {
+            BlockCheckResult::Invalid(state) => {
+                assert_eq!(state.mode(), ValidationMode::Invalid);
+                assert_eq!(state.result(), BlockValidationResult::InvalidHeader);
+            }
+            _ => unreachable!("expected BlockCheckResult::Invalid"),
+        }
+
+        assert!(matches!(
+            block.check(&chain_params, BLOCK_CHECK_MERKLE),
+            BlockCheckResult::Valid
+        ));
+    }
+
+    #[test]
+    fn check_tampered_coinbase() {
+        const COINBASE_PREVOUT_N_OFFSET: usize = 4 // version
+            + 32 // prev_hash
+            + 32 // merkle_root
+            + 4  // timestamp
+            + 4  // bits
+            + 4  // nonce
+            + 1  // tx count varint
+            + 4  // tx version
+            + 1  // vin count
+            + 32; // prevout hash
+
+        let mut raw_block = hex::decode(MAINNET_BLOCK_1_HEX).unwrap();
+        raw_block[COINBASE_PREVOUT_N_OFFSET] = 0x00;
+        let chain_params = ChainParams::new(ChainType::Mainnet);
+        let block = Block::new(&raw_block).unwrap();
+
+        match block.check(&chain_params, BLOCK_CHECK_BASE) {
+            BlockCheckResult::Invalid(state) => {
+                assert_eq!(state.mode(), ValidationMode::Invalid);
+                assert_eq!(state.result(), BlockValidationResult::Consensus);
+            }
+            _ => unreachable!("expected BlockCheckResult::Invalid"),
+        }
     }
 }

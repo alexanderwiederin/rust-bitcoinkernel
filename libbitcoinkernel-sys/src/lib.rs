@@ -80,6 +80,14 @@ pub const btck_ScriptVerificationFlags_ALL: btck_ScriptVerificationFlags =
         | btck_ScriptVerificationFlags_WITNESS
         | btck_ScriptVerificationFlags_TAPROOT;
 
+// btck_BlockCheckFlags
+
+pub const btck_BlockCheckFlags_BASE: btck_BlockCheckFlags = 0;
+pub const btck_BlockCheckFlags_POW: btck_BlockCheckFlags = 1 << 0;
+pub const btck_BlockCheckFlags_MERKLE: btck_BlockCheckFlags = 1 << 1;
+pub const btck_BlockCheckFlags_ALL: btck_BlockCheckFlags =
+    btck_BlockCheckFlags_POW | btck_BlockCheckFlags_MERKLE;
+
 // btck_ScriptVerifyStatus
 
 pub const btck_ScriptVerifyStatus_OK: btck_ScriptVerifyStatus = 0;
