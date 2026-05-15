@@ -74,6 +74,9 @@ jobs:
     - name: Check flake
       run: nix flake check
 
+    - name: Check Nix formatting (nixfmt)
+      run: nix run nixpkgs#nixfmt -- --check flake.nix
+
     - name: Set Cargo.lock
       run: cp Cargo-minimal.lock Cargo.lock
 
