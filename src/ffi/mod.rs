@@ -9,6 +9,11 @@ pub(crate) mod sealed {
         fn as_ptr(&self) -> *const T;
     }
 
+    pub trait AsMutPtr<T> {
+        /// Returns a raw mutable pointer to the underlying C object.
+        fn as_mut_ptr(&self) -> *mut T;
+    }
+
     pub trait FromPtr<T> {
         /// Creates a wrapper from a raw const C pointer.
         unsafe fn from_ptr(ptr: *const T) -> Self;
