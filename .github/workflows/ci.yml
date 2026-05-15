@@ -18,7 +18,7 @@ jobs:
       matrix:
         dep: [minimal, recent]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust MSRV
       uses: dtolnay/rust-toolchain@master
@@ -51,7 +51,7 @@ jobs:
     name: Check lock files
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust nightly
       uses: dtolnay/rust-toolchain@nightly
@@ -91,14 +91,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
-        toolchain: stable
-        override: true
         components: rustfmt
 
     - name: Cache dependencies
@@ -154,15 +151,10 @@ jobs:
     runs-on: windows-2025-vs2026
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-        components: rustfmt
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
@@ -190,15 +182,10 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-        components: rustfmt
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
@@ -216,15 +203,10 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-        components: rustfmt
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
@@ -251,10 +233,10 @@ jobs:
 
     steps:
       - name: Checkout rust-bitcoinkernel
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout qa-assets corpus
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: alexanderwiederin/qa-assets
           path: qa-assets
