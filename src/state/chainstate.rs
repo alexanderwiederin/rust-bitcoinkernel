@@ -28,9 +28,8 @@
 use std::ffi::CString;
 
 use libbitcoinkernel_sys::{
-    btck_BlockHash, btck_BlockValidationState, btck_ChainstateManager,
-    btck_ChainstateManagerOptions, btck_block_read, btck_block_spent_outputs_read,
-    btck_chainstate_manager_create, btck_chainstate_manager_destroy,
+    btck_BlockHash, btck_ChainstateManager, btck_ChainstateManagerOptions, btck_block_read,
+    btck_block_spent_outputs_read, btck_chainstate_manager_create, btck_chainstate_manager_destroy,
     btck_chainstate_manager_get_active_chain, btck_chainstate_manager_get_best_entry,
     btck_chainstate_manager_get_block_tree_entry_by_hash, btck_chainstate_manager_import_blocks,
     btck_chainstate_manager_options_create, btck_chainstate_manager_options_destroy,
@@ -45,7 +44,7 @@ use crate::{
     core::block::BlockHeader,
     ffi::{
         c_helpers,
-        sealed::{AsPtr, FromMutPtr, FromPtr},
+        sealed::{AsMutPtr, AsPtr, FromMutPtr, FromPtr},
     },
     notifications::types::BlockValidationState,
     Block, BlockHash, BlockSpentOutputs, BlockTreeEntry, KernelError,
@@ -311,7 +310,7 @@ impl ChainstateManager {
             btck_chainstate_manager_process_block_header(
                 self.inner,
                 header.as_ptr(),
-                state.as_ptr() as *mut btck_BlockValidationState,
+                state.as_mut_ptr(),
             )
         };
         if c_helpers::success(processed) {

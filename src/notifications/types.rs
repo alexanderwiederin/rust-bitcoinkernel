@@ -9,7 +9,7 @@ use libbitcoinkernel_sys::{
 };
 
 use crate::{
-    ffi::sealed::{AsPtr, FromMutPtr, FromPtr},
+    ffi::sealed::{AsMutPtr, AsPtr, FromMutPtr, FromPtr},
     BTCK_BLOCK_VALIDATION_RESULT_CACHED_INVALID, BTCK_BLOCK_VALIDATION_RESULT_CONSENSUS,
     BTCK_BLOCK_VALIDATION_RESULT_HEADER_LOW_WORK, BTCK_BLOCK_VALIDATION_RESULT_INVALID_HEADER,
     BTCK_BLOCK_VALIDATION_RESULT_INVALID_PREV, BTCK_BLOCK_VALIDATION_RESULT_MISSING_PREV,
@@ -211,6 +211,12 @@ impl BlockValidationState {
 impl AsPtr<btck_BlockValidationState> for BlockValidationState {
     fn as_ptr(&self) -> *const btck_BlockValidationState {
         self.inner as *const _
+    }
+}
+
+impl AsMutPtr<btck_BlockValidationState> for BlockValidationState {
+    fn as_mut_ptr(&self) -> *mut btck_BlockValidationState {
+        self.inner
     }
 }
 
