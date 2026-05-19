@@ -1,3 +1,5 @@
+#[cfg(feature = "bitcoin")]
+mod bitcoin_interop;
 pub mod block;
 pub mod block_tree_entry;
 pub mod script;

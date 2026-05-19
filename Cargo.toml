@@ -12,8 +12,12 @@ keywords = ["bitcoin", "ffi", "libbitcoinkernel"]
 categories = ["cryptography::cryptocurrencies"]
 readme = "README.md"
 
+[features]
+bitcoin = ["dep:bitcoin"]
+
 [dependencies]
 libbitcoinkernel-sys = { path = "libbitcoinkernel-sys", version = "0.3.0" }
+bitcoin = { version = "0.32.9", optional = true }
 
 [dev-dependencies]
 hex = "0.4"
