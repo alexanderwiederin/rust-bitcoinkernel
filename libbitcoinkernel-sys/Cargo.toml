@@ -1,6 +1,6 @@
 [package]
 name = "libbitcoinkernel-sys"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["sedited <seb.kung@gmail.com>"]
 description = "Raw FFI bindings to libbitcoinkernel. For safe usage, see the bitcoinkernel crate."
@@ -36,7 +36,8 @@ exclude = [
     "bitcoin/doc/design",
     "bitcoin/share",
     "bitcoin/src/bench",
-    "bitcoin/src/ipc",
+    "bitcoin/src/test/fuzz",
+    "bitcoin/src/node/data",
     "bitcoin/test/functional",
     "bitcoin/test/lint",
     "bitcoin/test/sanitizer_suppresions",
@@ -44,6 +45,7 @@ exclude = [
     "bitcoin/share",
     "bitcoin/src/qt",
     "bitcoin/src/bench",
+    "bitcoin/src/zmq",
     "bitcoin/src/wallet",
     "bitcoin/src/bench",
     "bitcoin/src/fuzz"
