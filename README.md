@@ -44,6 +44,15 @@ resolution:
 cargo build --locked
 ```
 
+## Feature flags
+
+- `bitcoin` - enables zero-copy [`Deref`] bridge to [`bitcoin::Script`](https://docs.rs/bitcoin/latest/bitcoin/struct.Script.html), giving kernel script types the full `bitcoin` crate API transparently.
+
+Enable with:
+```bash
+cargo build --features bitcoin
+```
+
 ## Lock files
 
 `Cargo-minimal.lock` and `Cargo-recent.lock` pin dependencies to their minimum
