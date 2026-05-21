@@ -177,6 +177,9 @@ jobs:
     - name: Run tests
       run: cargo test -vv
 
+    - name: Run tests (bitcoin feature)
+      run: cargo test -vv --features bitcoin
+
   linux-aarch64:
     name: Build and Test on Linux ARM64
     runs-on: ubuntu-24.04-arm
@@ -198,6 +201,9 @@ jobs:
     - name: Build and test
       run: cargo test -vv
 
+    - name: Run tests (bitcoin feature)
+      run: cargo test -vv --features bitcoin
+
   macos-build:
     name: Build and Test on macOS
     runs-on: macos-latest
@@ -217,6 +223,9 @@ jobs:
 
     - name: Build and test
       run: cargo test -vv
+
+    - name: Run tests (bitcoin feature)
+      run: cargo test -vv --features bitcoin
 
   fuzz-corpus:
     name: Verify Fuzz Corpus
