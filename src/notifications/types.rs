@@ -141,23 +141,23 @@ impl From<btck_ValidationMode> for ValidationMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum BlockValidationResult {
-    /// Initial value - block has not yet been validated
+    /// Initial value - block has not yet been rejected
     Unset = btck_BlockValidationResult_UNSET,
-    /// Block is valid according to consensus rules
+    /// Invalid by consensus rules (excluding any reason listed below)
     Consensus = btck_BlockValidationResult_CONSENSUS,
     /// Block was cached as invalid (reason not stored)
     CachedInvalid = btck_BlockValidationResult_CACHED_INVALID,
-    /// Block header is invalid (proof of work or timestamp)
+    /// Block header has invalid proof of work or timestamp is too old
     InvalidHeader = btck_BlockValidationResult_INVALID_HEADER,
     /// Block data doesn't match the proof of work commitment
     Mutated = btck_BlockValidationResult_MUTATED,
     /// Previous block is not available
     MissingPrev = btck_BlockValidationResult_MISSING_PREV,
-    /// Previous block is invalid
+    /// A block this one builds on is invalid
     InvalidPrev = btck_BlockValidationResult_INVALID_PREV,
-    /// Block timestamp is too far in the future
+    /// Block timestamp was more than 2 hours in the future (or our clock is bad)
     TimeFuture = btck_BlockValidationResult_TIME_FUTURE,
-    /// Block header indicates insufficient work
+    /// The block header may be on a too-little-work chain
     HeaderLowWork = btck_BlockValidationResult_HEADER_LOW_WORK,
 }
 
