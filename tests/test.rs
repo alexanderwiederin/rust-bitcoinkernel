@@ -858,6 +858,15 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "bitcoin")]
+    #[test]
+    fn test_bitcoin_feature_exposed() {
+        let p2pkh = hex::decode("76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac").unwrap();
+        let script = ScriptPubkey::try_from(p2pkh.as_slice()).unwrap();
+
+        assert!(script.is_p2pkh());
+    }
+
     fn verify_test(
         spent: &str,
         spending: &str,
