@@ -39,13 +39,19 @@ jobs:
 
     - name: Build with MSRV
       run: |
-        # Ensure we're using the right version
         rustc --version
-        # Build the project
-        cargo build --all-features --locked
+        cargo build --locked
+
+    - name: Build with MSRV (bitcoin feature)
+      run: |
+        rustc --version
+        cargo build --features bitcoin --locked
  
     - name: Run tests with MSRV
-      run: cargo test --all-features --locked
+      run: cargo test --locked
+
+    - name: Run tests with MSRV (bitcoin feature)
+      run: cargo test --features bitcoin --locked
 
   check-lock-files:
     name: Check lock files
