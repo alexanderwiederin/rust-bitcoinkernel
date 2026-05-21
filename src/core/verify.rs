@@ -171,37 +171,40 @@ use crate::{
     c_helpers, ffi::sealed::AsPtr, KernelError, ScriptPubkeyExt, TransactionExt, TxOutExt,
 };
 
+/// Bitmask of flags controlling which consensus rules [`verify`] enforces.
+pub type ScriptVerificationFlags = btck_ScriptVerificationFlags;
+
 /// No verification flags.
-pub const VERIFY_NONE: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_NONE;
+pub const VERIFY_NONE: ScriptVerificationFlags = btck_ScriptVerificationFlags_NONE;
 
 /// Validate Pay-to-Script-Hash (BIP 16).
-pub const VERIFY_P2SH: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_P2SH;
+pub const VERIFY_P2SH: ScriptVerificationFlags = btck_ScriptVerificationFlags_P2SH;
 
 /// Require strict DER encoding for ECDSA signatures (BIP 66).
-pub const VERIFY_DERSIG: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_DERSIG;
+pub const VERIFY_DERSIG: ScriptVerificationFlags = btck_ScriptVerificationFlags_DERSIG;
 
 /// Require the dummy element in OP_CHECKMULTISIG to be empty (BIP 147).
-pub const VERIFY_NULLDUMMY: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_NULLDUMMY;
+pub const VERIFY_NULLDUMMY: ScriptVerificationFlags = btck_ScriptVerificationFlags_NULLDUMMY;
 
 /// Enable OP_CHECKLOCKTIMEVERIFY (BIP 65).
-pub const VERIFY_CHECKLOCKTIMEVERIFY: btck_ScriptVerificationFlags =
+pub const VERIFY_CHECKLOCKTIMEVERIFY: ScriptVerificationFlags =
     btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY;
 
 /// Enable OP_CHECKSEQUENCEVERIFY (BIP 112).
-pub const VERIFY_CHECKSEQUENCEVERIFY: btck_ScriptVerificationFlags =
+pub const VERIFY_CHECKSEQUENCEVERIFY: ScriptVerificationFlags =
     btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY;
 
 /// Validate Segregated Witness programs (BIP 141/143).
-pub const VERIFY_WITNESS: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_WITNESS;
+pub const VERIFY_WITNESS: ScriptVerificationFlags = btck_ScriptVerificationFlags_WITNESS;
 
 /// Validate Taproot spends (BIP 341/342). Requires spent outputs.
-pub const VERIFY_TAPROOT: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_TAPROOT;
+pub const VERIFY_TAPROOT: ScriptVerificationFlags = btck_ScriptVerificationFlags_TAPROOT;
 
 /// All consensus rules.
-pub const VERIFY_ALL: btck_ScriptVerificationFlags = btck_ScriptVerificationFlags_ALL;
+pub const VERIFY_ALL: ScriptVerificationFlags = btck_ScriptVerificationFlags_ALL;
 
 /// All consensus rules except Taproot.
-pub const VERIFY_ALL_PRE_TAPROOT: btck_ScriptVerificationFlags = VERIFY_P2SH
+pub const VERIFY_ALL_PRE_TAPROOT: ScriptVerificationFlags = VERIFY_P2SH
     | VERIFY_DERSIG
     | VERIFY_NULLDUMMY
     | VERIFY_CHECKLOCKTIMEVERIFY
@@ -389,7 +392,7 @@ pub fn verify(
     amount: Option<i64>,
     tx_to: &impl TransactionExt,
     input_index: usize,
-    flags: Option<u32>,
+    flags: Option<ScriptVerificationFlags>,
     precomputed_txdata: &PrecomputedTransactionData,
 ) -> Result<(), KernelError> {
     let input_count = tx_to.input_count();
