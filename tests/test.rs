@@ -9,12 +9,11 @@ mod tests {
         prelude::*, verify, Block, BlockHash, BlockHeader, BlockSpentOutputs, BlockTreeEntry,
         BlockValidationStateRef, ChainParams, ChainType, ChainstateManager,
         ChainstateManagerBuilder, Coin, Context, ContextBuilder, KernelError, Log, Logger,
-        PrecomputedTransactionData, ScriptPubkey, ScriptVerifyError, Transaction,
-        TransactionSpentOutputs, TxIn, TxOut, ValidationMode, VERIFY_ALL, VERIFY_ALL_PRE_TAPROOT,
-        VERIFY_CHECKLOCKTIMEVERIFY, VERIFY_CHECKSEQUENCEVERIFY, VERIFY_DERSIG, VERIFY_NONE,
-        VERIFY_NULLDUMMY, VERIFY_P2SH, VERIFY_TAPROOT, VERIFY_WITNESS,
+        PrecomputedTransactionData, ScriptPubkey, ScriptVerificationFlags, ScriptVerifyError,
+        Transaction, TransactionSpentOutputs, TxIn, TxOut, ValidationMode, VERIFY_ALL,
+        VERIFY_ALL_PRE_TAPROOT, VERIFY_CHECKLOCKTIMEVERIFY, VERIFY_CHECKSEQUENCEVERIFY,
+        VERIFY_DERSIG, VERIFY_NONE, VERIFY_NULLDUMMY, VERIFY_P2SH, VERIFY_TAPROOT, VERIFY_WITNESS,
     };
-    use libbitcoinkernel_sys::btck_ScriptVerificationFlags;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
     use std::sync::{Arc, Once};
@@ -865,7 +864,7 @@ mod tests {
         amount: i64,
         input: usize,
         outputs: Vec<TxOut>,
-        flags: btck_ScriptVerificationFlags,
+        flags: ScriptVerificationFlags,
     ) -> Result<(), KernelError> {
         let spent_script_pubkey =
             ScriptPubkey::try_from(hex::decode(spent).unwrap().as_slice()).unwrap();
