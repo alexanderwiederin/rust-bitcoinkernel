@@ -281,9 +281,9 @@ impl std::error::Error for KernelError {
 }
 
 pub use crate::core::{
-    verify, Block, BlockHash, BlockHeader, BlockSpentOutputs, BlockSpentOutputsRef, BlockTreeEntry,
-    Coin, CoinRef, PrecomputedTransactionData, ScriptPubkey, ScriptPubkeyRef,
-    ScriptVerificationFlags, ScriptVerifyError, Transaction, TransactionRef,
+    verify, Block, BlockCheckFlags, BlockCheckResult, BlockHash, BlockHeader, BlockSpentOutputs,
+    BlockSpentOutputsRef, BlockTreeEntry, Coin, CoinRef, PrecomputedTransactionData, ScriptPubkey,
+    ScriptPubkeyRef, ScriptVerificationFlags, ScriptVerifyError, Transaction, TransactionRef,
     TransactionSpentOutputs, TransactionSpentOutputsRef, TxIn, TxInRef, TxOut, TxOutPoint,
     TxOutPointRef, TxOutRef, Txid, TxidRef,
 };
@@ -300,6 +300,10 @@ pub use crate::notifications::{
 pub use crate::state::{
     Chain, ChainParams, ChainType, ChainstateManager, ChainstateManagerBuilder, Context,
     ContextBuilder, ProcessBlockHeaderResult, ProcessBlockResult,
+};
+
+pub use crate::core::block_check_flags::{
+    BLOCK_CHECK_ALL, BLOCK_CHECK_BASE, BLOCK_CHECK_MERKLE, BLOCK_CHECK_POW,
 };
 
 pub use crate::core::verify_flags::{
