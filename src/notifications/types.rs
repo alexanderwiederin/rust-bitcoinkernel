@@ -1,4 +1,7 @@
-use std::marker::PhantomData;
+use std::{
+    fmt::{Debug, Formatter, Result},
+    marker::PhantomData,
+};
 
 use libbitcoinkernel_sys::{
     btck_BlockValidationResult, btck_BlockValidationResult_CACHED_INVALID,
@@ -230,6 +233,15 @@ impl FromMutPtr<btck_BlockValidationState> for BlockValidationState {
 
 impl BlockValidationStateExt for BlockValidationState {}
 
+impl Debug for BlockValidationState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.debug_struct("BlockValidationState")
+            .field("mode", &self.mode())
+            .field("result", &self.result())
+            .finish()
+    }
+}
+
 impl Clone for BlockValidationState {
     fn clone(&self) -> Self {
         BlockValidationState {
@@ -272,6 +284,15 @@ impl<'a> Copy for BlockValidationStateRef<'a> {}
 impl<'a> Clone for BlockValidationStateRef<'a> {
     fn clone(&self) -> Self {
         *self
+    }
+}
+
+impl<'a> Debug for BlockValidationStateRef<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.debug_struct("BlockValidationStateRef")
+            .field("mode", &self.mode())
+            .field("result", &self.result())
+            .finish()
     }
 }
 
@@ -620,5 +641,26 @@ mod tests {
             let back: BlockValidationResult = btck_result.into();
             assert_eq!(result, back);
         }
+    }
+
+    #[test]
+    fn test_block_validation_state_debug() {
+        let state = BlockValidationState::new();
+        let s = format!("{:?}", state);
+        assert!(s.contains("BlockValidationState"));
+        assert!(s.contains("mode"));
+        assert!(s.contains("result"));
+    }
+
+    #[test]
+    fn test_block_validation_state_ref_debug() {
+        use crate::ffi::sealed::FromPtr;
+        let state = BlockValidationState::new();
+        let state_ref: BlockValidationStateRef<'_> =
+            unsafe { BlockValidationStateRef::from_ptr(state.as_ptr()) };
+        let s = format!("{:?}", state_ref);
+        assert!(s.contains("BlockValidationStateRef"));
+        assert!(s.contains("mode"));
+        assert!(s.contains("result"));
     }
 }

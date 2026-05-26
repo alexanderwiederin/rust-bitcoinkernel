@@ -73,7 +73,7 @@ pub enum ProcessBlockResult {
 /// Result of proceesing a header with the [`ChainstateManager`]
 ///
 /// Indicates whether a block header was processed, or rejected, and whether it is valid.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ProcessBlockHeaderResult {
     /// Header was succssfully processed and added to the block tree
     Success(BlockValidationState),
@@ -816,5 +816,29 @@ mod tests {
         let result = ProcessBlockResult::NewBlock;
         let debug_str = format!("{:?}", result);
         assert_eq!(debug_str, "NewBlock");
+    }
+
+    #[test]
+    fn test_process_block_header_result_debug() {
+        let state = BlockValidationState::new();
+        let success = ProcessBlockHeaderResult::Success(state.clone());
+        let debug_str = format!("{:?}", success);
+        assert!(debug_str.contains("Success"));
+
+        let failed = ProcessBlockHeaderResult::Failed(state);
+        let debug_str = format!("{:?}", failed);
+        assert!(debug_str.contains("Failed"));
+    }
+
+    #[test]
+    fn test_process_block_header_result_clone() {
+        let state = BlockValidationState::new();
+        let success = ProcessBlockHeaderResult::Success(state.clone());
+        let cloned = success.clone();
+        assert!(matches!(cloned, ProcessBlockHeaderResult::Success(_)));
+
+        let failed = ProcessBlockHeaderResult::Failed(state);
+        let cloned = failed.clone();
+        assert!(matches!(cloned, ProcessBlockHeaderResult::Failed(_)));
     }
 }
