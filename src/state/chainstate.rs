@@ -73,6 +73,7 @@ pub enum ProcessBlockResult {
 /// Result of proceesing a header with the [`ChainstateManager`]
 ///
 /// Indicates whether a block header was processed, or rejected, and whether it is valid.
+#[must_use = "header processing result must be inspected to determine whether processing completed successfully"]
 #[derive(Clone)]
 pub enum ProcessBlockHeaderResult {
     /// Header was succssfully processed and added to the block tree
