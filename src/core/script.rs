@@ -48,7 +48,7 @@
 //! let p2wpkh = ScriptPubkey::new(&hex::decode(p2wpkh_hex).unwrap()).unwrap();
 //! ```
 
-use std::{ffi::c_void, marker::PhantomData};
+use std::{ffi::c_void, marker::PhantomData, panic};
 
 use libbitcoinkernel_sys::{
     btck_ScriptPubkey, btck_script_pubkey_copy, btck_script_pubkey_create,
@@ -57,7 +57,10 @@ use libbitcoinkernel_sys::{
 
 use crate::{
     c_serialize,
-    ffi::sealed::{AsPtr, FromMutPtr, FromPtr},
+    ffi::{
+        c_helpers,
+        sealed::{AsPtr, FromMutPtr, FromPtr},
+    },
     KernelError,
 };
 
@@ -83,6 +86,60 @@ pub trait ScriptPubkeyExt: AsPtr<btck_ScriptPubkey> {
             btck_script_pubkey_to_bytes(self.as_ptr(), Some(callback), user_data)
         })
         .expect("Script pubkey to_bytes should never fail")
+    }
+
+    /// Returns a zero-copy view of the script's raw bytes.
+    /// Unlike [`to_bytes`](ScriptPubkeyExt::to_bytes), this does not allocate.
+    /// The returned slice borrows directly from kernel-managed memory and is
+    /// valid for the lifetime of `self`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, ScriptPubkey};
+    /// let script = ScriptPubkey::new(&[0x76, 0xa9]).unwrap();
+    /// assert_eq!(script.as_bytes(), &[0x76, 0xa9]);
+    /// ```
+    fn as_bytes(&self) -> &[u8] {
+        struct BytesOut {
+            ptr: *const u8,
+            len: usize,
+        }
+
+        unsafe extern "C" fn writer(
+            data: *const c_void,
+            len: usize,
+            user_data: *mut c_void,
+        ) -> i32 {
+            panic::catch_unwind(|| {
+                let out = &mut *(user_data as *mut BytesOut);
+                out.ptr = data as *const u8;
+                out.len = len;
+                c_helpers::to_c_result(true)
+            })
+            .unwrap_or_else(|_| c_helpers::to_c_result(false))
+        }
+
+        let mut out = BytesOut {
+            ptr: std::ptr::null(),
+            len: 0,
+        };
+        let ret = unsafe {
+            btck_script_pubkey_to_bytes(
+                self.as_ptr(),
+                Some(writer),
+                &mut out as *mut BytesOut as *mut c_void,
+            )
+        };
+        assert!(
+            c_helpers::success(ret),
+            "btck_script_pubkey_to_bytes should never fail for a valid ScriptPubkey"
+        );
+
+        if out.ptr.is_null() {
+            return &[];
+        }
+        unsafe { std::slice::from_raw_parts(out.ptr, out.len) }
     }
 }
 
@@ -347,6 +404,43 @@ mod tests {
         let script = ScriptPubkey::try_from(script_data.as_slice()).unwrap();
         let bytes = script.to_bytes();
         assert_eq!(bytes, script_data);
+    }
+
+    #[test]
+    fn test_scriptpubkey_as_bytes_empty() {
+        let script = ScriptPubkey::new(&[]).unwrap();
+        assert_eq!(script.as_bytes(), &[]);
+    }
+
+    #[test]
+    fn test_scriptpubkey_as_bytes() {
+        let script_data = vec![0x76, 0xa9, 0x14];
+        let script = ScriptPubkey::new(&script_data).unwrap();
+        assert_eq!(script.as_bytes(), script_data.as_slice());
+    }
+
+    #[test]
+    fn test_scriptpubkey_ref_as_bytes() {
+        let script_data = vec![0x76, 0xa9, 0x14];
+        let script = ScriptPubkey::new(&script_data).unwrap();
+        let script_ref = script.as_ref();
+        assert_eq!(script_ref.as_bytes(), script_data.as_slice());
+    }
+
+    #[test]
+    fn test_as_bytes_matches_to_bytes() {
+        let script_data = vec![0x76, 0xa9, 0x14];
+        let script = ScriptPubkey::new(&script_data).unwrap();
+        assert_eq!(script.as_bytes(), script.to_bytes().as_slice());
+    }
+
+    #[test]
+    fn test_as_bytes_no_copy() {
+        let script_data = vec![0x76, 0xa9, 0x14];
+        let script = ScriptPubkey::new(&script_data).unwrap();
+        let bytes1 = script.as_bytes();
+        let bytes2 = script.as_bytes();
+        assert_eq!(bytes1.as_ptr(), bytes2.as_ptr());
     }
 
     #[test]

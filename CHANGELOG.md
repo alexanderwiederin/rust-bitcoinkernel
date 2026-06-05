@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Block::check` to perform context-free validation of a block (size, weight, coinbase, transactions, sigops), with optional proof-of-work and merkle-root checks toggled via the `BLOCK_CHECK_BASE` / `_POW` / `_MERKLE` / `_ALL` flags. Returns a `BlockCheckResult` enum carrying the validation state on failure.
 - Implemented `Debug` for `BlockValidationResult`, `BlockValidationStateRef`, `ProcessBlockHeaderresult` and `BlockCheckResult`, enabling inspection via `{:?}` in logs and test output.
 - Added `#[must_use]` to `BlockCheckResult` and `ProcessBlockHeaderResult` to warn when validation results are silently ignored.
+- Added `ScriptPubkeyExt::as_bytes` to return a zero-copy slice into kernel-managed memory. Unlike `to_bytes`, this does not allocate.
 
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
