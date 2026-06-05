@@ -74,6 +74,7 @@ pub enum ProcessBlockResult {
 ///
 /// Indicates whether a block header was processed, or rejected, and whether it is valid.
 #[derive(Clone, Debug)]
+#[must_use = "header processing result must be inspected to determine whether processing completed successfully"]
 pub enum ProcessBlockHeaderResult {
     /// Header was succssfully processed and added to the block tree
     Success(BlockValidationState),

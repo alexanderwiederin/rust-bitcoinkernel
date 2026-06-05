@@ -177,6 +177,7 @@ pub const BLOCK_CHECK_ALL: BlockCheckFlags = btck_BlockCheckFlags_ALL;
 /// On failure, the [`BlockValidationState`] carries details that can be
 /// inspected via [`BlockValidationStateExt`](crate::notifications::BlockValidationStateExt).
 #[derive(Clone, Debug)]
+#[must_use = "check result must be inspected to determine whether the block is valid"]
 pub enum BlockCheckResult {
     /// The block passed the requested context-free checks.
     Valid,
