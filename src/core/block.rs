@@ -176,6 +176,7 @@ pub const BLOCK_CHECK_ALL: BlockCheckFlags = btck_BlockCheckFlags_ALL;
 ///
 /// On failure, the [`BlockValidationState`] carries details that can be
 /// inspected via [`BlockValidationStateExt`](crate::notifications::BlockValidationStateExt).
+#[derive(Clone, Debug)]
 pub enum BlockCheckResult {
     /// The block passed the requested context-free checks.
     Valid,
@@ -2346,6 +2347,29 @@ mod tests {
             format!("{block_hash_ref}"),
             "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
         );
+    }
+    #[test]
+    fn test_block_check_result_debug() {
+        let valid = BlockCheckResult::Valid;
+        let debug_str = format!("{:?}", valid);
+        assert_eq!(debug_str, "Valid");
+
+        let state = BlockValidationState::new();
+        let invalid = BlockCheckResult::Invalid(state);
+        let debug_str = format!("{:?}", invalid);
+        assert!(debug_str.contains("Invalid"));
+    }
+
+    #[test]
+    fn test_block_check_result_clone() {
+        let valid = BlockCheckResult::Valid;
+        let cloned = valid.clone();
+        assert!(matches!(cloned, BlockCheckResult::Valid));
+
+        let state = BlockValidationState::new();
+        let invalid = BlockCheckResult::Invalid(state);
+        let cloned = invalid.clone();
+        assert!(matches!(cloned, BlockCheckResult::Invalid(_)));
     }
 
     #[test]
