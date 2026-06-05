@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `ScriptPubkeyExt::as_bytes` to return a zero-copy slice into kernel-managed memory. Unlike `to_bytes`, this does not allocate.
 - Added `Transaction::check` for context-free consensus validation of a transaction. Returns `TxCheckResult::Valid` on success or `TxCheckResult::Invalid(TxValidationResult)` on failure.
 - Added `TxValidationResult` enum with all transaction validation result variants.
+- Added `ChainParams::new_signet` and `ContextBuilder::signet` to configure a custom signet from a user-provided challenge.
 
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
