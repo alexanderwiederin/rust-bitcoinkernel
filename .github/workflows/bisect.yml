@@ -1,0 +1,64 @@
+name: Bisect MSRV
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bisect-msrv:
+    name: MSRV bisect - ${{ matrix.sha }} (${{ matrix.dep }} deps)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sha:
+          - c8afc60e56c51f273cfe164807e7fc3b0bf2ac50
+          - 270c40328faa93952343f3f7c90f5bb12f685678
+          - f45b85fedc21e5c47c8bb54f7aa4e01d198ed57c
+          - 6f03a4c0887def816ba888ab94899d9a5716d635
+          - bd456b449db449b252b48192bafcb0ce9947b3c0
+          - 7c564f74898c1b65e7b45db4291f9221c032a006
+          - 52b55986a8707aeb70bd3cd1f758ae818e9f086b
+          - cb1a86b714fb38070a9ed0937b064221982a0b8c
+          - 0090061e5e4c69b3331584495d310e8ec0c11c3f
+          - cc6de719aadb0da6edaf22e86fe450fe1ab6998c
+          - 0390cce5e915398a8f7d07278c0e1ad8fdb07674
+          - 208fcceea79b216694c876f128fb1ce48f11cff4
+          - 9a3417438d8b6a93d62ad24327e971362c33d233
+          - ee2688af96af93e6a22d4237ca1f00618910aff3
+          - b0e7931531f54f971964b48ad222d43328aa641e
+        dep: [minimal, recent]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+
+      - name: Install Rust MSRV
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.71.0
+
+      - name: Install Boost library
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.sha }}-${{ matrix.dep }}
+
+      - name: Set Cargo.lock
+        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
+
+      - name: Pin rustc-hash (MSRV compat)
+        run: cargo update -p rustc-hash --precise 2.1.1
+
+      - name: Build with MSRV
+        run: |
+          rustc --version
+          cargo build --all-features --locked
+
+      - name: Run tests with MSRV
+        run: cargo test --all-features --locked -- --test-threads=1
