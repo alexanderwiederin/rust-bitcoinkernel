@@ -149,7 +149,14 @@ use std::{
 
 use libbitcoinkernel_sys::{
     btck_Transaction, btck_TransactionInput, btck_TransactionOutPoint, btck_TransactionOutput,
-    btck_Txid, btck_transaction_copy, btck_transaction_count_inputs,
+    btck_TxValidationResult, btck_TxValidationResult_CONFLICT, btck_TxValidationResult_CONSENSUS,
+    btck_TxValidationResult_INPUTS_NOT_STANDARD, btck_TxValidationResult_MEMPOOL_POLICY,
+    btck_TxValidationResult_MISSING_INPUTS, btck_TxValidationResult_NOT_STANDARD,
+    btck_TxValidationResult_NO_MEMPOOL, btck_TxValidationResult_PREMATURE_SPEND,
+    btck_TxValidationResult_RECONSIDERABLE, btck_TxValidationResult_UNKNOWN,
+    btck_TxValidationResult_UNSET, btck_TxValidationResult_WITNESS_MUTATED,
+    btck_TxValidationResult_WITNESS_STRIPPED, btck_TxValidationState, btck_Txid,
+    btck_transaction_check, btck_transaction_copy, btck_transaction_count_inputs,
     btck_transaction_count_outputs, btck_transaction_create, btck_transaction_destroy,
     btck_transaction_get_input_at, btck_transaction_get_locktime, btck_transaction_get_output_at,
     btck_transaction_get_txid, btck_transaction_input_copy, btck_transaction_input_destroy,
@@ -158,8 +165,10 @@ use libbitcoinkernel_sys::{
     btck_transaction_out_point_get_index, btck_transaction_out_point_get_txid,
     btck_transaction_output_copy, btck_transaction_output_create, btck_transaction_output_destroy,
     btck_transaction_output_get_amount, btck_transaction_output_get_script_pubkey,
-    btck_transaction_to_bytes, btck_txid_copy, btck_txid_destroy, btck_txid_equals,
-    btck_txid_to_bytes,
+    btck_transaction_to_bytes, btck_tx_validation_state_create, btck_tx_validation_state_destroy,
+    btck_tx_validation_state_get_tx_validation_result,
+    btck_tx_validation_state_get_validation_mode, btck_txid_copy, btck_txid_destroy,
+    btck_txid_equals, btck_txid_to_bytes,
 };
 
 use crate::{
@@ -168,7 +177,7 @@ use crate::{
         c_helpers::present,
         sealed::{AsPtr, FromMutPtr, FromPtr},
     },
-    KernelError, ScriptPubkeyExt,
+    KernelError, ScriptPubkeyExt, ValidationMode,
 };
 
 use super::script::ScriptPubkeyRef;
@@ -398,6 +407,40 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// ```
     fn locktime(&self) -> u32 {
         unsafe { btck_transaction_get_locktime(self.as_ptr()) }
+    }
+
+    /// Runs context-free consensus validation on this transaction.
+    ///
+    /// Performs basic structural checks (empty inputs/outputs, value ranges,
+    /// duplicate inputs, coinbase script size) without requiring chain state.
+    /// On failure, only [`TxValidationResult::Consensus`] is reachable via this
+    /// function.
+    ///
+    /// # Returns
+    /// [`TxCheckResult::Valid`] on success, otherwise
+    /// [`TxCheckResult::Invalid`] carrying the validation state.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction, TxCheckResult};
+    /// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+    /// # let tx_data = vec![0u8; 100]; // placeholder
+    /// # let tx = Transaction::new(&tx_data)?;
+    /// match tx.check() {
+    ///     TxCheckResult::Valid => println!("transaction passed consensus checks"),
+    ///     TxCheckResult::Invalid(reason) => println!("transaction failed: {:?}", reason),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn check(&self) -> TxCheckResult {
+        let state = TxValidationState::new();
+
+        unsafe { btck_transaction_check(self.as_ptr(), state.inner) };
+        match state.mode() {
+            ValidationMode::Valid => TxCheckResult::Valid,
+            _ => TxCheckResult::Invalid(state.result()),
+        }
     }
 }
 
@@ -1656,6 +1699,91 @@ impl<'a> Display for TxidRef<'a> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum TxValidationResult {
+    Unset = btck_TxValidationResult_UNSET,
+    Consensus = btck_TxValidationResult_CONSENSUS,
+    InputsNotStandard = btck_TxValidationResult_INPUTS_NOT_STANDARD,
+    NotStandard = btck_TxValidationResult_NOT_STANDARD,
+    MissingInputs = btck_TxValidationResult_MISSING_INPUTS,
+    PrematureSpend = btck_TxValidationResult_PREMATURE_SPEND,
+    WitnessMutated = btck_TxValidationResult_WITNESS_MUTATED,
+    WitnessStripped = btck_TxValidationResult_WITNESS_STRIPPED,
+    Conflict = btck_TxValidationResult_CONFLICT,
+    MempoolPolicy = btck_TxValidationResult_MEMPOOL_POLICY,
+    NoMempool = btck_TxValidationResult_NO_MEMPOOL,
+    Reconsiderable = btck_TxValidationResult_RECONSIDERABLE,
+    Unknown = btck_TxValidationResult_UNKNOWN,
+}
+
+impl From<TxValidationResult> for btck_TxValidationResult {
+    fn from(result: TxValidationResult) -> Self {
+        result as btck_TxValidationResult
+    }
+}
+
+#[allow(non_upper_case_globals)]
+impl From<btck_TxValidationResult> for TxValidationResult {
+    fn from(value: btck_TxValidationResult) -> Self {
+        match value {
+            btck_TxValidationResult_UNSET => TxValidationResult::Unset,
+            btck_TxValidationResult_CONSENSUS => TxValidationResult::Consensus,
+            btck_TxValidationResult_INPUTS_NOT_STANDARD => TxValidationResult::InputsNotStandard,
+            btck_TxValidationResult_NOT_STANDARD => TxValidationResult::NotStandard,
+            btck_TxValidationResult_MISSING_INPUTS => TxValidationResult::MissingInputs,
+            btck_TxValidationResult_PREMATURE_SPEND => TxValidationResult::PrematureSpend,
+            btck_TxValidationResult_WITNESS_MUTATED => TxValidationResult::WitnessMutated,
+            btck_TxValidationResult_WITNESS_STRIPPED => TxValidationResult::WitnessStripped,
+            btck_TxValidationResult_CONFLICT => TxValidationResult::Conflict,
+            btck_TxValidationResult_MEMPOOL_POLICY => TxValidationResult::MempoolPolicy,
+            btck_TxValidationResult_NO_MEMPOOL => TxValidationResult::NoMempool,
+            btck_TxValidationResult_RECONSIDERABLE => TxValidationResult::Reconsiderable,
+            btck_TxValidationResult_UNKNOWN => TxValidationResult::Unknown,
+            _ => panic!("Unknown tx validation result: {}", value),
+        }
+    }
+}
+
+/// Outcome of [`Transaction::check`].
+///
+/// On failure, the [`TxValidationResult`] carries the reason the transaction
+/// failed, inspectable via the `result` field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use = "check result must be inspected to determine whether the transaction is valid"]
+pub enum TxCheckResult {
+    /// The transaction passed context-free consensus checks.
+    Valid,
+    /// The transaction failed consensus validation.
+    Invalid(TxValidationResult),
+}
+
+struct TxValidationState {
+    inner: *mut btck_TxValidationState,
+}
+
+impl TxValidationState {
+    fn new() -> Self {
+        TxValidationState {
+            inner: unsafe { btck_tx_validation_state_create() },
+        }
+    }
+
+    fn mode(&self) -> ValidationMode {
+        unsafe { btck_tx_validation_state_get_validation_mode(self.inner).into() }
+    }
+
+    fn result(&self) -> TxValidationResult {
+        unsafe { btck_tx_validation_state_get_tx_validation_result(self.inner).into() }
+    }
+}
+
+impl Drop for TxValidationState {
+    fn drop(&mut self) {
+        unsafe { btck_tx_validation_state_destroy(self.inner) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1958,6 +2086,41 @@ mod tests {
     fn test_transaction_locktime_zero() {
         let (_, tx) = get_test_transactions();
         assert_eq!(tx.locktime(), 0);
+    }
+
+    #[test]
+    fn test_transaction_check_valid() {
+        let (tx, _) = get_test_transactions();
+        assert_eq!(tx.check(), TxCheckResult::Valid);
+    }
+
+    #[test]
+    fn test_transaction_coinbase_valid() {
+        let (tx, _) = get_test_coinbase_transactions();
+        assert_eq!(tx.check(), TxCheckResult::Valid);
+    }
+
+    #[test]
+    fn test_transaction_check_invalid() {
+        let tx_no_outputs = hex::decode(
+            "01000000010001000000000000000000000000000000000000000000000000000000000000\
+             000000006d483045022100f16703104aab4e4088317c862daec83440242411b039d14280e0\
+             3dd33b487ab802201318a7be236672c5c56083eb7a5a195bc57a40af7923ff8545016cd3b5\
+             71e2a601232103c40e5d339df3f30bf753e7e04450ae4ef76c9e45587d1d993bdc4cd06f06\
+             51c7acffffffff0000000000",
+        )
+        .unwrap();
+        let tx = Transaction::new(&tx_no_outputs).unwrap();
+        assert_eq!(
+            tx.check(),
+            TxCheckResult::Invalid(TxValidationResult::Consensus)
+        );
+    }
+
+    #[test]
+    fn test_transaction_check_ref() {
+        let (tx, _) = get_test_transactions();
+        assert_eq!(tx.as_ref().check(), TxCheckResult::Valid);
     }
 
     // TxOut tests
