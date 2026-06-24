@@ -358,7 +358,13 @@ static RPCMethod addnode()
     if (command == "onetry")
     {
         CAddress addr;
-        connman.OpenNetworkConnection(addr, /*fCountFailure=*/false, /*grant_outbound=*/{}, std::string{node_arg}.c_str(), ConnectionType::MANUAL, use_v2transport);
+        connman.OpenNetworkConnection(/*addrConnect=*/addr,
+                                      /*fCountFailure=*/false,
+                                      /*grant_outbound=*/{},
+                                      /*pszDest=*/std::string{node_arg}.c_str(),
+                                      /*conn_type=*/ConnectionType::MANUAL,
+                                      /*use_v2transport=*/use_v2transport,
+                                      /*proxy_override=*/std::nullopt);
         return UniValue::VNULL;
     }
 
@@ -1167,7 +1173,7 @@ static RPCMethod exportasmap()
 
             UniValue result(UniValue::VOBJ);
             result.pushKV("path", export_path.utf8string());
-            result.pushKV("bytes_written", (uint64_t)node::data::ip_asn.size());
+            result.pushKV("bytes_written", node::data::ip_asn.size());
             result.pushKV("file_hash", HexStr(hasher.GetSHA256()));
             return result;
 #endif

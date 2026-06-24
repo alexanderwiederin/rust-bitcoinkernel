@@ -48,6 +48,8 @@ static const unsigned int MAX_CMPCTBLOCKS_INFLIGHT_PER_BLOCK = 3;
 /** Number of headers sent in one getheaders result. We rely on the assumption that if a peer sends
  *  less than this number, we reached its tip. Changing this value is a protocol upgrade. */
 static const unsigned int MAX_HEADERS_RESULTS = 2000;
+/** The compactblocks version we support. See BIP 152. */
+static constexpr uint64_t CMPCTBLOCKS_VERSION{2};
 
 struct CNodeStateStats {
     int nSyncHeight = -1;
@@ -69,6 +71,7 @@ struct CNodeStateStats {
 struct PeerManagerInfo {
     std::chrono::seconds median_outbound_time_offset{0s};
     bool ignores_incoming_txs{false};
+    bool private_broadcast{DEFAULT_PRIVATE_BROADCAST};
 };
 
 class PeerManager : public CValidationInterface, public NetEventsInterface

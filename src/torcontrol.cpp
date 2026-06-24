@@ -10,7 +10,6 @@
 #include <common/args.h>
 #include <compat/compat.h>
 #include <crypto/hmac_sha256.h>
-#include <logging.h>
 #include <net.h>
 #include <netaddress.h>
 #include <netbase.h>
@@ -18,6 +17,7 @@
 #include <tinyformat.h>
 #include <util/check.h>
 #include <util/fs.h>
+#include <util/log.h>
 #include <util/readwritefile.h>
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -191,7 +191,7 @@ bool TorControlConnection::ProcessBuffer()
         // Parse: <code><separator><data>
         // <status>(-|+| )<data>
         m_message.code = ToIntegral<int>(line->substr(0, 3)).value_or(0);
-        m_message.lines.push_back(line->substr(4));
+        m_message.lines.emplace_back(line->substr(4));
         char separator = (*line)[3]; // '-', '+', or ' '
 
         if (separator == ' ') {
