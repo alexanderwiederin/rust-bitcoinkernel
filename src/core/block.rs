@@ -601,6 +601,12 @@ impl BlockHeader {
     /// # }
     /// ```
     pub fn new(raw_header: &[u8]) -> Result<Self, KernelError> {
+        if raw_header.len() != 80 {
+            return Err(KernelError::InvalidLength {
+                expected: 80,
+                actual: raw_header.len(),
+            });
+        }
         let inner = unsafe {
             btck_block_header_create(raw_header.as_ptr() as *const c_void, raw_header.len())
         };
@@ -2160,14 +2166,39 @@ mod tests {
     fn test_block_header_new() {
         let block_data = read_block_data();
         let block = Block::new(&block_data[0]).unwrap();
-        let header = BlockHeader::new(&block_data[0]).unwrap();
+        let header = BlockHeader::new(&block_data[0][..80]).unwrap();
         assert_eq!(block.hash(), header.hash());
+    }
+
+    #[test]
+    fn test_block_header_new_invalid_length() {
+        let too_short = [0u8; 10];
+        let result = BlockHeader::new(&too_short);
+        assert!(matches!(
+            result,
+            Err(KernelError::InvalidLength {
+                expected: 80,
+                actual: 10
+            })
+        ));
+    }
+
+    #[test]
+    fn test_block_header_new_empty() {
+        let result = BlockHeader::new(&[]);
+        assert!(matches!(
+            result,
+            Err(KernelError::InvalidLength {
+                expected: 80,
+                actual: 0
+            })
+        ));
     }
 
     #[test]
     fn test_block_header_try_from() {
         let block_data = read_block_data();
-        let header = BlockHeader::try_from(block_data[0].as_slice());
+        let header = BlockHeader::try_from(block_data[0][..80].as_ref());
         assert!(header.is_ok());
     }
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `btck_block_header_create` now asserts that the input buffer is non-null and exactly 80 bytes; previously non-null buffer of any length was accepted
+- `btck_transaction_create`, `btck_script_pubkey_create` and `btck_block_create` now assert valid buffer preconditions rather than returning null on invalid input
+
 ## [0.3.0] - 2026-05-20
 
 ### Added
