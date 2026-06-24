@@ -18,6 +18,7 @@ pub type btck_LogLevel = u8;
 pub type btck_ScriptVerificationFlags = u32;
 pub type btck_ScriptVerifyStatus = u8;
 pub type btck_SynchronizationState = u8;
+pub type btck_TxValidationResult = u32;
 pub type btck_ValidationMode = u8;
 pub type btck_Warning = u8;
 
@@ -32,6 +33,22 @@ pub const btck_BlockValidationResult_MISSING_PREV: btck_BlockValidationResult = 
 pub const btck_BlockValidationResult_INVALID_PREV: btck_BlockValidationResult = 6;
 pub const btck_BlockValidationResult_TIME_FUTURE: btck_BlockValidationResult = 7;
 pub const btck_BlockValidationResult_HEADER_LOW_WORK: btck_BlockValidationResult = 8;
+
+// btck_TxValidationResult
+
+pub const btck_TxValidationResult_UNSET: btck_TxValidationResult = 0;
+pub const btck_TxValidationResult_CONSENSUS: btck_TxValidationResult = 1;
+pub const btck_TxValidationResult_INPUTS_NOT_STANDARD: btck_TxValidationResult = 2;
+pub const btck_TxValidationResult_NOT_STANDARD: btck_TxValidationResult = 3;
+pub const btck_TxValidationResult_MISSING_INPUTS: btck_TxValidationResult = 4;
+pub const btck_TxValidationResult_PREMATURE_SPEND: btck_TxValidationResult = 5;
+pub const btck_TxValidationResult_WITNESS_MUTATED: btck_TxValidationResult = 6;
+pub const btck_TxValidationResult_WITNESS_STRIPPED: btck_TxValidationResult = 7;
+pub const btck_TxValidationResult_CONFLICT: btck_TxValidationResult = 8;
+pub const btck_TxValidationResult_MEMPOOL_POLICY: btck_TxValidationResult = 9;
+pub const btck_TxValidationResult_NO_MEMPOOL: btck_TxValidationResult = 10;
+pub const btck_TxValidationResult_RECONSIDERABLE: btck_TxValidationResult = 11;
+pub const btck_TxValidationResult_UNKNOWN: btck_TxValidationResult = 12;
 
 // btck_ChainType
 
@@ -183,6 +200,10 @@ pub struct btck_ScriptPubkey {
 }
 #[repr(C)]
 pub struct btck_Transaction {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+pub struct btck_TxValidationState {
     _unused: [u8; 0],
 }
 #[repr(C)]
@@ -360,6 +381,19 @@ const _: () = {
 // extern "C" declarations - grouped by type
 
 extern "C" {
+    // --- TxValidationState --------------------------------------------------
+
+    pub fn btck_tx_validation_state_create() -> *mut btck_TxValidationState;
+
+    pub fn btck_tx_validation_state_get_validation_mode(
+        state: *const btck_TxValidationState,
+    ) -> btck_ValidationMode;
+
+    pub fn btck_tx_validation_state_get_tx_validation_result(
+        state: *const btck_TxValidationState,
+    ) -> btck_TxValidationResult;
+
+    pub fn btck_tx_validation_state_destroy(state: *mut btck_TxValidationState);
 
     // --- Transaction --------------------------------------------------------
 
@@ -393,6 +427,11 @@ extern "C" {
     pub fn btck_transaction_get_locktime(transaction: *const btck_Transaction) -> u32;
 
     pub fn btck_transaction_get_txid(transaction: *const btck_Transaction) -> *const btck_Txid;
+
+    pub fn btck_transaction_check(
+        tx: *const btck_Transaction,
+        validation: *mut btck_TxValidationState,
+    ) -> c_int;
 
     pub fn btck_transaction_destroy(transaction: *mut btck_Transaction);
 

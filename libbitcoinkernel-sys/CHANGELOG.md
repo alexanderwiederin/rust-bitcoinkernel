@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New `btck_TxValidationState` opaque type for holding transaction validation state
+- New `btck_TxValidationResult` type with named constants for all transaction validation result variants
+- New `btck_tx_validation_state_create`, `btck_tx_validation_state_get_validation_mode`, `btck_tx_validation_state_get_tx_validation_result` and `btck_tx_validation_state_destroy` for managing and inspecting transaction validation state
+- New `btck_transaction_check` for context-free consensus validation of transactions (reachable results: `UNSET` on success, `CONSENSUS` on failure)
+
 ### Changed
 - `btck_block_header_create` now asserts that the input buffer is non-null and exactly 80 bytes; previously non-null buffer of any length was accepted
 - `btck_transaction_create`, `btck_script_pubkey_create` and `btck_block_create` now assert valid buffer preconditions rather than returning null on invalid input
