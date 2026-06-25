@@ -16,9 +16,9 @@ variants.
   and test the values returned."""
 
 import concurrent.futures
+import threading
 import time
 
-from test_framework.authproxy import JSONRPCException
 from test_framework.blocktools import COINBASE_MATURITY
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.descriptors import descsum_create
@@ -26,6 +26,7 @@ from test_framework.script import SEQUENCE_LOCKTIME_TYPE_FLAG
 from test_framework.util import (
     assert_equal,
     assert_raises_rpc_error,
+    JSONRPCException,
 )
 from test_framework.wallet_util import (
     get_generate_key,
@@ -64,6 +65,135 @@ class ImportDescriptorsTest(BitcoinTestFramework):
         if error_code is not None:
             assert_equal(result[0]['error']['code'], error_code)
             assert_equal(result[0]['error']['message'], error_message)
+
+    def test_import_unused_key(self):
+        self.log.info("Test import of unused(KEY)")
+        self.nodes[0].createwallet(wallet_name="import_unused", blank=True)
+        wallet = self.nodes[0].get_wallet_rpc("import_unused")
+
+        assert_equal(len(wallet.gethdkeys()), 0)
+
+        xprv = "tprv8ZgxMBicQKsPeuVhWwi6wuMQGfPKi9Li5GtX35jVNknACgqe3CY4g5xgkfDDJcmtF7o1QnxWDRYw4H5P26PXq7sbcUkEqeR4fg3Kxp2tigg"
+        xpub = "tpubD6NzVbkrYhZ4YNXVQbNhMK1WqguFsUXceaVJKbmno2aZ3B6QfbMeraaYvnBSGpV3vxLyTTK9DYT1yoEck4XUScMzXoQ2U2oSmE2JyMedq3H"
+        self.test_importdesc({"desc":descsum_create(f"unused({xpub})"),
+                              "timestamp": "now"},
+                              success=False,
+                              error_code=-4,
+                              error_message='Cannot import descriptor without private keys to a wallet with private keys enabled',
+                              wallet=wallet)
+        self.test_importdesc({"timestamp": "now", "desc": descsum_create(f"unused({xprv})")},
+                             success=True,
+                             wallet=wallet)
+        hdkeys = wallet.gethdkeys()
+        assert_equal(len(hdkeys), 1)
+        assert_equal(hdkeys[0]["xpub"], xpub)
+        wallet.unloadwallet()
+
+    def test_import_unused_key_existing(self):
+        self.log.info("Test import of unused(KEY) with existing KEY")
+        self.nodes[0].createwallet(wallet_name="import_existing_unused")
+        wallet = self.nodes[0].get_wallet_rpc("import_existing_unused")
+
+        hdkeys = wallet.gethdkeys(private=True)
+        assert_equal(len(hdkeys), 1)
+        xprv = hdkeys[0]["xprv"]
+
+        self.test_importdesc({"timestamp": "now", "desc": descsum_create(f"unused({xprv})")},
+                             success=False,
+                             error_code=-4,
+                             error_message="Cannot import an unused() descriptor when its private key is already in the wallet",
+                             wallet=wallet)
+        wallet.unloadwallet()
+
+    def test_import_unused_noprivs(self):
+        self.log.info("Test import of unused(KEY) to wallet without privkeys")
+        self.nodes[0].createwallet(wallet_name="import_unused_noprivs", disable_private_keys=True)
+        wallet = self.nodes[0].get_wallet_rpc("import_unused_noprivs")
+
+        xpub = "tpubD6NzVbkrYhZ4YNXVQbNhMK1WqguFsUXceaVJKbmno2aZ3B6QfbMeraaYvnBSGpV3vxLyTTK9DYT1yoEck4XUScMzXoQ2U2oSmE2JyMedq3H"
+        self.test_importdesc({"timestamp": "now", "desc": descsum_create(f"unused({xpub})")},
+                             success=False,
+                             error_code=-4,
+                             error_message="Cannot import unused() to wallet without private keys enabled",
+                             wallet=wallet)
+        wallet.unloadwallet()
+
+    def test_rescan_fails_import(self):
+        xpriv = "tprv8ZgxMBicQKsPeuVhWwi6wuMQGfPKi9Li5GtX35jVNknACgqe3CY4g5xgkfDDJcmtF7o1QnxWDRYw4H5P26PXq7sbcUkEqeR4fg3Kxp2tigg"
+
+        self.log.info("Test importdescriptors fails when wallet is already rescanning")
+        wallet_name = "rescan_wallet"
+        self.nodes[0].createwallet(wallet_name=wallet_name, blank=True)
+        other_desc = descsum_create("pkh(" + get_generate_key().privkey + ")")
+
+        w_import = self.nodes[0].create_new_rpc_connection(mode="AUTHPROXY") / f"wallet/{wallet_name}"
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as thread:
+            w_rescan = self.nodes[0].create_new_rpc_connection(mode="AUTHPROXY") / f"wallet/{wallet_name}"
+            w_conflict = self.nodes[0].create_new_rpc_connection(mode="AUTHPROXY") / f"wallet/{wallet_name}"
+            # Use an xprv with timestamp=0 and a large key-range to trigger a slow full rescan that stays in-flight
+            slow_desc = [{"desc": descsum_create("pkh(" + xpriv + "/0h/*h)"),
+            "timestamp": 0, "range": [0, 10000]}]
+            conflicting_desc = [{"desc": descsum_create("pkh(" + xpriv + "/1h/*h)"),
+            "timestamp": 0, "range": [0, 10000]}]
+
+            start = threading.Barrier(3)
+
+            def import_after_barrier(wallet, descriptors):
+                start.wait(timeout=10)
+                return wallet.importdescriptors(descriptors)
+
+            imports = [
+                thread.submit(import_after_barrier, w_rescan, slow_desc),
+                thread.submit(import_after_barrier, w_conflict, conflicting_desc),
+            ]
+            start.wait(timeout=10)
+
+            # One importdescriptor call must hold WalletRescanReserver while the other fails immediately.
+            num_errors = 0
+            num_success = 0
+            for future in concurrent.futures.as_completed(imports, timeout=30 * self.options.timeout_factor):
+                try:
+                    assert_equal(future.result(), [{'success': True}])
+                    num_success += 1
+                except JSONRPCException as e:
+                    assert_equal(e.error["code"], -4)
+                    assert_equal(e.error["message"], "Wallet is currently rescanning. Abort existing rescan or wait.")
+                    num_errors += 1
+
+            assert_equal(num_success, 1)
+            assert_equal(num_errors, 1)
+
+        # After the rescan finishes, any importdescriptors should succeed.
+        result = w_import.importdescriptors([{"desc": other_desc, "timestamp": "now"}])
+        assert_equal(result[0]['success'], True)
+
+        self.log.info("Aborting an importdescriptors rescan should fail the RPC call")
+        wallet_name = "abort_import_wallet"
+        self.nodes[0].createwallet(wallet_name, blank=True)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as thread:
+            w_import = self.nodes[0].create_new_rpc_connection(mode="AUTHPROXY") / f"wallet/{wallet_name}"
+            abort_rpc = self.nodes[0].create_new_rpc_connection(mode="AUTHPROXY") / f"wallet/{wallet_name}"
+            descriptor = [{"desc": descsum_create("pkh(" + xpriv + "/2h/*h)"),
+            "timestamp": 0, "range": [0, 4000]}]
+
+            importing = thread.submit(w_import.importdescriptors, descriptor)
+
+            # Keep trying because an abort before ScanForWalletTransactions starts
+            # is reset when the scan loop begins.
+            abort_succeeded = False
+            abort_deadline = time.time() + 30 * self.options.timeout_factor
+            while not importing.done() and time.time() < abort_deadline:
+                abort_succeeded = abort_rpc.abortrescan() or abort_succeeded
+
+            assert_equal(abort_succeeded, True)
+            try:
+                importing.result(timeout=30 * self.options.timeout_factor)
+                raise AssertionError("importdescriptors unexpectedly succeeded")
+            except JSONRPCException as e:
+                assert_equal(e.error["code"], -1)
+                assert_equal(e.error["message"], "Rescan aborted by user.")
 
     def run_test(self):
         self.log.info('Setting up wallets')
@@ -709,6 +839,10 @@ class ImportDescriptorsTest(BitcoinTestFramework):
         self.nodes[0].createwallet("encrypted_wallet", blank=True, passphrase="passphrase")
         encrypted_wallet = self.nodes[0].get_wallet_rpc("encrypted_wallet")
 
+        self.log.info("Wallet must be unlocked to import a descriptor")
+        assert_raises_rpc_error(-13, "Error: Please enter the wallet passphrase with walletpassphrase first.",
+            encrypted_wallet.importdescriptors, [descriptor])
+
         descriptor["timestamp"] = 0
         descriptor["next_index"] = 0
 
@@ -821,6 +955,11 @@ class ImportDescriptorsTest(BitcoinTestFramework):
                 warnings=[expected_warning],
             )
 
+
+        self.test_import_unused_key()
+        self.test_import_unused_key_existing()
+        self.test_import_unused_noprivs()
+        self.test_rescan_fails_import()
 
 if __name__ == '__main__':
     ImportDescriptorsTest(__file__).main()

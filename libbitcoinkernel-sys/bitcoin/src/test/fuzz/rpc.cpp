@@ -292,7 +292,7 @@ std::string ConsumeScalarRPCArgument(FuzzedDataProvider& fuzzed_data_provider, b
         },
         [&] {
             // base64 encoded psbt
-            std::optional<PartiallySignedTransaction> opt_psbt = ConsumeDeserializable<PartiallySignedTransaction>(fuzzed_data_provider);
+            std::optional<PartiallySignedTransaction> opt_psbt = ConsumeDeserializableConstructor<PartiallySignedTransaction>(fuzzed_data_provider);
             if (!opt_psbt) {
                 good_data = false;
                 return;
@@ -372,7 +372,7 @@ FUZZ_TARGET(rpc, .init = initialize_rpc)
     SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
     bool good_data{true};
-    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider)};
+    FakeNodeClock clock{ConsumeTime(fuzzed_data_provider)};
     const std::string rpc_command = fuzzed_data_provider.ConsumeRandomLengthString(64);
     if (!g_limit_to_rpc_command.empty() && rpc_command != g_limit_to_rpc_command) {
         return;

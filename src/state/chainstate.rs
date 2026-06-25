@@ -44,10 +44,10 @@ use crate::{
     core::block::BlockHeader,
     ffi::{
         c_helpers,
-        sealed::{AsMutPtr, AsPtr, FromMutPtr, FromPtr},
+        sealed::{AsPtr, FromMutPtr, FromPtr},
     },
-    notifications::types::BlockValidationState,
-    Block, BlockHash, BlockSpentOutputs, BlockTreeEntry, KernelError,
+    notifications::types::{BlockValidationState, BlockValidationStateExt},
+    Block, BlockHash, BlockSpentOutputs, BlockTreeEntry, KernelError, ValidationMode,
 };
 
 use super::{Chain, Context};
@@ -76,10 +76,10 @@ pub enum ProcessBlockResult {
 #[derive(Clone, Debug)]
 #[must_use = "header processing result must be inspected to determine whether processing completed successfully"]
 pub enum ProcessBlockHeaderResult {
-    /// Header was succssfully processed and added to the block tree
-    Success(BlockValidationState),
-    /// Header processing failed
-    Failed(BlockValidationState),
+    /// The header was valid and added to the block tree.
+    Valid,
+    /// The header failed validation; the state holds the details.
+    Invalid(BlockValidationState),
 }
 
 impl ProcessBlockResult {
@@ -280,8 +280,11 @@ impl ChainstateManager {
     /// * `header` - The [`BlockHeader`] to process
     ///
     /// # Returns
-    /// A [`ProcessBlockHeaderResult`] indicating whether it was processed successfully and
-    /// the header was valid.
+    /// * `Ok(ProcessBlockHeaderResult::Valid)` - the header was valid and added to the block tree
+    /// * `Ok(ProcessBlockHeaderResult::Invalid(state))` - Processing completed but the header
+    ///   failed validation; inspect `state` for details
+    /// * `Err(KernelError::Internal)` - An internal error occured (e.g. an exception in the
+    ///   underlying library)
     ///
     /// # Important Notes
     /// - Calling this function will allocate internal resources and will eventually
@@ -295,29 +298,35 @@ impl ChainstateManager {
     /// To detect when a header extends the most proof of work header chain, use
     /// [`ContextBuilder::with_header_tip_notification`](crate::ContextBuilder::with_header_tip_notification),
     /// or [`ContextBuilder::notifications`](crate::ContextBuilder::notifications)
+    ///
     /// # Example
     /// ```no_run
-    /// # use bitcoinkernel::{BlockHeader, ChainstateManager, ProcessBlockHeaderResult};
-    /// # let chainman: ChainstateManager = unimplemented!();
-    /// # let header: BlockHeader = unimplemented!();
-    /// match chainman.process_block_header(&header) {
-    ///     ProcessBlockHeaderResult::Success(_) => println!("Block header validated and written to disk"),
-    ///     _ => println!("Failed to process header")
+    /// # use bitcoinkernel::{BlockHeader, ChainstateManager, KernelError, ProcessBlockHeaderResult};
+    /// # fn example(chainman: &ChainstateManager, header: &BlockHeader) -> Result<(), KernelError>
+    /// {
+    /// match chainman.process_block_header(header)? {
+    ///     ProcessBlockHeaderResult::Valid => println!("Block header validated and written to disk"),
+    ///     ProcessBlockHeaderResult::Invalid(state) => println!("Header failed validation: {:?}", state),
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn process_block_header(&self, header: &BlockHeader) -> ProcessBlockHeaderResult {
-        let state = BlockValidationState::new();
-        let processed = unsafe {
-            btck_chainstate_manager_process_block_header(
-                self.inner,
-                header.as_ptr(),
-                state.as_mut_ptr(),
-            )
-        };
-        if c_helpers::success(processed) {
-            ProcessBlockHeaderResult::Success(state)
+    pub fn process_block_header(
+        &self,
+        header: &BlockHeader,
+    ) -> Result<ProcessBlockHeaderResult, KernelError> {
+        let state_ptr =
+            unsafe { btck_chainstate_manager_process_block_header(self.inner, header.as_ptr()) };
+        if state_ptr.is_null() {
+            return Err(KernelError::Internal(
+                "Failed to process block header".to_string(),
+            ));
+        }
+        let state = unsafe { BlockValidationState::from_ptr(state_ptr) };
+        if state.mode() == ValidationMode::Valid {
+            Ok(ProcessBlockHeaderResult::Valid)
         } else {
-            ProcessBlockHeaderResult::Failed(state)
+            Ok(ProcessBlockHeaderResult::Invalid(state))
         }
     }
 
@@ -822,24 +831,24 @@ mod tests {
     #[test]
     fn test_process_block_header_result_debug() {
         let state = BlockValidationState::new();
-        let success = ProcessBlockHeaderResult::Success(state.clone());
+        let success = ProcessBlockHeaderResult::Valid;
         let debug_str = format!("{:?}", success);
-        assert!(debug_str.contains("Success"));
+        assert!(debug_str.contains("Valid"));
 
-        let failed = ProcessBlockHeaderResult::Failed(state);
+        let failed = ProcessBlockHeaderResult::Invalid(state);
         let debug_str = format!("{:?}", failed);
-        assert!(debug_str.contains("Failed"));
+        assert!(debug_str.contains("Invalid"));
     }
 
     #[test]
     fn test_process_block_header_result_clone() {
         let state = BlockValidationState::new();
-        let success = ProcessBlockHeaderResult::Success(state.clone());
+        let success = ProcessBlockHeaderResult::Valid;
         let cloned = success.clone();
-        assert!(matches!(cloned, ProcessBlockHeaderResult::Success(_)));
+        assert!(matches!(cloned, ProcessBlockHeaderResult::Valid));
 
-        let failed = ProcessBlockHeaderResult::Failed(state);
+        let failed = ProcessBlockHeaderResult::Invalid(state);
         let cloned = failed.clone();
-        assert!(matches!(cloned, ProcessBlockHeaderResult::Failed(_)));
+        assert!(matches!(cloned, ProcessBlockHeaderResult::Invalid(_)));
     }
 }

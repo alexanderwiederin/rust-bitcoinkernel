@@ -10,9 +10,9 @@ mod tests {
         BlockValidationStateRef, ChainParams, ChainType, ChainstateManager,
         ChainstateManagerBuilder, Coin, Context, ContextBuilder, KernelError, Log, Logger,
         PrecomputedTransactionData, ScriptPubkey, ScriptVerificationFlags, ScriptVerifyError,
-        Transaction, TransactionSpentOutputs, TxIn, TxOut, ValidationMode, VERIFY_ALL,
-        VERIFY_ALL_PRE_TAPROOT, VERIFY_CHECKLOCKTIMEVERIFY, VERIFY_CHECKSEQUENCEVERIFY,
-        VERIFY_DERSIG, VERIFY_NONE, VERIFY_NULLDUMMY, VERIFY_P2SH, VERIFY_TAPROOT, VERIFY_WITNESS,
+        Transaction, TransactionSpentOutputs, TxIn, TxOut, VERIFY_ALL, VERIFY_ALL_PRE_TAPROOT,
+        VERIFY_CHECKLOCKTIMEVERIFY, VERIFY_CHECKSEQUENCEVERIFY, VERIFY_DERSIG, VERIFY_NONE,
+        VERIFY_NULLDUMMY, VERIFY_P2SH, VERIFY_TAPROOT, VERIFY_WITNESS,
     };
     use std::fs::File;
     use std::io::{BufRead, BufReader};
@@ -654,13 +654,8 @@ mod tests {
 
         for raw_block in block_data.iter() {
             let block = Block::new(raw_block.as_slice()).unwrap();
-            let result = chainman.process_block_header(&block.header());
-            match result {
-                ProcessBlockHeaderResult::Success(state) => {
-                    assert_eq!(state.mode(), ValidationMode::Valid);
-                }
-                _ => assert!(false),
-            };
+            let result = chainman.process_block_header(&block.header()).unwrap();
+            assert!(matches!(result, ProcessBlockHeaderResult::Valid));
         }
     }
 

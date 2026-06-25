@@ -79,6 +79,22 @@ enum class BlockValidationResult : btck_BlockValidationResult {
     HEADER_LOW_WORK = btck_BlockValidationResult_HEADER_LOW_WORK
 };
 
+enum class TxValidationResult : btck_TxValidationResult {
+    UNSET               = btck_TxValidationResult_UNSET,
+    CONSENSUS           = btck_TxValidationResult_CONSENSUS,
+    INPUTS_NOT_STANDARD = btck_TxValidationResult_INPUTS_NOT_STANDARD,
+    NOT_STANDARD        = btck_TxValidationResult_NOT_STANDARD,
+    MISSING_INPUTS      = btck_TxValidationResult_MISSING_INPUTS,
+    PREMATURE_SPEND     = btck_TxValidationResult_PREMATURE_SPEND,
+    WITNESS_MUTATED     = btck_TxValidationResult_WITNESS_MUTATED,
+    WITNESS_STRIPPED    = btck_TxValidationResult_WITNESS_STRIPPED,
+    CONFLICT            = btck_TxValidationResult_CONFLICT,
+    MEMPOOL_POLICY      = btck_TxValidationResult_MEMPOOL_POLICY,
+    NO_MEMPOOL          = btck_TxValidationResult_NO_MEMPOOL,
+    RECONSIDERABLE      = btck_TxValidationResult_RECONSIDERABLE,
+    UNKNOWN             = btck_TxValidationResult_UNKNOWN
+};
+
 enum class ScriptVerifyStatus : btck_ScriptVerifyStatus {
     OK = btck_ScriptVerifyStatus_OK,
     ERROR_INVALID_FLAGS_COMBINATION = btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION,
@@ -989,7 +1005,9 @@ class BlockValidationState : public Handle<btck_BlockValidationState, btck_block
 public:
     explicit BlockValidationState() : Handle{btck_block_validation_state_create()} {}
 
-    BlockValidationState(const BlockValidationStateView& view) : Handle{view} {}
+    explicit BlockValidationState(const BlockValidationStateView& view) : Handle{view} {}
+
+    explicit BlockValidationState(btck_BlockValidationState* state) : Handle{state} {}
 };
 
 inline bool Block::Check(const ConsensusParamsView& consensus_params,
@@ -997,6 +1015,28 @@ inline bool Block::Check(const ConsensusParamsView& consensus_params,
     BlockValidationState& state) const
 {
     return btck_block_check(get(), consensus_params.get(), static_cast<btck_BlockCheckFlags>(flags), state.get()) == 1;
+}
+
+class TxValidationState : public UniqueHandle<btck_TxValidationState, btck_tx_validation_state_destroy>
+{
+public:
+    using UniqueHandle::UniqueHandle; // inherit ctor
+    explicit TxValidationState() : UniqueHandle{btck_tx_validation_state_create()} {}
+
+    ValidationMode GetValidationMode() const
+    {
+        return static_cast<ValidationMode>(btck_tx_validation_state_get_validation_mode(get()));
+    }
+
+    TxValidationResult GetTxValidationResult() const
+    {
+        return static_cast<TxValidationResult>(btck_tx_validation_state_get_tx_validation_result(get()));
+    }
+};
+
+inline bool CheckTransaction(const Transaction& tx, TxValidationState& state)
+{
+    return btck_transaction_check(tx.get(), state.get()) == 1;
 }
 
 class ValidationInterface
@@ -1279,9 +1319,10 @@ public:
         return res == 0;
     }
 
-    bool ProcessBlockHeader(const BlockHeader& header, BlockValidationState& state)
+    BlockValidationState ProcessBlockHeader(const BlockHeader& header)
     {
-        return btck_chainstate_manager_process_block_header(get(), header.get(), state.get()) == 0;
+        auto state = btck_chainstate_manager_process_block_header(get(), header.get());
+        return BlockValidationState{state};
     }
 
     ChainView GetChain() const

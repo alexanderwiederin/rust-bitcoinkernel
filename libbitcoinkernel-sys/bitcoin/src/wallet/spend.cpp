@@ -94,7 +94,7 @@ int CalculateMaximumSignedInputSize(const CTxOut& txout, const COutPoint outpoin
     if (!provider) return -1;
 
     if (const auto desc = InferDescriptor(txout.scriptPubKey, *provider)) {
-        if (const auto weight = MaxInputWeight(*desc, {}, coin_control, true, can_grind_r)) {
+        if (const auto weight = MaxInputWeight(*desc, CTxIn{outpoint}, coin_control, true, can_grind_r)) {
             return static_cast<int>(GetVirtualTransactionSize(*weight, 0, 0));
         }
     }
@@ -208,10 +208,6 @@ std::vector<COutput> CoinsResult::All() const
         all.insert(all.end(), it.second.begin(), it.second.end());
     }
     return all;
-}
-
-void CoinsResult::Clear() {
-    coins.clear();
 }
 
 void CoinsResult::Erase(const std::unordered_set<COutPoint, SaltedOutpointHasher>& coins_to_remove)
