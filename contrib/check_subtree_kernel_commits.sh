@@ -35,12 +35,13 @@ fi
 extract_upstream_commit() {
     local commit_hash="$1"
     local commit_msg
-    commit_msg=$(git log -1 --format=%B "$commit_hash")
+    commit_msg=$(git log -1 --format=%B "$commit_hash" | head -1)
+
 
     # Extract from squashed format: "Squashed 'path/' changes from START..END"
     # Extract the END part after ".."
     local upstream
-    upstream=$(echo "$commit_msg" | sed -n "s/.*Squashed.*changes from [0-9a-f]\{12\}\.\.\([0-9a-f]\{12\}\).*/\1/p")
+    upstream=$(echo "$commit_msg" | sed -n "s/.*Squashed.*changes from [0-9a-f]*\.\.\([0-9a-f]*\).*/\1/p")
 
     echo "$upstream"
 }
@@ -49,12 +50,12 @@ extract_upstream_commit() {
 extract_previous_upstream() {
     local commit_hash="$1"
     local commit_msg
-    commit_msg=$(git log -1 --format=%B "$commit_hash")
+    commit_msg=$(git log -1 --format=%B "$commit_hash" | head -1)
 
     # Extract from squashed format: "Squashed 'path/' changes from START..END"
     # Extract the START part before ".."
     local previous
-    previous=$(echo "$commit_msg" | sed -n "s/.*Squashed.*changes from \([0-9a-f]\{12\}\)\.\..*/\1/p")
+    previous=$(echo "$commit_msg" | sed -n "s/.*Squashed.*changes from \([0-9a-f]*\)\.\..*/\1/p")
 
     echo "$previous"
 }
