@@ -601,8 +601,7 @@ extern "C" {
     pub fn btck_chainstate_manager_process_block_header(
         chainstate_manager: *mut btck_ChainstateManager,
         header: *const btck_BlockHeader,
-        block_validation_state: *mut btck_BlockValidationState,
-    ) -> c_int;
+    ) -> *mut btck_BlockValidationState;
 
     pub fn btck_chainstate_manager_import_blocks(
         chainstate_manager: *mut btck_ChainstateManager,

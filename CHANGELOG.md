@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
 - `BlockHeader::new` now returns `Err(KernelError::InvalidLength)` when passed a buffer that is not exactly 80 bytes, rather than delegating the check to the underlying library.
+- `ChainstateManager::process_block_header` now returns `Result<ProcessBlockHeaderResult, KernelError>` instead of `ProcessBlockHeaderResult` directly. `Err` indicates an internal failure; `Ok(ProcessBlockHeaderResult::Invalid(state)` indicates the header failed validation.
+- `ProcessBlockHeaderResult::Success` and `ProcessBlockHeaderResult::Failed` renamed to `ProcessBlockHeaderResult::Valid` and `ProcessBlockHeaderResult::Invalid` respectively. `Valid` no longer carries a `BlockValidationState`.
 
 ## [0.2.1] 2026-05-20
 
