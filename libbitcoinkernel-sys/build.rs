@@ -2,6 +2,22 @@ use std::env;
 use std::path::Path;
 use std::process::Command;
 
+fn run_cmake(cmd: &mut Command) {
+    let output = cmd
+        .output()
+        .expect("cmake should be installed and available in PATH");
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        panic!(
+            "cmake failed with status {}.\nstdout:\n{stdout}\nstderr:\n{stderr}",
+            output.status
+        );
+    }
+}
+
 fn main() {
     let bitcoin_dir = Path::new("bitcoin");
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -15,54 +31,54 @@ fn main() {
 
     let build_config = "RelWithDebInfo";
 
-    Command::new("cmake")
-        .arg("-B")
-        .arg(&build_dir)
-        .arg("-S")
-        .arg(bitcoin_dir)
-        .arg(format!("-DCMAKE_BUILD_TYPE={build_config}"))
-        .arg("-DBUILD_KERNEL_LIB=ON")
-        .arg("-DBUILD_TESTS=OFF")
-        .arg("-DBUILD_BENCH=OFF")
-        .arg("-DBUILD_KERNEL_TEST=OFF")
-        .arg("-DBUILD_TX=OFF")
-        .arg("-DBUILD_WALLET_TOOL=OFF")
-        .arg("-DENABLE_WALLET=OFF")
-        .arg("-DENABLE_EXTERNAL_SIGNER=OFF")
-        .arg("-DBUILD_UTIL=OFF")
-        .arg("-DBUILD_BITCOIN_BIN=OFF")
-        .arg("-DBUILD_DAEMON=OFF")
-        .arg("-DBUILD_UTIL_CHAINSTATE=OFF")
-        .arg("-DBUILD_CLI=OFF")
-        .arg("-DBUILD_FUZZ_BINARY=OFF")
-        .arg("-DBUILD_SHARED_LIBS=OFF")
-        .arg("-DCMAKE_INSTALL_LIBDIR=lib")
-        .arg("-DENABLE_IPC=OFF")
-        .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display()))
-        .status()
-        .expect("cmake should be installed and available in PATH");
+    run_cmake(
+        Command::new("cmake")
+            .arg("-B")
+            .arg(&build_dir)
+            .arg("-S")
+            .arg(bitcoin_dir)
+            .arg(format!("-DCMAKE_BUILD_TYPE={build_config}"))
+            .arg("-DBUILD_KERNEL_LIB=ON")
+            .arg("-DBUILD_TESTS=OFF")
+            .arg("-DBUILD_BENCH=OFF")
+            .arg("-DBUILD_KERNEL_TEST=OFF")
+            .arg("-DBUILD_TX=OFF")
+            .arg("-DBUILD_WALLET_TOOL=OFF")
+            .arg("-DENABLE_WALLET=OFF")
+            .arg("-DENABLE_EXTERNAL_SIGNER=OFF")
+            .arg("-DBUILD_UTIL=OFF")
+            .arg("-DBUILD_BITCOIN_BIN=OFF")
+            .arg("-DBUILD_DAEMON=OFF")
+            .arg("-DBUILD_UTIL_CHAINSTATE=OFF")
+            .arg("-DBUILD_CLI=OFF")
+            .arg("-DBUILD_FUZZ_BINARY=OFF")
+            .arg("-DBUILD_SHARED_LIBS=OFF")
+            .arg("-DCMAKE_INSTALL_LIBDIR=lib")
+            .arg("-DENABLE_IPC=OFF")
+            .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display())),
+    );
 
     let num_jobs = env::var("NUM_JOBS")
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(1); // Default to 1 if not set
 
-    Command::new("cmake")
-        .arg("--build")
-        .arg(&build_dir)
-        .arg("--config")
-        .arg(build_config)
-        .arg(format!("--parallel={num_jobs}"))
-        .status()
-        .unwrap();
+    run_cmake(
+        Command::new("cmake")
+            .arg("--build")
+            .arg(&build_dir)
+            .arg("--config")
+            .arg(build_config)
+            .arg(format!("--parallel={num_jobs}")),
+    );
 
-    Command::new("cmake")
-        .arg("--install")
-        .arg(&build_dir)
-        .arg("--config")
-        .arg(build_config)
-        .status()
-        .unwrap();
+    run_cmake(
+        Command::new("cmake")
+            .arg("--install")
+            .arg(&build_dir)
+            .arg("--config")
+            .arg(build_config),
+    );
 
     // Check if the build system used a multi-config generator
     let lib_dir = if install_dir.join("lib").join(build_config).exists() {
