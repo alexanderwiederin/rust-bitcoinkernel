@@ -11,8 +11,8 @@ pub use block::{
 pub use block_tree_entry::BlockTreeEntry;
 pub use script::{ScriptPubkey, ScriptPubkeyRef};
 pub use transaction::{
-    Transaction, TransactionRef, TxIn, TxInRef, TxOut, TxOutPoint, TxOutPointRef, TxOutRef, Txid,
-    TxidRef,
+    Transaction, TransactionRef, TxCheckResult, TxIn, TxInRef, TxOut, TxOutPoint, TxOutPointRef,
+    TxOutRef, Txid, TxidRef,
 };
 
 pub use block::{
