@@ -26,3 +26,6 @@ members = [
     "fuzz",
     "libbitcoinkernel-sys"
 ]
+
+[features]
+script-trace = ["libbitcoinkernel-sys/script-trace"]
