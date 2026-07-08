@@ -231,6 +231,7 @@ pub struct btck_Txid {
 
 pub type btck_DestroyCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 
+// nonnull in C (btck_logging_connection_create arg 1); None is UB, not a way to disable logging.
 pub type btck_LogCallback = Option<
     unsafe extern "C" fn(user_data: *mut c_void, message: *const c_char, message_len: usize),
 >;
