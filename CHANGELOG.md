@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ChainstateManager::process_block_header` now returns `Result<ProcessBlockHeaderResult, KernelError>` instead of `ProcessBlockHeaderResult` directly. `Err` indicates an internal failure; `Ok(ProcessBlockHeaderResult::Invalid(state)` indicates the header failed validation.
 - `ProcessBlockHeaderResult::Success` and `ProcessBlockHeaderResult::Failed` renamed to `ProcessBlockHeaderResult::Valid` and `ProcessBlockHeaderResult::Invalid` respectively. `Valid` no longer carries a `BlockValidationState`.
 
+### Fixed
+- `verify` now uses an infallible conversion for the internal `ScriptVerifyStatus`, since an unrecognized status can only indicate a build-time mismatch between the bindings and the vendored `libbitcoinkernel` subtree rather than a runtime condition.
+
 ## [0.2.1] 2026-05-20
 
 ### Added

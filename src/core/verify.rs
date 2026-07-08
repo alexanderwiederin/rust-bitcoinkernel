@@ -425,9 +425,7 @@ pub fn verify(
         )
     };
 
-    let script_status = ScriptVerifyStatus::try_from(status).map_err(|_| {
-        KernelError::Internal(format!("Invalid script verify status: {:?}", status))
-    })?;
+    let script_status = ScriptVerifyStatus::from(status);
 
     if !c_helpers::verification_passed(ret) {
         let err = match script_status {
