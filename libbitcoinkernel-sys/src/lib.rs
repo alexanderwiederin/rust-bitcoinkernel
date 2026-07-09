@@ -231,9 +231,8 @@ pub struct btck_Txid {
 
 pub type btck_DestroyCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 
-pub type btck_LogCallback = Option<
-    unsafe extern "C" fn(user_data: *mut c_void, message: *const c_char, message_len: usize),
->;
+pub type btck_LogCallback =
+    unsafe extern "C" fn(user_data: *mut c_void, message: *const c_char, message_len: usize);
 
 pub type btck_NotifyBlockTip = Option<
     unsafe extern "C" fn(
@@ -317,7 +316,7 @@ pub type btck_ValidationInterfacePoWValidBlock = Option<
 >;
 
 pub type btck_WriteBytes =
-    Option<unsafe extern "C" fn(bytes: *const c_void, size: usize, userdata: *mut c_void) -> c_int>;
+    unsafe extern "C" fn(bytes: *const c_void, size: usize, userdata: *mut c_void) -> c_int;
 
 // These structs are passed by value across the FFI boundary - alphabetical order
 // Field order must match C exactly - sizes verified by const assertions below

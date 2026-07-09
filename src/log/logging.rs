@@ -115,7 +115,7 @@ impl Logger {
 
         let inner = unsafe {
             btck_logging_connection_create(
-                Some(log_callback::<T>),
+                log_callback::<T>,
                 log_ptr as *mut c_void,
                 Some(destroy_log_callback::<T>),
             )

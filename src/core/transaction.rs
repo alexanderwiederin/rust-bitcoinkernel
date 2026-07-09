@@ -341,7 +341,7 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// ```
     fn consensus_encode(&self) -> Result<Vec<u8>, KernelError> {
         c_serialize(|callback, user_data| unsafe {
-            btck_transaction_to_bytes(self.as_ptr(), Some(callback), user_data)
+            btck_transaction_to_bytes(self.as_ptr(), callback, user_data)
         })
     }
 
