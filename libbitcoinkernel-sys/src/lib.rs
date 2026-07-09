@@ -231,9 +231,8 @@ pub struct btck_Txid {
 
 pub type btck_DestroyCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 
-pub type btck_LogCallback = Option<
-    unsafe extern "C" fn(user_data: *mut c_void, message: *const c_char, message_len: usize),
->;
+pub type btck_LogCallback =
+    unsafe extern "C" fn(user_data: *mut c_void, message: *const c_char, message_len: usize);
 
 pub type btck_NotifyBlockTip = Option<
     unsafe extern "C" fn(
