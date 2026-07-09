@@ -316,7 +316,7 @@ pub type btck_ValidationInterfacePoWValidBlock = Option<
 >;
 
 pub type btck_WriteBytes =
-    Option<unsafe extern "C" fn(bytes: *const c_void, size: usize, userdata: *mut c_void) -> c_int>;
+    unsafe extern "C" fn(bytes: *const c_void, size: usize, userdata: *mut c_void) -> c_int;
 
 // These structs are passed by value across the FFI boundary - alphabetical order
 // Field order must match C exactly - sizes verified by const assertions below

@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `btck_transaction_create`, `btck_script_pubkey_create` and `btck_block_create` now assert valid buffer preconditions rather than returning null on invalid input
 - `btck_chainstate_manager_process_block_header` no longer takes a `btck_BlockValidationState` out-parameter; it now returns an owned `*mut btck_BlockValidationState` (null on error)
 - `btck_LogCallback` is no longer wrapped in `Option`; it is a nonnull argument to `btck_logging_connection_create` and passing `None` previously compiled but was UB. Code constructing this callback type directly must now provide a bare `unsafe extern "C" fn(...)` instead of `Some(...)`
+- `btck_WriteBytes` is no longer wrapped in `Option`; it is a nonnull argument to `btck_transaction_to_bytes`, `btck_script_pubkey_to_bytes` and `btck_block_to_bytes` and passing `None` previously compiled but was UB. Code constructing this callback type directly must now provide a bare `unsafe extern "C" fn(...)` instead of `Some(...)`
 
 ## [0.3.0] - 2026-05-20
 

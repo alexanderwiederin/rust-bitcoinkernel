@@ -956,7 +956,7 @@ impl Block {
     /// ```
     pub fn consensus_encode(&self) -> Result<Vec<u8>, KernelError> {
         c_serialize(|callback, user_data| unsafe {
-            btck_block_to_bytes(self.inner, Some(callback), user_data)
+            btck_block_to_bytes(self.inner, callback, user_data)
         })
     }
 

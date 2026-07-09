@@ -83,7 +83,7 @@ pub trait ScriptPubkeyExt: AsPtr<btck_ScriptPubkey> {
     /// ```
     fn to_bytes(&self) -> Vec<u8> {
         c_serialize(|callback, user_data| unsafe {
-            btck_script_pubkey_to_bytes(self.as_ptr(), Some(callback), user_data)
+            btck_script_pubkey_to_bytes(self.as_ptr(), callback, user_data)
         })
         .expect("Script pubkey to_bytes should never fail")
     }
@@ -127,7 +127,7 @@ pub trait ScriptPubkeyExt: AsPtr<btck_ScriptPubkey> {
         let ret = unsafe {
             btck_script_pubkey_to_bytes(
                 self.as_ptr(),
-                Some(writer),
+                writer,
                 &mut out as *mut BytesOut as *mut c_void,
             )
         };
