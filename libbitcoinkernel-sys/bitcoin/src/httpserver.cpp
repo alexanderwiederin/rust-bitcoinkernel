@@ -595,6 +595,16 @@ void HTTPRequest::WriteReply(HTTPStatusCode status, std::span<const std::byte> r
         // data. The original data will go out of scope when WriteReply() returns.
         // This is analogous to the memcpy() in libevent's evbuffer_add()
         m_client->m_send_buffer.insert(m_client->m_send_buffer.end(), reply_body.begin(), reply_body.end());
+
+        // If the buffer already held data, the I/O thread is (or soon will be)
+        // draining it, so flag that there is more data to send. This must happen
+        // while holding m_send_mutex and while the buffer is known non-empty:
+        // setting m_send_ready after releasing the lock would race with the I/O
+        // thread draining the buffer to empty and clearing m_send_ready in
+        // between, leaving m_send_ready set on an empty buffer. The I/O loop would
+        // then only ever poll the socket for writeability, never read the client's
+        // next request, and wedge the connection.
+        if (!send_buffer_was_empty) m_client->m_send_ready = true;
     }
 
     LogDebug(
@@ -611,10 +621,6 @@ void HTTPRequest::WriteReply(HTTPStatusCode status, std::span<const std::byte> r
     // of waiting for the next iteration of the I/O loop.
     if (send_buffer_was_empty) {
         m_client->MaybeSendBytesFromBuffer();
-    } else {
-        // Inform HTTPServer I/O that data is ready to be sent to this client
-        // in the next loop iteration.
-        m_client->m_send_ready = true;
     }
 
     // Signal to the I/O loop that we are ready to handle the next request.
@@ -841,9 +847,9 @@ void HTTPServer::SocketHandlerConnected(const IOReadiness& io_readiness) const
         }
         const std::shared_ptr<HTTPRemoteClient>& client{it->second};
 
-        bool send_ready = events.occurred & Sock::SEND;
-        bool recv_ready = events.occurred & Sock::RECV;
-        bool err_ready = events.occurred & Sock::ERR;
+        bool send_ready = events.occurred & Sock::SendEvent;
+        bool recv_ready = events.occurred & Sock::RecvEvent;
+        bool err_ready = events.occurred & Sock::ErrorEvent;
 
         if (send_ready) {
             // Try to send as much data as is ready for this client.
@@ -909,7 +915,7 @@ void HTTPServer::SocketHandlerListening(const Sock::EventsPerSock& events_per_so
             return;
         }
         const auto it = events_per_sock.find(sock);
-        if (it != events_per_sock.end() && it->second.occurred & Sock::RECV) {
+        if (it != events_per_sock.end() && it->second.occurred & Sock::RecvEvent) {
             CService addr_accepted;
 
             auto sock_accepted{AcceptConnection(*sock, addr_accepted)};
@@ -926,7 +932,7 @@ HTTPServer::IOReadiness HTTPServer::GenerateWaitSockets() const
     IOReadiness io_readiness;
 
     for (const auto& sock : m_listen) {
-        io_readiness.events_per_sock.emplace(sock, Sock::Events{Sock::RECV});
+        io_readiness.events_per_sock.emplace(sock, Sock::Events{Sock::RecvEvent});
     }
 
     for (const auto& http_client : m_connected) {
@@ -935,7 +941,12 @@ HTTPServer::IOReadiness HTTPServer::GenerateWaitSockets() const
 
         // Check if client is ready to send data. Don't try to receive again
         // until the send buffer is cleared (all data sent to client).
-        Sock::Event event = (http_client->m_send_ready ? Sock::SEND : Sock::RECV);
+        // Keep this as a separate critical section from the m_sock_mutex one above:
+        // never hold m_sock_mutex and m_send_mutex at the same time here.
+        // MaybeSendBytesFromBuffer() locks m_send_mutex then m_sock_mutex, so nesting
+        // them in the opposite order here would risk a lock-order inversion deadlock.
+        const bool send_ready{WITH_LOCK(http_client->m_send_mutex, return http_client->m_send_ready;)};
+        Sock::Event event = (send_ready ? Sock::SendEvent : Sock::RecvEvent);
         io_readiness.events_per_sock.emplace(sock, Sock::Events{event});
         io_readiness.httpclients_per_sock.emplace(sock, http_client);
     }
