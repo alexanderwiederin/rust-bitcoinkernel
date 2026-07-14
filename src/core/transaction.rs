@@ -161,9 +161,10 @@ use libbitcoinkernel_sys::{
     btck_transaction_get_input_at, btck_transaction_get_locktime, btck_transaction_get_output_at,
     btck_transaction_get_txid, btck_transaction_input_copy, btck_transaction_input_destroy,
     btck_transaction_input_get_out_point, btck_transaction_input_get_sequence,
-    btck_transaction_out_point_copy, btck_transaction_out_point_destroy,
-    btck_transaction_out_point_get_index, btck_transaction_out_point_get_txid,
-    btck_transaction_output_copy, btck_transaction_output_create, btck_transaction_output_destroy,
+    btck_transaction_is_coinbase, btck_transaction_out_point_copy,
+    btck_transaction_out_point_destroy, btck_transaction_out_point_get_index,
+    btck_transaction_out_point_get_txid, btck_transaction_output_copy,
+    btck_transaction_output_create, btck_transaction_output_destroy,
     btck_transaction_output_get_amount, btck_transaction_output_get_script_pubkey,
     btck_transaction_to_bytes, btck_tx_validation_state_create, btck_tx_validation_state_destroy,
     btck_tx_validation_state_get_tx_validation_result,
@@ -407,6 +408,29 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// ```
     fn locktime(&self) -> u32 {
         unsafe { btck_transaction_get_locktime(self.as_ptr()) }
+    }
+
+    /// Returns true if this is a coinbase transaction.
+    ///
+    /// A coinbase transaction is the first transaction in a block and creates
+    /// new coins as a reward for the miner (plus any collected fees). Coinbase
+    /// transactions have a single input with a null previous outpoint.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction};
+    /// # fn example() -> Result<(), bitcoinkernel::KernelError> {
+    /// # let tx_data = vec![0u8; 100]; // placeholder
+    /// # let tx = Transaction::new(&tx_data)?;
+    /// if tx.is_coinbase() {
+    ///     println!("This is a coinbase transaction");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn is_coinbase(&self) -> bool {
+        let result = unsafe { btck_transaction_is_coinbase(self.as_ptr()) };
+        present(result)
     }
 
     /// Runs context-free consensus validation on this transaction.
@@ -2098,6 +2122,20 @@ mod tests {
     fn test_transaction_coinbase_valid() {
         let (tx, _) = get_test_coinbase_transactions();
         assert_eq!(tx.check(), TxCheckResult::Valid);
+    }
+
+    #[test]
+    fn test_transaction_is_coinbase() {
+        let (tx, tx2) = get_test_transactions();
+        assert!(!tx.is_coinbase());
+        assert!(!tx2.is_coinbase());
+    }
+
+    #[test]
+    fn test_transaction_is_coinbase_true() {
+        let (tx, tx2) = get_test_coinbase_transactions();
+        assert!(tx.is_coinbase());
+        assert!(tx2.is_coinbase());
     }
 
     #[test]

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `btck_tx_validation_state_create`, `btck_tx_validation_state_get_validation_mode`, `btck_tx_validation_state_get_tx_validation_result` and `btck_tx_validation_state_destroy` for managing and inspecting transaction validation state
 - New `btck_transaction_check` for context-free consensus validation of transactions (reachable results: `UNSET` on success, `CONSENSUS` on failure)
 - New `btck_chain_parameters_create_signet` for creating chain parameters for a custom signet from a user-provided challenge.
+- New `btck_transaction_is_coinbase` for checking whether a transaction is a coinbase transaction
 
 ### Changed
 - `btck_block_header_create` now asserts that the input buffer is non-null and exactly 80 bytes; previously non-null buffer of any length was accepted

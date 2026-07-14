@@ -432,6 +432,8 @@ extern "C" {
         validation: *mut btck_TxValidationState,
     ) -> c_int;
 
+    pub fn btck_transaction_is_coinbase(transaction: *const btck_Transaction) -> c_int;
+
     pub fn btck_transaction_destroy(transaction: *mut btck_Transaction);
 
     // --- PrecomputedTransactionData -----------------------------------------
