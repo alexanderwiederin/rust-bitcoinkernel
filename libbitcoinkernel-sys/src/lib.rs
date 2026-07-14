@@ -524,6 +524,11 @@ extern "C" {
 
     pub fn btck_chain_parameters_create(chain_type: btck_ChainType) -> *mut btck_ChainParameters;
 
+    pub fn btck_chain_parameters_create_signet(
+        challenge: *const c_void,
+        challenge_len: usize,
+    ) -> *mut btck_ChainParameters;
+
     pub fn btck_chain_parameters_copy(
         chain_parameters: *const btck_ChainParameters,
     ) -> *mut btck_ChainParameters;

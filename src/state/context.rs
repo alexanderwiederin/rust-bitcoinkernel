@@ -59,10 +59,11 @@ use libbitcoinkernel_sys::{
     btck_ChainParameters, btck_ChainType, btck_ChainType_MAINNET, btck_ChainType_REGTEST,
     btck_ChainType_SIGNET, btck_ChainType_TESTNET, btck_ChainType_TESTNET_4, btck_Context,
     btck_ContextOptions, btck_NotificationInterfaceCallbacks, btck_ValidationInterfaceCallbacks,
-    btck_chain_parameters_create, btck_chain_parameters_destroy, btck_context_create,
-    btck_context_destroy, btck_context_interrupt, btck_context_options_create,
-    btck_context_options_destroy, btck_context_options_set_chainparams,
-    btck_context_options_set_notifications, btck_context_options_set_validation_interface,
+    btck_chain_parameters_create, btck_chain_parameters_create_signet,
+    btck_chain_parameters_destroy, btck_context_create, btck_context_destroy,
+    btck_context_interrupt, btck_context_options_create, btck_context_options_destroy,
+    btck_context_options_set_chainparams, btck_context_options_set_notifications,
+    btck_context_options_set_validation_interface,
 };
 
 use crate::{
@@ -131,6 +132,35 @@ impl ChainParams {
         let btck_chain_type = chain_type.into();
         ChainParams {
             inner: unsafe { btck_chain_parameters_create(btck_chain_type) },
+        }
+    }
+
+    /// Creates chain parameters for a custom signet with a user-provided challenge.
+    ///
+    /// The signet challenge is the script that blocks must satisfy in order to be
+    /// considered valid, allowing private signets with their own block signers.
+    ///
+    /// # Arguments
+    /// * `challenge` - The signet challenge value (a serialized script).
+    ///
+    /// # Returns
+    /// A new [`ChainParams`] instance configured for the custom signet.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use bitcoinkernel::ChainParams;
+    ///
+    /// let challenge = [0x51]; // OP_TRUE
+    /// let params = ChainParams::new_signet(&challenge);
+    /// ```
+    pub fn new_signet(challenge: &[u8]) -> ChainParams {
+        ChainParams {
+            inner: unsafe {
+                btck_chain_parameters_create_signet(
+                    challenge.as_ptr() as *const c_void,
+                    challenge.len(),
+                )
+            },
         }
     }
 }
@@ -452,6 +482,33 @@ impl ContextBuilder {
     /// ```
     pub fn chain_type(self, chain_type: ChainType) -> ContextBuilder {
         let chain_params = ChainParams::new(chain_type);
+        unsafe { btck_context_options_set_chainparams(self.inner, chain_params.inner) };
+        self
+    }
+
+    /// Configures the context for a custom signet.
+    ///
+    /// Sets the chain parameters to a signet defined by the given challenge,
+    /// the script that blocks must satisfy in order to be considered valid.
+    ///
+    /// # Arguments
+    /// * `challenge` - The signet challenge value (a serialized script).
+    ///
+    /// # Returns
+    /// The builder instance for method chaining.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use bitcoinkernel::{ContextBuilder, KernelError};
+    ///
+    /// let challenge = [0x51]; // OP_TRUE
+    /// let context = ContextBuilder::new()
+    ///     .signet(&challenge)
+    ///     .build()?;
+    /// # Ok::<(), KernelError>(())
+    /// ```
+    pub fn signet(self, challenge: &[u8]) -> ContextBuilder {
+        let chain_params = ChainParams::new_signet(challenge);
         unsafe { btck_context_options_set_chainparams(self.inner, chain_params.inner) };
         self
     }
@@ -1099,6 +1156,12 @@ mod tests {
         let _regtest_params = ChainParams::new(ChainType::Regtest);
     }
 
+    #[test]
+    fn test_signet_params_creation() {
+        // OP_TRUE challenge - blocks are trivially valid.
+        let _params = ChainParams::new_signet(&[0x51]);
+    }
+
     // Context tests
     #[test]
     fn test_context_creation_default() {
@@ -1128,6 +1191,13 @@ mod tests {
 
         let regtest = ContextBuilder::new().chain_type(ChainType::Regtest).build();
         assert!(regtest.is_ok());
+    }
+
+    #[test]
+    fn test_context_creation_with_signet() {
+        // OP_TRUE challenge - blocks are trivially valid.
+        let signet = ContextBuilder::new().signet(&[0x51]).build();
+        assert!(signet.is_ok());
     }
 
     #[test]
