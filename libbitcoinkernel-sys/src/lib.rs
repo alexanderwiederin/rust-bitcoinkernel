@@ -904,6 +904,13 @@ extern "C" {
     // --- Coin ---------------------------------------------------------------
 
     #[must_use]
+    pub fn btck_coin_create(
+        output: *const btck_TransactionOutput,
+        height: u32,
+        is_coinbase: c_int,
+    ) -> *mut btck_Coin;
+
+    #[must_use]
     pub fn btck_coin_copy(coin: *const btck_Coin) -> *mut btck_Coin;
 
     pub fn btck_coin_confirmation_height(coin: *const btck_Coin) -> u32;
