@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `btck_transaction_is_coinbase` for checking whether a transaction is a coinbase transaction
 - New `btck_coin_create` for constructing a `btck_Coin` from a transaction output, confirmation height, and coinbase flag
 - New `btck_transaction_out_point_create` for constructing a `btck_TransactionOutPoint` from a txid and output index
+- New `btck_chainstate_manager_validate_block` for validating a block against caller-supplied spent coins (as parallel `btck_TransactionOutPoint`/`btck_Coin` arrays) without requiring the full UTXO set to be present
 
 ### Changed
 - `btck_block_header_create` now asserts that the input buffer is non-null and exactly 80 bytes; previously non-null buffer of any length was accepted

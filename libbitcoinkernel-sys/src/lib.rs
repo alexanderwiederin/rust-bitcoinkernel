@@ -648,6 +648,16 @@ extern "C" {
         header: *const btck_BlockHeader,
     ) -> *mut btck_BlockValidationState;
 
+    pub fn btck_chainstate_manager_validate_block(
+        chainstate_manager: *mut btck_ChainstateManager,
+        block: *const btck_Block,
+        block_tree_entry: *const btck_BlockTreeEntry,
+        spent_out_points: *const *const btck_TransactionOutPoint,
+        spent_coins: *const *const btck_Coin,
+        spent_outputs_len: usize,
+        block_validation_state: *mut btck_BlockValidationState,
+    ) -> c_int;
+
     pub fn btck_chainstate_manager_import_blocks(
         chainstate_manager: *mut btck_ChainstateManager,
         block_file_paths_data: *mut *const c_char,
