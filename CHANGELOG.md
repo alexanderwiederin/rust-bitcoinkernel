@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `ChainParams::new_signet` and `ContextBuilder::signet` to configure a custom signet from a user-provided challenge.
 - Added `TransactionExt::is_coinbase` to check whether a transaction is a coinbase transaction.
 - Added `Coin::new` to construct a coin from a transaction output, confirmation height, and coinbase flag, for use with `ChainstateManager::validate_block` when validating a block without the full UTXO set present.
+- Added `TxOutPoint::new` to construct a new outpoint from a transaction ID and output index.
 
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.

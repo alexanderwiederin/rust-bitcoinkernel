@@ -802,6 +802,11 @@ extern "C" {
 
     // --- TransactionOutPoint ------------------------------------------------
 
+    pub fn btck_transaction_out_point_create(
+        txid: *const btck_Txid,
+        index: u32,
+    ) -> *mut btck_TransactionOutPoint;
+
     pub fn btck_transaction_out_point_copy(
         transaction_out_point: *const btck_TransactionOutPoint,
     ) -> *mut btck_TransactionOutPoint;
