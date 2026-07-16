@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Transaction::check` for context-free consensus validation of a transaction. Returns `TxCheckResult::Valid` on success or `TxCheckResult::Invalid(TxValidationResult)` on failure.
 - Added `TxValidationResult` enum with all transaction validation result variants.
 - Added `ChainParams::new_signet` and `ContextBuilder::signet` to configure a custom signet from a user-provided challenge.
+- Added `TxIn::witness_stack()` (via `TxInExt`) to retrieve a transaction input's witness stack. Returns a `WitnessStackRef` borrowing from the input.
+- Added `WitnessStack` and `WitnessStackRef` types for holding a transaction input's witness stack, along with the shared `WitnessStackExt` trait exposing `len()`, `is_empty()` and `item(index)`. `item` returns the raw bytes of the item at the given index, or `Err(KernelError::OutOfBounds)` if the index is invalid.
 
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
