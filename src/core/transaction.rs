@@ -1103,6 +1103,18 @@ pub trait TxInExt: AsPtr<btck_TransactionInput> {
     ///
     /// The witness stack contains the data needed to satisfy a segwit (or taproot) spending
     /// condition as a sequence of byte-string items. Pre-segwit inputs have an empty witness stack.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction, KernelError};
+    /// # fn example(tx: &Transaction) -> Result<(), KernelError> {
+    /// let input = tx.input(0)?;
+    /// for item in input.witness_stack().items() {
+    ///     println!("witness item: {} bytes", item.len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     fn witness_stack(&self) -> WitnessStackRef<'_> {
         let ptr = unsafe { btck_transaction_input_get_witness_stack(self.as_ptr()) };
         unsafe { WitnessStackRef::from_ptr(ptr) }
@@ -1271,6 +1283,23 @@ pub trait WitnessStackExt: AsPtr<btck_WitnessStack> {
             btck_witness_stack_get_item_at(self.as_ptr(), index, callback, user_data)
         })
     }
+
+    /// Returns an iterator over all items in the witness stack.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction, KernelError};
+    /// # fn example(tx: &Transaction) -> Result<(), KernelError> {
+    /// let input = tx.input(0)?;
+    /// for item in input.witness_stack().items() {
+    ///     println!("{} bytes", item.len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn items(&self) -> WitnessStackIter<'_> {
+        WitnessStackIter::new(unsafe { WitnessStackRef::from_ptr(self.as_ptr()) })
+    }
 }
 
 /// The witness stack of a transactoin input.
@@ -1374,6 +1403,52 @@ impl<'a> Clone for WitnessStackRef<'a> {
 }
 
 impl<'a> Copy for WitnessStackRef<'a> {}
+
+/// Iterator over witness stack items.
+///
+/// Yields each item as an owned `Vec<u8>`, in the order they appear in the witness stack.
+///
+/// # Lifetime
+/// The iterator is tied to the lifetime of the transaction input it was created from.
+pub struct WitnessStackIter<'a> {
+    stack: WitnessStackRef<'a>,
+    current_index: usize,
+}
+
+impl<'a> WitnessStackIter<'a> {
+    fn new(stack: WitnessStackRef<'a>) -> Self {
+        Self {
+            stack,
+            current_index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for WitnessStackIter<'a> {
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_index >= self.stack.len() {
+            return None;
+        }
+
+        let index = self.current_index;
+        self.current_index += 1;
+
+        self.stack.item(index).ok()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.stack.len().saturating_sub(self.current_index);
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a> ExactSizeIterator for WitnessStackIter<'a> {
+    fn len(&self) -> usize {
+        self.stack.len().saturating_sub(self.current_index)
+    }
+}
 
 /// Common operations for transaction outpoints, implemented by both owned and borrowed types.
 ///
@@ -2455,6 +2530,22 @@ mod tests {
             stack.item(stack.len()),
             Err(KernelError::OutOfBounds)
         ));
+    }
+
+    #[test]
+    fn test_witness_stack_iterator() {
+        let (tx, _) = get_test_transactions();
+        let input = tx.input(0).unwrap();
+        let stack = input.witness_stack();
+        let len = stack.len();
+
+        let mut iter_count = 0;
+        for (i, item) in stack.items().enumerate() {
+            assert_eq!(item, stack.item(i).unwrap());
+            iter_count += 1;
+        }
+
+        assert_eq!(iter_count, len);
     }
 
     // TxOutPoint tests
