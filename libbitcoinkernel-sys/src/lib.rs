@@ -843,6 +843,13 @@ extern "C" {
         transaction_input: *const btck_TransactionInput,
     ) -> *const btck_WitnessStack;
 
+    #[must_use]
+    pub fn btck_transaction_input_get_script_sig(
+        transaction_input: *const btck_TransactionInput,
+        writer: btck_WriteBytes,
+        user_data: *mut c_void,
+    ) -> c_int;
+
     pub fn btck_transaction_input_destroy(transaction_input: *mut btck_TransactionInput);
 
     // --- WitnessStack ---------------------------------------------------------
