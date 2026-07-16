@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `ChainParams::new_signet` and `ContextBuilder::signet` to configure a custom signet from a user-provided challenge.
 - Added `TxIn::witness_stack()` (via `TxInExt`) to retrieve a transaction input's witness stack. Returns a `WitnessStackRef` borrowing from the input.
 - Added `WitnessStack` and `WitnessStackRef` types for holding a transaction input's witness stack, along with the shared `WitnessStackExt` trait exposing `len()`, `is_empty()` and `item(index)`. `item` returns the raw bytes of the item at the given index, or `Err(KernelError::OutOfBounds)` if the index is invalid.
+- Added `WitnessStackExt::items()` returning a `WitnessStackIter` that yields each witness stack item as an owned `Vec<u8>` in order. Implements `Iterator` and `ExactSizeIterator`.
 
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
