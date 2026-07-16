@@ -160,11 +160,11 @@ use libbitcoinkernel_sys::{
     btck_transaction_count_outputs, btck_transaction_create, btck_transaction_destroy,
     btck_transaction_get_input_at, btck_transaction_get_locktime, btck_transaction_get_output_at,
     btck_transaction_get_txid, btck_transaction_input_copy, btck_transaction_input_destroy,
-    btck_transaction_input_get_out_point, btck_transaction_input_get_sequence,
-    btck_transaction_input_get_witness_stack, btck_transaction_out_point_copy,
-    btck_transaction_out_point_destroy, btck_transaction_out_point_get_index,
-    btck_transaction_out_point_get_txid, btck_transaction_output_copy,
-    btck_transaction_output_create, btck_transaction_output_destroy,
+    btck_transaction_input_get_out_point, btck_transaction_input_get_script_sig,
+    btck_transaction_input_get_sequence, btck_transaction_input_get_witness_stack,
+    btck_transaction_out_point_copy, btck_transaction_out_point_destroy,
+    btck_transaction_out_point_get_index, btck_transaction_out_point_get_txid,
+    btck_transaction_output_copy, btck_transaction_output_create, btck_transaction_output_destroy,
     btck_transaction_output_get_amount, btck_transaction_output_get_script_pubkey,
     btck_transaction_to_bytes, btck_tx_validation_state_create, btck_tx_validation_state_destroy,
     btck_tx_validation_state_get_tx_validation_result,
@@ -1118,6 +1118,31 @@ pub trait TxInExt: AsPtr<btck_TransactionInput> {
     fn witness_stack(&self) -> WitnessStackRef<'_> {
         let ptr = unsafe { btck_transaction_input_get_witness_stack(self.as_ptr()) };
         unsafe { WitnessStackRef::from_ptr(ptr) }
+    }
+
+    /// Returns the scriptSig of this input, serialized as raw bytes.
+    ///
+    /// The scriptSig satisfies a legacy (pre-segwit) spending condition - typically a signature and
+    /// public key push, or redeem script for P2SH. Segwit and taproot inputs carry their spending
+    /// data in the [`witness_stack`](TxInExt::witness_stack) instead, and have an empty scriptSig.
+    ///
+    /// # Errors
+    /// Returns [`KernelError::Internal`] if serialization fails.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Transaction, KernelError};
+    /// # fn example(tx: &Transaction) -> Result<(), KernelError> {
+    /// let input = tx.input(0)?;
+    /// let script_sig = input.script_sig()?;
+    /// println!("scriptSig is {} bytes", script_sig.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn script_sig(&self) -> Result<Vec<u8>, KernelError> {
+        c_serialize(|callback, user_data| unsafe {
+            btck_transaction_input_get_script_sig(self.as_ptr(), callback, user_data)
+        })
     }
 }
 
@@ -2503,6 +2528,20 @@ mod tests {
         assert_eq!(input.sequence(), 0xFFFFFFFD);
     }
 
+    #[test]
+    fn test_txin_script_sig_empty_for_segwit() {
+        let (input, _) = get_test_txins();
+        let script_sig = input.script_sig().unwrap();
+        assert!(script_sig.is_empty());
+    }
+
+    #[test]
+    fn test_txin_script_sig_non_empty_for_legacy() {
+        let input = get_test_legacy_txin();
+        let script_sig = input.script_sig().unwrap();
+        assert!(!script_sig.is_empty());
+    }
+
     // WitnessStack tests
     #[test]
     fn test_witness_stack_p2wpkh_has_two_items() {
@@ -2720,6 +2759,18 @@ mod tests {
         let value_from_ref = get_value(&txout_ref);
 
         assert_eq!(value_from_owned, value_from_ref);
+    }
+
+    #[test]
+    fn test_txin_script_sig_polymorphism() {
+        let (input, _) = get_test_txins();
+        let input_ref = input.as_ref();
+
+        fn get_script_sig(input: &impl TxInExt) -> Vec<u8> {
+            input.script_sig().unwrap()
+        }
+
+        assert_eq!(get_script_sig(&input_ref), get_script_sig(&input));
     }
 
     #[test]

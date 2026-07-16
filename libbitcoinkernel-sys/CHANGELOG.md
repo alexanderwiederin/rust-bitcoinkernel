@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `btck_WitnessStack` opaque type for holding a transaction input's witness stack
 - New `btck_transaction_input_get_witness_stack` for retrieving the witness stack of a transaction input
 - New `btck_witness_stack_count_items`, `btck_witness_stack_get_item_at`, `btck_witness_stack_copy` and `btck_witness_stack_destroy` for inspecting, copying and managing witness stack objects
+- New `btck_transaction_input_get_script_sig` for retrieving a transaction input's scriptSig
 
 ### Changed
 - `btck_block_header_create` now asserts that the input buffer is non-null and exactly 80 bytes; previously non-null buffer of any length was accepted
