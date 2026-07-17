@@ -117,6 +117,9 @@ jobs:
     - name: Check formatting
       run: cargo fmt -- --check
 
+    - name: Check must_use annotations
+      run: bash contrib/check_must_use.sh libbitcoinkernel-sys/bitcoin/src/kernel/bitcoinkernel.h src/lib.rs
+
     - name: Check documentation
       env:
         RUSTDOCFLAGS: "-D warnings"
