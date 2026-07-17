@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `btck_LogCallback` is no longer wrapped in `Option`; it is a nonnull argument to `btck_logging_connection_create` and passing `None` previously compiled but was UB. Code constructing this callback type directly must now provide a bare `unsafe extern "C" fn(...)` instead of `Some(...)`
 - `btck_WriteBytes` is no longer wrapped in `Option`; it is a nonnull argument to `btck_transaction_to_bytes`, `btck_script_pubkey_to_bytes` and `btck_block_to_bytes` and passing `None` previously compiled but was UB. Code constructing this callback type directly must now provide a bare `unsafe extern "C" fn(...)` instead of `Some(...)`
 
+### Fixed
+- Added `#[must_use] to all function marked `BITCOINKERNEL_WARN_UNUSED_RESULT` in the upstream header (primarily `*_create`/`*_copy` functions returning owned pointers, plus a handful of status/error-code returns); previously these could be silently discarded, e.g. leaking an owned pointer
+
 ## [0.3.0] - 2026-05-20
 
 ### Added
