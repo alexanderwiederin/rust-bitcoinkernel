@@ -218,6 +218,29 @@ jobs:
     - name: Build and test
       run: cargo test -vv
 
+
+  android:
+    name: Android (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - libbitcoinkernel-android-aarch64
+          - libbitcoinkernel-android-armv7
+          # Build-only: Rust 1.71 compiler_builtins lacks f128 routines
+          # required by bionic on x86_64. Tests are skipped until the
+          # MSRV is bumped or a workaround is found. See #198
+          - libbitcoinkernel-android-x86_64
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Build${{ matrix.package != 'libbitcoinkernel-android-x86_64' && ' and Test' || '' }}
+      run: nix build .#${{ matrix.package }} -L
+
   fuzz-corpus:
     name: Verify Fuzz Corpus
     runs-on: ubuntu-latest

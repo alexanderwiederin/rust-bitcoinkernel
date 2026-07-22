@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Added build support for Android
+
 ### Added
 - New `btck_TxValidationState` opaque type for holding transaction validation state
 - New `btck_TxValidationResult` type with named constants for all transaction validation result variants

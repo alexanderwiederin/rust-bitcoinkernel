@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added Nix package outputs for Android with bundled NDK r24, Rust toolchains, Boost, and cmake.
 - Added `Block::check` to perform context-free validation of a block (size, weight, coinbase, transactions, sigops), with optional proof-of-work and merkle-root checks toggled via the `BLOCK_CHECK_BASE` / `_POW` / `_MERKLE` / `_ALL` flags. Returns a `BlockCheckResult` enum carrying the validation state on failure.
 - Implemented `Debug` for `BlockValidationResult`, `BlockValidationStateRef`, `ProcessBlockHeaderresult` and `BlockCheckResult`, enabling inspection via `{:?}` in logs and test output.
 - Added `#[must_use]` to `BlockCheckResult` and `ProcessBlockHeaderResult` to warn when validation results are silently ignored.
@@ -36,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `From<BlockHeader>` and `From<&BlockHeader>` for `[u8; 80]` to align with existing block conversions.
 
 ### Dependencies
-
 - The sys crate no longer uses auto-generated bindings from bindgen. This removes some build-time dependencies for this crate.
 
 ## [0.2.0] 2026-01-26
