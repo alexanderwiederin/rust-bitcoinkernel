@@ -298,7 +298,11 @@ fn cmake_build(build_dir: &Path) {
     let num_jobs = env::var("NUM_JOBS")
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1); // Default to 1 if not set
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(1) // Default to 1 if not set
+        });
 
     run(
         Command::new("cmake")
