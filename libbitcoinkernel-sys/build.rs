@@ -100,11 +100,11 @@ enum Abi {
 
 impl Abi {
     fn from_env() -> Self {
-        match &*env::var("TARGET").unwrap() {
-            t if t.contains("aarch64") => Self::Arm64,
-            t if t.contains("armv7") => Self::ArmV7,
-            t if t.contains("x86_64") => Self::X86_64,
-            target => panic!("Unsupported Android ABI: {target}"),
+        match &*env::var("CARGO_CFG_TARGET_ARCH").unwrap() {
+            "aarch64" => Self::Arm64,
+            "arm" => Self::ArmV7,
+            "x86_64" => Self::X86_64,
+            arch => panic!("Unsupported Android ABI: {arch}"),
         }
     }
 
