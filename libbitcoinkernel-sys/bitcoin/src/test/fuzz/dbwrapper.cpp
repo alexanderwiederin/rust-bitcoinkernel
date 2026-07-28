@@ -188,6 +188,7 @@ DBParams ConsumeDBParams(FuzzedDataProvider& provider, leveldb::Env* testing_env
         .path = "dbwrapper_fuzz",
         .cache_bytes = provider.ConsumeIntegralInRange<size_t>(64 << 10, 1_MiB),
         .obfuscate = obfuscate,
+        .bloom_filter = provider.ConsumeBool(),
         .options = options,
         .testing_env = testing_env,
         .max_file_size = provider.ConsumeBool()
@@ -215,8 +216,7 @@ void TestDbWrapper(FuzzedDataProvider& provider,
     // Oracle: key → value size. Content is reconstructed via MakeValue().
     Oracle oracle;
 
-    LIMITED_WHILE(provider.ConsumeBool(), 1'000)
-    {
+    LIMITED_WHILE (provider.ConsumeBool(), 1'000) {
         CallOneOf(
             provider,
             // --- Mutations ---
@@ -238,8 +238,7 @@ void TestDbWrapper(FuzzedDataProvider& provider,
                 std::map<uint16_t, uint32_t> batch_writes;
                 std::set<uint16_t> batch_erases;
                 const auto fill{[&] {
-                    LIMITED_WHILE(provider.ConsumeBool(), 20)
-                    {
+                    LIMITED_WHILE (provider.ConsumeBool(), 20) {
                         const auto key{ConsumeKey(provider)};
                         if (provider.ConsumeBool()) {
                             const auto size{ConsumeValueSize(provider)};
