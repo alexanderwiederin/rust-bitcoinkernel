@@ -28,7 +28,7 @@
 use std::ffi::CString;
 
 use libbitcoinkernel_sys::{
-    btck_BlockHash, btck_ChainstateManager, btck_ChainstateManagerOptions, btck_block_read,
+    btck_ChainstateManager, btck_ChainstateManagerOptions, btck_block_read,
     btck_block_spent_outputs_read, btck_chainstate_manager_create, btck_chainstate_manager_destroy,
     btck_chainstate_manager_get_active_chain, btck_chainstate_manager_get_best_entry,
     btck_chainstate_manager_get_block_tree_entry_by_hash, btck_chainstate_manager_import_blocks,
@@ -461,10 +461,7 @@ impl ChainstateManager {
     /// [`ChainstateManager`] and becomes invalid when the manager is dropped.
     pub fn get_block_tree_entry(&self, block_hash: &BlockHash) -> Option<BlockTreeEntry<'_>> {
         let ptr = unsafe {
-            btck_chainstate_manager_get_block_tree_entry_by_hash(
-                self.inner,
-                block_hash as *const _ as *const btck_BlockHash,
-            )
+            btck_chainstate_manager_get_block_tree_entry_by_hash(self.inner, block_hash.as_ptr())
         };
         if ptr.is_null() {
             None
