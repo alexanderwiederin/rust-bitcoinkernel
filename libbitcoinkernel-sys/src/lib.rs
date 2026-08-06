@@ -382,6 +382,7 @@ const _: () = {
 extern "C" {
     // --- TxValidationState --------------------------------------------------
 
+    #[must_use]
     pub fn btck_tx_validation_state_create() -> *mut btck_TxValidationState;
 
     pub fn btck_tx_validation_state_get_validation_mode(
@@ -396,13 +397,16 @@ extern "C" {
 
     // --- Transaction --------------------------------------------------------
 
+    #[must_use]
     pub fn btck_transaction_create(
         raw_transaction: *const c_void,
         raw_transaction_len: usize,
     ) -> *mut btck_Transaction;
 
+    #[must_use]
     pub fn btck_transaction_copy(transaction: *const btck_Transaction) -> *mut btck_Transaction;
 
+    #[must_use]
     pub fn btck_transaction_to_bytes(
         transaction: *const btck_Transaction,
         writer: btck_WriteBytes,
@@ -436,12 +440,14 @@ extern "C" {
 
     // --- PrecomputedTransactionData -----------------------------------------
 
+    #[must_use]
     pub fn btck_precomputed_transaction_data_create(
         tx_to: *const btck_Transaction,
         spent_outputs: *mut *const btck_TransactionOutput,
         spent_outputs_len: usize,
     ) -> *mut btck_PrecomputedTransactionData;
 
+    #[must_use]
     pub fn btck_precomputed_transaction_data_copy(
         precomputed_txdata: *const btck_PrecomputedTransactionData,
     ) -> *mut btck_PrecomputedTransactionData;
@@ -452,15 +458,18 @@ extern "C" {
 
     // --- ScriptPubkey -------------------------------------------------------
 
+    #[must_use]
     pub fn btck_script_pubkey_create(
         script_pubkey: *const c_void,
         script_pubkey_len: usize,
     ) -> *mut btck_ScriptPubkey;
 
+    #[must_use]
     pub fn btck_script_pubkey_copy(
         script_pubkey: *const btck_ScriptPubkey,
     ) -> *mut btck_ScriptPubkey;
 
+    #[must_use]
     pub fn btck_script_pubkey_verify(
         script_pubkey: *const btck_ScriptPubkey,
         amount: i64,
@@ -471,6 +480,7 @@ extern "C" {
         status: *mut btck_ScriptVerifyStatus,
     ) -> c_int;
 
+    #[must_use]
     pub fn btck_script_pubkey_to_bytes(
         script_pubkey: *const btck_ScriptPubkey,
         writer: btck_WriteBytes,
@@ -481,6 +491,7 @@ extern "C" {
 
     // --- TransactionOutput --------------------------------------------------
 
+    #[must_use]
     pub fn btck_transaction_output_create(
         script_pubkey: *const btck_ScriptPubkey,
         amount: i64,
@@ -494,6 +505,7 @@ extern "C" {
         transaction_output: *const btck_TransactionOutput,
     ) -> i64;
 
+    #[must_use]
     pub fn btck_transaction_output_copy(
         transaction_output: *const btck_TransactionOutput,
     ) -> *mut btck_TransactionOutput;
@@ -512,6 +524,7 @@ extern "C" {
 
     pub fn btck_logging_disable_category(category: btck_LogCategory);
 
+    #[must_use]
     pub fn btck_logging_connection_create(
         log_callback: btck_LogCallback,
         user_data: *mut c_void,
@@ -522,13 +535,16 @@ extern "C" {
 
     // --- ChainParameters ----------------------------------------------------
 
+    #[must_use]
     pub fn btck_chain_parameters_create(chain_type: btck_ChainType) -> *mut btck_ChainParameters;
 
+    #[must_use]
     pub fn btck_chain_parameters_create_signet(
         challenge: *const c_void,
         challenge_len: usize,
     ) -> *mut btck_ChainParameters;
 
+    #[must_use]
     pub fn btck_chain_parameters_copy(
         chain_parameters: *const btck_ChainParameters,
     ) -> *mut btck_ChainParameters;
@@ -541,6 +557,7 @@ extern "C" {
 
     // --- ContextOptions -----------------------------------------------------
 
+    #[must_use]
     pub fn btck_context_options_create() -> *mut btck_ContextOptions;
 
     pub fn btck_context_options_set_chainparams(
@@ -562,10 +579,13 @@ extern "C" {
 
     // --- Context ------------------------------------------------------------
 
+    #[must_use]
     pub fn btck_context_create(context_options: *const btck_ContextOptions) -> *mut btck_Context;
 
+    #[must_use]
     pub fn btck_context_copy(context: *const btck_Context) -> *mut btck_Context;
 
+    #[must_use]
     pub fn btck_context_interrupt(context: *mut btck_Context) -> c_int;
 
     pub fn btck_context_destroy(context: *mut btck_Context);
@@ -581,6 +601,7 @@ extern "C" {
         height: i32,
     ) -> *const btck_BlockTreeEntry;
 
+    #[must_use]
     pub fn btck_block_tree_entry_get_block_header(
         block_tree_entry: *const btck_BlockTreeEntry,
     ) -> *mut btck_BlockHeader;
@@ -598,6 +619,7 @@ extern "C" {
 
     // --- ChainstateManagerOptions -------------------------------------------
 
+    #[must_use]
     pub fn btck_chainstate_manager_options_create(
         context: *const btck_Context,
         data_directory: *const c_char,
@@ -611,6 +633,7 @@ extern "C" {
         worker_threads: c_int,
     );
 
+    #[must_use]
     pub fn btck_chainstate_manager_options_set_wipe_dbs(
         chainstate_manager_options: *mut btck_ChainstateManagerOptions,
         wipe_block_tree_db: c_int,
@@ -633,6 +656,7 @@ extern "C" {
 
     // --- ChainstateManager --------------------------------------------------
 
+    #[must_use]
     pub fn btck_chainstate_manager_create(
         chainstate_manager_options: *const btck_ChainstateManagerOptions,
     ) -> *mut btck_ChainstateManager;
@@ -641,11 +665,13 @@ extern "C" {
         chainstate_manager: *const btck_ChainstateManager,
     ) -> *const btck_BlockTreeEntry;
 
+    #[must_use]
     pub fn btck_chainstate_manager_process_block_header(
         chainstate_manager: *mut btck_ChainstateManager,
         header: *const btck_BlockHeader,
     ) -> *mut btck_BlockValidationState;
 
+    #[must_use]
     pub fn btck_chainstate_manager_import_blocks(
         chainstate_manager: *mut btck_ChainstateManager,
         block_file_paths_data: *mut *const c_char,
@@ -653,6 +679,7 @@ extern "C" {
         block_file_paths_data_len: usize,
     ) -> c_int;
 
+    #[must_use]
     pub fn btck_chainstate_manager_process_block(
         chainstate_manager: *mut btck_ChainstateManager,
         block: *const btck_Block,
@@ -672,13 +699,16 @@ extern "C" {
 
     // --- Block --------------------------------------------------------------
 
+    #[must_use]
     pub fn btck_block_read(
         chainstate_manager: *const btck_ChainstateManager,
         block_tree_entry: *const btck_BlockTreeEntry,
     ) -> *mut btck_Block;
 
+    #[must_use]
     pub fn btck_block_create(raw_block: *const c_void, raw_block_len: usize) -> *mut btck_Block;
 
+    #[must_use]
     pub fn btck_block_copy(block: *const btck_Block) -> *mut btck_Block;
 
     pub fn btck_block_check(
@@ -695,10 +725,13 @@ extern "C" {
         transaction_index: usize,
     ) -> *const btck_Transaction;
 
+    #[must_use]
     pub fn btck_block_get_header(block: *const btck_Block) -> *mut btck_BlockHeader;
 
+    #[must_use]
     pub fn btck_block_get_hash(block: *const btck_Block) -> *mut btck_BlockHash;
 
+    #[must_use]
     pub fn btck_block_to_bytes(
         block: *const btck_Block,
         writer: btck_WriteBytes,
@@ -709,6 +742,7 @@ extern "C" {
 
     // --- BlockValidationState -----------------------------------------------
 
+    #[must_use]
     pub fn btck_block_validation_state_create() -> *mut btck_BlockValidationState;
 
     pub fn btck_block_validation_state_get_validation_mode(
@@ -719,6 +753,7 @@ extern "C" {
         block_validation_state: *const btck_BlockValidationState,
     ) -> btck_BlockValidationResult;
 
+    #[must_use]
     pub fn btck_block_validation_state_copy(
         block_validation_state: *const btck_BlockValidationState,
     ) -> *mut btck_BlockValidationState;
@@ -743,11 +778,13 @@ extern "C" {
 
     // --- BlockSpentOutputs --------------------------------------------------
 
+    #[must_use]
     pub fn btck_block_spent_outputs_read(
         chainstate_manager: *const btck_ChainstateManager,
         block_tree_entry: *const btck_BlockTreeEntry,
     ) -> *mut btck_BlockSpentOutputs;
 
+    #[must_use]
     pub fn btck_block_spent_outputs_copy(
         block_spent_outputs: *const btck_BlockSpentOutputs,
     ) -> *mut btck_BlockSpentOutputs;
@@ -765,6 +802,7 @@ extern "C" {
 
     // --- TransactionSpentOutputs --------------------------------------------
 
+    #[must_use]
     pub fn btck_transaction_spent_outputs_copy(
         transaction_spent_outputs: *const btck_TransactionSpentOutputs,
     ) -> *mut btck_TransactionSpentOutputs;
@@ -784,6 +822,7 @@ extern "C" {
 
     // --- TransactionInput ---------------------------------------------------
 
+    #[must_use]
     pub fn btck_transaction_input_copy(
         transaction_input: *const btck_TransactionInput,
     ) -> *mut btck_TransactionInput;
@@ -800,6 +839,7 @@ extern "C" {
 
     // --- TransactionOutPoint ------------------------------------------------
 
+    #[must_use]
     pub fn btck_transaction_out_point_copy(
         transaction_out_point: *const btck_TransactionOutPoint,
     ) -> *mut btck_TransactionOutPoint;
@@ -816,6 +856,7 @@ extern "C" {
 
     // --- Txid ---------------------------------------------------------------
 
+    #[must_use]
     pub fn btck_txid_copy(txid: *const btck_Txid) -> *mut btck_Txid;
 
     pub fn btck_txid_equals(txid1: *const btck_Txid, txid2: *const btck_Txid) -> c_int;
@@ -826,6 +867,7 @@ extern "C" {
 
     // --- Coin ---------------------------------------------------------------
 
+    #[must_use]
     pub fn btck_coin_copy(coin: *const btck_Coin) -> *mut btck_Coin;
 
     pub fn btck_coin_confirmation_height(coin: *const btck_Coin) -> u32;
@@ -838,6 +880,7 @@ extern "C" {
 
     // --- BlockHash ----------------------------------------------------------
 
+    #[must_use]
     pub fn btck_block_hash_create(block_hash: *const c_uchar) -> *mut btck_BlockHash;
 
     pub fn btck_block_hash_equals(
@@ -845,6 +888,7 @@ extern "C" {
         hash2: *const btck_BlockHash,
     ) -> c_int;
 
+    #[must_use]
     pub fn btck_block_hash_copy(block_hash: *const btck_BlockHash) -> *mut btck_BlockHash;
 
     pub fn btck_block_hash_to_bytes(block_hash: *const btck_BlockHash, output: *mut c_uchar);
@@ -853,13 +897,16 @@ extern "C" {
 
     // --- BlockHeader --------------------------------------------------------
 
+    #[must_use]
     pub fn btck_block_header_create(
         raw_block_header: *const c_void,
         raw_block_header_len: usize,
     ) -> *mut btck_BlockHeader;
 
+    #[must_use]
     pub fn btck_block_header_copy(header: *const btck_BlockHeader) -> *mut btck_BlockHeader;
 
+    #[must_use]
     pub fn btck_block_header_get_hash(header: *const btck_BlockHeader) -> *mut btck_BlockHash;
 
     pub fn btck_block_header_get_prev_hash(
@@ -874,6 +921,7 @@ extern "C" {
 
     pub fn btck_block_header_get_nonce(header: *const btck_BlockHeader) -> u32;
 
+    #[must_use]
     pub fn btck_block_header_to_bytes(
         header: *const btck_BlockHeader,
         output: *mut c_uchar,
