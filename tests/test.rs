@@ -713,6 +713,58 @@ mod tests {
     }
 
     #[test]
+    fn test_get_block_tree_entry() {
+        let (context, temp_dir) = testing_setup();
+
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
+
+        let chain = chainman.active_chain();
+        let tip = chain.tip();
+        let tip_hash = BlockHash::from(tip.block_hash().to_bytes());
+
+        let entry = chainman.get_block_tree_entry(&tip_hash).unwrap();
+        assert_eq!(entry.height(), tip.height());
+        assert_eq!(entry.block_hash(), tip.block_hash());
+
+        let zero_hash = BlockHash::from([0u8; 32]);
+        assert!(chainman.get_block_tree_entry(&zero_hash).is_none());
+
+        let unknown_hash = BlockHash::from([0xab; 32]);
+        assert!(chainman.get_block_tree_entry(&unknown_hash).is_none());
+
+        let mut flipped_bytes = tip.block_hash().to_bytes();
+        flipped_bytes[0] ^= 1;
+        let flipped_hash = BlockHash::from(flipped_bytes);
+        assert!(chainman.get_block_tree_entry(&flipped_hash).is_none());
+    }
+
+    #[test]
+    fn test_get_block_tree_entry_resolves_every_block() {
+        let (context, temp_dir) = testing_setup();
+
+        let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
+
+        let chain = chainman.active_chain();
+
+        let mut visited = 0;
+        let mut current = Some(chain.tip());
+
+        while let Some(entry) = current {
+            let hash = BlockHash::from(entry.block_hash().to_bytes());
+            let found = chainman.get_block_tree_entry(&hash).unwrap();
+
+            assert_eq!(found.height(), entry.height());
+            assert_eq!(found.block_hash(), entry.block_hash());
+
+            visited += 1;
+            current = entry.prev();
+        }
+
+        assert!(visited > 1);
+        assert_eq!(visited, chain.height() + 1);
+    }
+
+    #[test]
     fn test_block_transactions_iterator() {
         let block_data = read_block_data();
 
