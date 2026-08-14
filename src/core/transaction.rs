@@ -2498,6 +2498,28 @@ mod tests {
         assert!(!script_bytes.is_empty());
     }
 
+    #[test]
+    fn test_txout_iter_size_hint_matches_len() {
+        let (tx, _) = get_test_transactions();
+        let count = tx.output_count();
+
+        let mut iter = tx.outputs();
+        for remaining in (0..=count).rev() {
+            assert_eq!(iter.size_hint(), (remaining, Some(remaining)));
+            assert_eq!(iter.len(), remaining);
+            iter.next();
+        }
+
+        assert_eq!(iter.size_hint(), (0, Some(0)));
+        assert_eq!(iter.len(), 0);
+    }
+
+    #[test]
+    fn test_txout_iter_collect_length() {
+        let (tx, _) = get_test_transactions();
+        assert_eq!(tx.outputs().collect::<Vec<_>>().len(), tx.output_count());
+    }
+
     // TxIn tests
     #[test]
     fn test_txin_from_transaction() {
@@ -2592,6 +2614,28 @@ mod tests {
         }
 
         assert_eq!(iter_count, len);
+    }
+
+    #[test]
+    fn test_txin_iter_size_hint_matches_len() {
+        let (tx, _) = get_test_transactions();
+        let count = tx.input_count();
+
+        let mut iter = tx.inputs();
+        for remaining in (0..=count).rev() {
+            assert_eq!(iter.size_hint(), (remaining, Some(remaining)));
+            assert_eq!(iter.len(), remaining);
+            iter.next();
+        }
+
+        assert_eq!(iter.size_hint(), (0, Some(0)));
+        assert_eq!(iter.len(), 0);
+    }
+
+    #[test]
+    fn test_txin_iter_collect_length() {
+        let (tx, _) = get_test_transactions();
+        assert_eq!(tx.inputs().collect::<Vec<_>>().len(), tx.input_count());
     }
 
     // TxOutPoint tests
