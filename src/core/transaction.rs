@@ -821,7 +821,7 @@ impl<'a> Iterator for TxOutIter<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self
             .transaction
-            .input_count()
+            .output_count()
             .saturating_sub(self.current_index);
         (remaining, Some(remaining))
     }
