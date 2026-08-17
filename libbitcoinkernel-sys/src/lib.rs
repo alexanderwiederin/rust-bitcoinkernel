@@ -96,6 +96,7 @@ pub const btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY: btck_ScriptVerificat
 pub const btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY: btck_ScriptVerificationFlags = 1 << 10;
 pub const btck_ScriptVerificationFlags_WITNESS: btck_ScriptVerificationFlags = 1 << 11;
 pub const btck_ScriptVerificationFlags_TAPROOT: btck_ScriptVerificationFlags = 1 << 17;
+pub const btck_ScriptVerificationFlags_SCRIPT_RESTORATION: btck_ScriptVerificationFlags = 1 << 21;
 pub const btck_ScriptVerificationFlags_ALL: btck_ScriptVerificationFlags =
     btck_ScriptVerificationFlags_P2SH
         | btck_ScriptVerificationFlags_DERSIG
@@ -103,7 +104,8 @@ pub const btck_ScriptVerificationFlags_ALL: btck_ScriptVerificationFlags =
         | btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY
         | btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY
         | btck_ScriptVerificationFlags_WITNESS
-        | btck_ScriptVerificationFlags_TAPROOT;
+        | btck_ScriptVerificationFlags_TAPROOT
+        | btck_ScriptVerificationFlags_SCRIPT_RESTORATION;
 
 // btck_BlockCheckFlags
 
@@ -125,6 +127,7 @@ pub const btck_SigVersion_BASE: btck_SigVersion = 0;
 pub const btck_SigVersion_WITNESS_V0: btck_SigVersion = 1;
 pub const btck_SigVersion_TAPROOT: btck_SigVersion = 2;
 pub const btck_SigVersion_TAPSCRIPT: btck_SigVersion = 3;
+pub const btck_SigVersion_TAPSCRIPT_V2: btck_SigVersion = 4;
 
 // btck_SynchronizationState
 
