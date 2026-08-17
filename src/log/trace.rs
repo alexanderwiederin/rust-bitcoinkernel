@@ -10,15 +10,16 @@ use libbitcoinkernel_sys::{
     btck_ScriptEvalStack, btck_ScriptEvalStackItem, btck_ScriptTraceFrame,
     btck_ScriptTraceFrameKind, btck_ScriptTraceFrameKind_BEGIN, btck_ScriptTraceFrameKind_END,
     btck_ScriptTraceFrameKind_STEP, btck_SigVersion, btck_SigVersion_BASE, btck_SigVersion_TAPROOT,
-    btck_SigVersion_TAPSCRIPT, btck_SigVersion_WITNESS_V0, btck_script_eval_stack_count_items,
-    btck_script_eval_stack_get_item_at, btck_script_eval_stack_item_to_bytes,
-    btck_script_trace_frame_get_altstack, btck_script_trace_frame_get_codeseparator_pos,
-    btck_script_trace_frame_get_exec, btck_script_trace_frame_get_kind,
-    btck_script_trace_frame_get_op_count, btck_script_trace_frame_get_opcode,
-    btck_script_trace_frame_get_opcode_pos, btck_script_trace_frame_get_script,
-    btck_script_trace_frame_get_script_error, btck_script_trace_frame_get_sig_version,
-    btck_script_trace_frame_get_stack, btck_script_trace_frame_get_tapleaf_hash,
-    btck_script_trace_register_callback, btck_script_trace_unregister_callback,
+    btck_SigVersion_TAPSCRIPT, btck_SigVersion_TAPSCRIPT_V2, btck_SigVersion_WITNESS_V0,
+    btck_script_eval_stack_count_items, btck_script_eval_stack_get_item_at,
+    btck_script_eval_stack_item_to_bytes, btck_script_trace_frame_get_altstack,
+    btck_script_trace_frame_get_codeseparator_pos, btck_script_trace_frame_get_exec,
+    btck_script_trace_frame_get_kind, btck_script_trace_frame_get_op_count,
+    btck_script_trace_frame_get_opcode, btck_script_trace_frame_get_opcode_pos,
+    btck_script_trace_frame_get_script, btck_script_trace_frame_get_script_error,
+    btck_script_trace_frame_get_sig_version, btck_script_trace_frame_get_stack,
+    btck_script_trace_frame_get_tapleaf_hash, btck_script_trace_register_callback,
+    btck_script_trace_unregister_callback,
 };
 
 use crate::{
@@ -163,6 +164,8 @@ pub enum SigVersion {
     Taproot = btck_SigVersion_TAPROOT,
     /// Taproot script path spend (BIP342).
     Tapscript = btck_SigVersion_TAPSCRIPT,
+    /// Tapscript v2 script path spends (BIP 440/441).
+    TapscriptV2 = btck_SigVersion_TAPSCRIPT_V2,
 }
 
 impl From<SigVersion> for btck_SigVersion {
@@ -179,6 +182,7 @@ impl From<btck_SigVersion> for SigVersion {
             btck_SigVersion_WITNESS_V0 => SigVersion::WitnessV0,
             btck_SigVersion_TAPROOT => SigVersion::Taproot,
             btck_SigVersion_TAPSCRIPT => SigVersion::Tapscript,
+            btck_SigVersion_TAPSCRIPT_V2 => SigVersion::TapscriptV2,
             _ => panic!("Unknown sig version: {}", value),
         }
     }
@@ -543,6 +547,7 @@ mod tests {
             SigVersion::WitnessV0,
             SigVersion::Taproot,
             SigVersion::Tapscript,
+            SigVersion::TapscriptV2,
         ] {
             let raw: btck_SigVersion = version.into();
             assert_eq!(version, raw.into());
