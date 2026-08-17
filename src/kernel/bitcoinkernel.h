@@ -298,9 +298,16 @@ typedef struct btck_BlockHash btck_BlockHash;
 /**
  * Opaque data structure for holding a transaction input.
  *
- * Holds information on the @ref btck_TransactionOutPoint held within.
+ * Holds information on the @ref btck_TransactionOutPoint, @ref btck_WitnessStack and script_sig held within.
  */
 typedef struct btck_TransactionInput btck_TransactionInput;
+
+/**
+ * Opaque data structure for holding a witness stack.
+ *
+ * Holds a sequence of witness stack items.
+ */
+typedef struct btck_WitnessStack btck_WitnessStack;
 
 /**
  * Opaque data structure for holding a transaction out point.
@@ -525,13 +532,15 @@ typedef uint32_t btck_ScriptVerificationFlags;
 #define btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY ((btck_ScriptVerificationFlags)(1U << 10)) //!< enable CHECKSEQUENCEVERIFY (BIP112)
 #define btck_ScriptVerificationFlags_WITNESS ((btck_ScriptVerificationFlags)(1U << 11))             //!< enable WITNESS (BIP141)
 #define btck_ScriptVerificationFlags_TAPROOT ((btck_ScriptVerificationFlags)(1U << 17))             //!< enable TAPROOT (BIPs 341 & 342)
+#define btck_ScriptVerificationFlags_SCRIPT_RESTORATION ((btck_ScriptVerificationFlags)(1U << 21))
 #define btck_ScriptVerificationFlags_ALL ((btck_ScriptVerificationFlags)(btck_ScriptVerificationFlags_P2SH |                \
                                                                          btck_ScriptVerificationFlags_DERSIG |              \
                                                                          btck_ScriptVerificationFlags_NULLDUMMY |           \
                                                                          btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY | \
                                                                          btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY | \
                                                                          btck_ScriptVerificationFlags_WITNESS |             \
-                                                                         btck_ScriptVerificationFlags_TAPROOT))
+                                                                         btck_ScriptVerificationFlags_TAPROOT |             \
+                                                                         btck_ScriptVerificationFlags_SCRIPT_RESTORATION))
 
 typedef uint8_t btck_ChainType;
 #define btck_ChainType_MAINNET ((btck_ChainType)(0))
@@ -1692,9 +1701,80 @@ BITCOINKERNEL_API uint32_t btck_transaction_input_get_sequence(
     const btck_TransactionInput* transaction_input) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
+ * @brief Get the witness stack of a transaction input. The returned witness
+ * stack is not owned and depends on the lifetime of the transaction input.
+ *
+ * @param[in] transaction_input Non-null.
+ * @return                      The witness stack.
+ */
+BITCOINKERNEL_API const btck_WitnessStack* btck_transaction_input_get_witness_stack(
+    const btck_TransactionInput* transaction_input) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Serialize the script sig of a transaction input through the passed
+ * in callback.
+ *
+ * @param[in] transaction_input Non-null.
+ * @param[in] writer            Non-null, function pointer for writing bytes.
+ * @param[in] user_data         Nullable, passed back through the writer callback.
+ * @return                      The return value of the writer.
+ */
+BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_transaction_input_get_script_sig(
+    const btck_TransactionInput* transaction_input,
+    btck_WriteBytes writer,
+    void* user_data) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+/**
  * Destroy the transaction input.
  */
 BITCOINKERNEL_API void btck_transaction_input_destroy(btck_TransactionInput* transaction_input);
+
+///@}
+
+/** @name Witness Stack
+ * Functions for working with witness stacks.
+ */
+///@{
+
+/**
+ * @brief Return the number of items in a witness stack.
+ *
+ * @param[in] witness_stack Non-null.
+ * @return                  The number of witness stack items.
+ */
+BITCOINKERNEL_API size_t btck_witness_stack_count_items(
+    const btck_WitnessStack* witness_stack) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Serialize a witness stack item at a given index through the passed in
+ * callback.
+ *
+ * @param[in] witness_stack Non-null.
+ * @param[in] index         Index of the item in the witness stack.
+ * @param[in] writer        Non-null, function pointer for writing bytes.
+ * @param[in] user_data     Nullable, passed back through the writer callback.
+ * @return                  The return value of the writer.
+ * @pre                    index < btck_witness_stack_count_items(witness_stack)
+ */
+BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_witness_stack_get_item_at(
+    const btck_WitnessStack* witness_stack,
+    size_t index,
+    btck_WriteBytes writer,
+    void* user_data) BITCOINKERNEL_ARG_NONNULL(1, 3);
+
+/**
+ * @brief Copy a witness stack.
+ *
+ * @param[in] witness_stack Non-null.
+ * @return                  The copied witness stack.
+ */
+BITCOINKERNEL_API btck_WitnessStack* BITCOINKERNEL_WARN_UNUSED_RESULT btck_witness_stack_copy(
+    const btck_WitnessStack* witness_stack) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * Destroy the witness stack.
+ */
+BITCOINKERNEL_API void btck_witness_stack_destroy(btck_WitnessStack* witness_stack);
 
 ///@}
 
@@ -1972,6 +2052,7 @@ BITCOINKERNEL_API void btck_block_header_destroy(btck_BlockHeader* header);
 
 ///@}
 
+
 /** @name ScriptTrace
  * Functions for script execution tracing.
  */
@@ -1987,6 +2068,7 @@ typedef uint8_t btck_SigVersion;
 #define btck_SigVersion_WITNESS_V0 ((btck_SigVersion)(1))
 #define btck_SigVersion_TAPROOT    ((btck_SigVersion)(2))
 #define btck_SigVersion_TAPSCRIPT  ((btck_SigVersion)(3))
+#define btck_SigVersion_TAPSCRIPT_V2 ((btck_SigVersion)(4))
 
 /**
  * Snapshot of script execution state passed to the trace callback.
@@ -2006,7 +2088,7 @@ typedef struct {
     uint8_t opcode;                             //!< The current opcode under evaluation. Only meaningful in step frames.
     int op_count;                               //!< Counter towards the ops per script limit.
     btck_SigVersion sig_version;                //!< Signature version.
-    const unsigned char* tapleaf_hash;          //!< Either null if not evaluating a tapleaf, or points to exactly 32 bytes (and sig_version is TAPSCRIPT).
+    const unsigned char* tapleaf_hash;          //!< Either null if not evaluating a tapleaf, or points to exactly 32 bytes (and sig_version is TAPSCRIPT or TAPSCRIPT_V2).
     uint32_t codeseparator_pos;                 //!< Opcode position of the last evaluated OP_CODESEPARATOR. 0xFFFFFFFF if none.
     int32_t script_error;                       //!< Script error code. Only meaningful in end frames.
 } btck_ScriptTraceFrame;

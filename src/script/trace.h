@@ -7,6 +7,7 @@
 
 #include <script/script.h>
 #include <script/script_error.h>
+#include <script/valtype_stack.h>
 
 #include <functional>
 #include <span>
@@ -43,12 +44,14 @@ ScriptTraceCallback ScriptTraceGetCallback();
 
 struct ScriptTraceScope {
     const ScriptTraceCallback m_callback;
-    std::vector<std::vector<unsigned char>>& m_stack;
+    const std::vector<valtype>* m_stack{nullptr};
+    const ValtypeStack* m_v2_stack{nullptr};
     const CScript& m_script;
     uint32_t& m_opcode_pos;
-    std::vector<std::vector<unsigned char>>& m_altstack;
+    const std::vector<valtype>* m_altstack{nullptr};
+    const ValtypeStack* m_v2_altstack{nullptr};
     std::function<bool()> m_exec_fn;
-    int& m_op_count;
+    const int* m_op_count{nullptr};
     uint8_t m_sig_version;
     const unsigned char* m_tapleaf_hash;
     uint32_t& m_codeseparator_pos;
@@ -59,12 +62,30 @@ struct ScriptTraceScope {
                           int& nOpCount, uint8_t sigversion, const unsigned char* tapleaf_hash,
                           uint32_t& codeseparator_pos, const ScriptError* error) :
         m_callback{ScriptTraceGetCallback()},
-        m_stack{stack},
+        m_stack{&stack},
         m_script{script},
         m_opcode_pos{opcode_pos},
-        m_altstack{altstack},
+        m_altstack{&altstack},
         m_exec_fn{std::move(exec_fn)},
-        m_op_count{nOpCount},
+        m_op_count{&nOpCount},
+        m_sig_version{sigversion},
+        m_tapleaf_hash{tapleaf_hash},
+        m_codeseparator_pos{codeseparator_pos},
+        m_error{error}
+    {
+        Emit(ScriptTraceFrameKind::Begin, m_exec_fn(), /*opcode=*/0, SCRIPT_ERR_OK);
+    }
+
+    ScriptTraceScope(const ValtypeStack& stack, const CScript& script, uint32_t& opcode_pos,
+                     const ValtypeStack& altstack, std::function<bool()> exec_fn,
+                     uint8_t sigversion, const unsigned char* tapleaf_hash,
+                     uint32_t& codeseparator_pos, const ScriptError* error) :
+        m_callback{ScriptTraceGetCallback()},
+        m_v2_stack{&stack},
+        m_script{script},
+        m_opcode_pos{opcode_pos},
+        m_v2_altstack{&altstack},
+        m_exec_fn{std::move(exec_fn)},
         m_sig_version{sigversion},
         m_tapleaf_hash{tapleaf_hash},
         m_codeseparator_pos{codeseparator_pos},
@@ -89,13 +110,15 @@ private:
         if (!m_callback) return;
         auto frame = ScriptTraceFrame{
             .kind = kind,
-            .stack = m_stack,
-            .altstack = m_altstack,
+            .stack = m_v2_stack ? std::span<const valtype>{m_v2_stack->GetStack()}
+                                : std::span<const valtype>{*m_stack},
+            .altstack = m_v2_altstack ? std::span<const valtype>{m_v2_altstack->GetStack()}
+                                    : std::span<const valtype>{*m_altstack},
             .script = m_script,
             .opcode_pos = m_opcode_pos,
             .exec = exec,
             .opcode = opcode,
-            .op_count = m_op_count,
+            .op_count = m_op_count ? *m_op_count : 0,
             .sig_version = m_sig_version,
             .tapleaf_hash = m_tapleaf_hash,
             .codeseparator_pos = m_codeseparator_pos,
@@ -111,9 +134,13 @@ private:
 #define SCRIPT_TRACE_STEP(fExec, opcode) \
     script_trace_scope.Step(fExec, static_cast<uint8_t>(opcode))
 
+#define SCRIPT_TRACE_SCOPE_V2(stack, script, opcode_pos, altstack, exec_fn, sigversion, tapleaf_hash, codeseparator_pos, error) \
+    ScriptTraceScope script_trace_scope { stack, script, opcode_pos, altstack, exec_fn, static_cast<uint8_t>(sigversion), tapleaf_hash, codeseparator_pos, error }
+
 #else
 #define SCRIPT_TRACE_SCOPE(stack, script, opcode_pos, altstack, exec_fn, nOpCount, sigversion, tapleaf_hash, codeseparator_pos, error) static_assert(true)
 #define SCRIPT_TRACE_STEP(fExec, opcode) static_assert(true)
+#define SCRIPT_TRACE_SCOPE_V2(stack, script, opcode_pos, altstack, exec_fn, sigversion, tapleaf_hash, codeseparator_pos, error) static_assert(true)
 #endif // ENABLE_SCRIPT_TRACE
 
 #endif // BITCOIN_SCRIPT_TRACE_H
