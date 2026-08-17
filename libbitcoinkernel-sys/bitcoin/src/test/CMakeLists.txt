@@ -109,6 +109,8 @@ add_executable(test_bitcoin
   sync_tests.cpp
   system_ram_tests.cpp
   system_tests.cpp
+  tapscript_v2_json_tests.cpp
+  tapscript_v2_tests.cpp
   testnet4_miner_tests.cpp
   threadpool_tests.cpp
   timeoffsets_tests.cpp
@@ -131,12 +133,16 @@ add_executable(test_bitcoin
   util_tests.cpp
   util_threadnames_tests.cpp
   util_trace_tests.cpp
+  val64_internal_tests.cpp
+  val64_semantics_tests.cpp
   validation_block_tests.cpp
   validation_chainstate_tests.cpp
   validation_chainstatemanager_tests.cpp
   validation_flush_tests.cpp
   validation_tests.cpp
   validationinterface_tests.cpp
+  valtype_stack_tests.cpp
+  varops_tests.cpp
   versionbits_tests.cpp
 )
 
@@ -149,8 +155,12 @@ target_json_data_sources(test_bitcoin
   data/key_io_valid.json
   data/script_tests.json
   data/sighash.json
+  data/siphash.json
+  data/tapscript_v2_restored_ops.json
+  data/tapscript_v2_varops.json
   data/tx_invalid.json
   data/tx_valid.json
+  data/val64_conversion.json
 )
 target_raw_data_sources(test_bitcoin NAMESPACE test::data
   data/asmap.raw
@@ -167,16 +177,9 @@ target_link_libraries(test_bitcoin
   minisketch
   secp256k1
   Boost::headers
+  $<TARGET_NAME_IF_EXISTS:Boost::multiprecision>
   $<TARGET_NAME_IF_EXISTS:USDT::headers>
 )
-
-if(ENABLE_WALLET)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/src/wallet/test wallet)
-endif()
-
-if(ENABLE_IPC)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
-endif()
 
 function(add_boost_test source_file)
   if(NOT EXISTS ${source_file})
@@ -215,6 +218,14 @@ function(add_all_test_targets)
     add_boost_test(${test_source})
   endforeach()
 endfunction()
+
+if(ENABLE_WALLET)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/src/wallet/test wallet)
+endif()
+
+if(ENABLE_IPC)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
+endif()
 
 add_all_test_targets()
 

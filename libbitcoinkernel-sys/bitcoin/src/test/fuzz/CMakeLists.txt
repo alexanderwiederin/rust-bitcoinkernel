@@ -79,6 +79,7 @@ add_executable(fuzz
   overflow.cpp
   p2p_handshake.cpp
   p2p_headers_presync.cpp
+  p2p_private_broadcast.cpp
   p2p_transport_serialization.cpp
   pcp.cpp
   package_eval.cpp
@@ -124,6 +125,11 @@ add_executable(fuzz
   strprintf.cpp
   system.cpp
   threadpool.cpp
+  tapscript_v2_budget_accounting.cpp
+  tapscript_v2_eval_invariants.cpp
+  tapscript_v2_signature_timelock.cpp
+  tapscript_v2_stack_programs.cpp
+  tapscript_v2_stack_resource_limits.cpp
   timeoffsets.cpp
   torcontrol.cpp
   transaction.cpp
@@ -135,6 +141,7 @@ add_executable(fuzz
   txorphan.cpp
   txrequest.cpp
   utxo_snapshot.cpp
+  val64_ops.cpp
   utxo_total_supply.cpp
   validation_load_mempool.cpp
   vecdeque.cpp
@@ -159,6 +166,7 @@ target_link_libraries(fuzz
   univalue
   secp256k1
   Boost::headers
+  $<TARGET_NAME_IF_EXISTS:Boost::multiprecision>
 )
 
 if(ENABLE_WALLET)

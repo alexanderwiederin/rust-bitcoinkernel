@@ -52,6 +52,8 @@ add_library(bitcoinkernel
   ../script/script_error.cpp
   ../script/sigcache.cpp
   ../script/solver.cpp
+  ../script/val64.cpp
+  ../script/valtype_stack.cpp
   ../signet.cpp
   ../streams.cpp
   ../sync.cpp
@@ -119,7 +121,7 @@ if(bitcoinkernel_type STREQUAL "STATIC_LIBRARY")
   target_compile_definitions(bitcoinkernel PUBLIC BITCOINKERNEL_STATIC)
 endif()
 
-option(ENABLE_SCRIPT_TRACE "Enable script execution trace hooks" OFF)
+option(NABLE_SCRIPT_TRACE "Enable script execution trace hooks" OFF)
 if(ENABLE_SCRIPT_TRACE)
   target_sources(bitcoinkernel PRIVATE ../script/trace.cpp)
   target_compile_definitions(bitcoinkernel PRIVATE ENABLE_SCRIPT_TRACE)

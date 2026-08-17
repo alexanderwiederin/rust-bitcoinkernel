@@ -135,6 +135,12 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1815; // 90%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].bit = 2;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].threshold = 1815; // 90%
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].period = 2016;
 
         ApplyDeploymentOptions(opts.dep_opts);
 
@@ -259,6 +265,12 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1512; // 75%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].bit = 2;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].threshold = 1512; // 75%
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].period = 2016;
 
         ApplyDeploymentOptions(opts.dep_opts);
 
@@ -284,7 +296,6 @@ public:
         // nodes with support for servicebits filtering should be at the top
         vSeeds.emplace_back("testnet-seed.bitcoin.jonasschnelli.ch.");
         vSeeds.emplace_back("seed.tbtc.petertodd.net.");
-        vSeeds.emplace_back("seed.testnet.bitcoin.sprovoost.nl.");
         vSeeds.emplace_back("testnet-seed.bluematt.me."); // Just a static list of stable node(s), only supports x9
         vSeeds.emplace_back("seed.testnet.achownodes.xyz."); // Ava Chow, only supports x1, x5, x9, x49, x809, x849, xd, x400, x404, x408, x448, xc08, xc48, x40c
 
@@ -361,6 +372,12 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1512; // 75%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].bit = 2;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].threshold = 1512; // 75%
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].period = 2016;
 
         ApplyDeploymentOptions(opts.dep_opts);
 
@@ -506,6 +523,12 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 1815; // 90%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 2016;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].bit = 2;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].threshold = 324; // 75%
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].period = 432;
 
         ApplyDeploymentOptions(options.dep_opts);
 
@@ -590,6 +613,12 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].threshold = 108; // 75%
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].period = 144; // Faster than normal for regtest (144 instead of 2016)
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].bit = 2;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].min_activation_height = 0;
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].threshold = 108; // 75%
+        consensus.vDeployments[Consensus::DEPLOYMENT_SCRIPT_RESTORATION].period = 144;
 
         consensus.nMinimumChainWork = uint256{};
         consensus.defaultAssumeValid = uint256{};
