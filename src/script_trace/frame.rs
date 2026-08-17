@@ -2,7 +2,7 @@ use libbitcoinkernel_sys::{
     btck_ScriptTraceFrame as RawScriptTraceFrame, btck_ScriptTraceFrameKind,
     btck_ScriptTraceFrameKind_BEGIN, btck_ScriptTraceFrameKind_END, btck_ScriptTraceFrameKind_STEP,
     btck_SigVersion, btck_SigVersion_BASE, btck_SigVersion_TAPROOT, btck_SigVersion_TAPSCRIPT,
-    btck_SigVersion_WITNESS_V0,
+    btck_SigVersion_TAPSCRIPT_V2, btck_SigVersion_WITNESS_V0,
 };
 
 /// Which point in script execution a [`ScriptTraceFrame`] was captured at.
@@ -47,6 +47,8 @@ pub enum SigVersion {
     Taproot = btck_SigVersion_TAPROOT,
     /// Taproot script path spends (BIP 342).
     Tapscript = btck_SigVersion_TAPSCRIPT,
+    /// Tapscript v2 script path spends (BIP 440/441).
+    TapscriptV2 = btck_SigVersion_TAPSCRIPT_V2,
 }
 
 impl From<SigVersion> for btck_SigVersion {
@@ -63,6 +65,7 @@ impl From<btck_SigVersion> for SigVersion {
             btck_SigVersion_WITNESS_V0 => SigVersion::WitnessV0,
             btck_SigVersion_TAPROOT => SigVersion::Taproot,
             btck_SigVersion_TAPSCRIPT => SigVersion::Tapscript,
+            btck_SigVersion_TAPSCRIPT_V2 => SigVersion::TapscriptV2,
             _ => panic!("Unknown sig version: {}", value),
         }
     }
@@ -182,6 +185,7 @@ mod tests {
             SigVersion::WitnessV0,
             SigVersion::Taproot,
             SigVersion::Tapscript,
+            SigVersion::TapscriptV2,
         ] {
             let raw: btck_SigVersion = version.into();
             let back: SigVersion = raw.into();
