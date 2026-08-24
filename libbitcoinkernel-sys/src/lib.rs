@@ -435,6 +435,8 @@ extern "C" {
 
     pub fn btck_transaction_get_txid(transaction: *const btck_Transaction) -> *const btck_Txid;
 
+    pub fn btck_transaction_is_coinbase(transaction: *const btck_Transaction) -> c_int;
+
     pub fn btck_transaction_check(
         tx: *const btck_Transaction,
         validation: *mut btck_TxValidationState,

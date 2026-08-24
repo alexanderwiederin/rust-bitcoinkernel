@@ -162,9 +162,10 @@ use libbitcoinkernel_sys::{
     btck_transaction_get_txid, btck_transaction_input_copy, btck_transaction_input_destroy,
     btck_transaction_input_get_out_point, btck_transaction_input_get_script_sig,
     btck_transaction_input_get_sequence, btck_transaction_input_get_witness_stack,
-    btck_transaction_out_point_copy, btck_transaction_out_point_destroy,
-    btck_transaction_out_point_get_index, btck_transaction_out_point_get_txid,
-    btck_transaction_output_copy, btck_transaction_output_create, btck_transaction_output_destroy,
+    btck_transaction_is_coinbase, btck_transaction_out_point_copy,
+    btck_transaction_out_point_destroy, btck_transaction_out_point_get_index,
+    btck_transaction_out_point_get_txid, btck_transaction_output_copy,
+    btck_transaction_output_create, btck_transaction_output_destroy,
     btck_transaction_output_get_amount, btck_transaction_output_get_script_pubkey,
     btck_transaction_to_bytes, btck_tx_validation_state_create, btck_tx_validation_state_destroy,
     btck_tx_validation_state_get_tx_validation_result,
@@ -409,6 +410,26 @@ pub trait TransactionExt: AsPtr<btck_Transaction> {
     /// ```
     fn locktime(&self) -> u32 {
         unsafe { btck_transaction_get_locktime(self.as_ptr()) }
+    }
+
+    /// Returns true if this is a coinbase transaction.
+    ///
+    /// A coinbase transaction is the first transaction in a block. It has exactly
+    /// one input whose outpoint is null. It creates the block subsidy and collects
+    /// the fees of the other transactions in the block rather than spending
+    /// existing outputs.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use bitcoinkernel::{prelude::*, Block, KernelError};
+    /// # fn example(block: &Block) -> Result<(), KernelError> {
+    /// let first = block.transaction(0)?;
+    /// assert!(first.is_coinbase());
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn is_coinbase(&self) -> bool {
+        present(unsafe { btck_transaction_is_coinbase(self.as_ptr()) })
     }
 
     /// Runs context-free consensus validation on this transaction.
@@ -2426,6 +2447,20 @@ mod tests {
     fn test_transaction_check_ref() {
         let (tx, _) = get_test_transactions();
         assert_eq!(tx.as_ref().check(), TxCheckResult::Valid);
+    }
+
+    #[test]
+    fn test_transaction_is_coinbase() {
+        let (coinbase, coinbase_2) = get_test_coinbase_transactions();
+        assert!(coinbase.is_coinbase());
+        assert!(coinbase_2.is_coinbase());
+    }
+
+    #[test]
+    fn test_transaction_is_not_coinbase() {
+        let (tx, tx_2) = get_test_transactions();
+        assert!(!tx.is_coinbase());
+        assert!(!tx_2.is_coinbase());
     }
 
     // TxOut tests
