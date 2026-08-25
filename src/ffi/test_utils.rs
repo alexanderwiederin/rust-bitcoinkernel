@@ -14,6 +14,11 @@ macro_rules! test_owned_trait_requirements {
             assert_send_sync::<$owned>();
             assert_as_ptr::<$owned, $ffi_type>();
             assert_from_mut_ptr::<$owned, $ffi_type>();
+
+            assert!(
+                std::mem::needs_drop::<$owned>(),
+                "owned FFI wrapper must impl Drop to release its handle"
+            );
         }
     };
 }
