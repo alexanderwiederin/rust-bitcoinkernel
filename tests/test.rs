@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_reindex() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         {
             let block_data = read_block_data();
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_invalid_block() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         for _ in 0..10 {
             let chainman =
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_process_data() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let block_data = read_block_data();
         let chainman =
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_validate_any() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let block_data = read_block_data();
         let chainman =
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_logger() {
-        let (_, _) = testing_setup();
+        let (_, _) = testing_setup("test_chainman_regtest");
 
         let logger_1 = Some(Logger::new(TestLog {}).unwrap());
         let logger_2 = Some(Logger::new(TestLog {}).unwrap());
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn test_header_validation() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let block_data = read_block_data();
         let chainman =
@@ -569,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_chain_operations() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
@@ -622,7 +622,7 @@ mod tests {
 
     #[test]
     fn test_get_block_tree_entry() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
@@ -648,7 +648,7 @@ mod tests {
 
     #[test]
     fn test_get_block_tree_entry_resolves_every_block() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
@@ -703,7 +703,7 @@ mod tests {
 
     #[test]
     fn test_block_spent_outputs_iterator() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
@@ -734,7 +734,7 @@ mod tests {
 
     #[test]
     fn test_transaction_spent_outputs_iterator() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn test_nested_iteration() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 
@@ -799,7 +799,7 @@ mod tests {
 
     #[test]
     fn test_iterator_with_block_transactions() {
-        let (context, temp_dir) = testing_setup();
+        let (context, temp_dir) = testing_setup("test_chainman_regtest");
 
         let chainman = setup_chainman_with_blocks(&context, &temp_dir).unwrap();
 

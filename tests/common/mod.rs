@@ -121,13 +121,13 @@ pub fn create_context() -> Context {
     builder.build().unwrap()
 }
 
-pub fn testing_setup() -> (Arc<Context>, TempDir) {
+pub fn testing_setup(name: &str) -> (Arc<Context>, TempDir) {
     START.call_once(|| {
         setup_logging();
     });
     let context = Arc::new(create_context());
 
-    let temp_dir = TempDir::new("test_chainman_regtest");
+    let temp_dir = TempDir::new(name);
     (context, temp_dir)
 }
 
