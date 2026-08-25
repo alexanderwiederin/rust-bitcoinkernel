@@ -235,6 +235,11 @@ pub struct btck_WitnessStack {
 
 pub type btck_DestroyCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 
+pub type btck_FetchCoin = unsafe extern "C" fn(
+    user_data: *mut c_void,
+    out_point: *const btck_TransactionOutPoint,
+) -> *mut btck_Coin;
+
 pub type btck_LogCallback =
     unsafe extern "C" fn(user_data: *mut c_void, message: *const c_char, message_len: usize);
 
@@ -676,6 +681,16 @@ extern "C" {
         chainstate_manager: *mut btck_ChainstateManager,
         header: *const btck_BlockHeader,
     ) -> *mut btck_BlockValidationState;
+
+    #[must_use]
+    pub fn btck_chainstate_manager_validate_block(
+        chainstate_manager: *mut btck_ChainstateManager,
+        block: *const btck_Block,
+        block_tree_entry: *const btck_BlockTreeEntry,
+        coin_fetcher: btck_FetchCoin,
+        user_data: *mut c_void,
+        block_validation_state: *mut btck_BlockValidationState,
+    ) -> c_int;
 
     #[must_use]
     pub fn btck_chainstate_manager_import_blocks(
