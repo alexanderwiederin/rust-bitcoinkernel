@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `verify` now uses an infallible conversion for the internal `ScriptVerifyStatus`, since an unrecognized status can only indicate a build-time mismatch between the bindings and the vendored `libbitcoinkernel` subtree rather than a runtime condition.
 - `ChainstateManager::get_block_tree_entry` now resolves the requested block instead of returning `None` for every input. It passed the address of the `BlockHash` wrapper to the kernel rather than the block hash handle the wrapper owns, so no lookup ever matched an entry in the block tree.
+- `TxOutIter::size_hint` returned the transaction's input count instead of its output count, giving an incorrect hint (and an incorrect `ExactSizeIterator::len`).
 
 ## [0.2.1] 2026-05-20
 
