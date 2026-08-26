@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] 2026-08-26
+
 ### Added
 - Added Nix package outputs for Android with bundled NDK r24, Rust toolchains, Boost, and cmake.
 - Added `Block::check` to perform context-free validation of a block (size, weight, coinbase, transactions, sigops), with optional proof-of-work and merkle-root checks toggled via the `BLOCK_CHECK_BASE` / `_POW` / `_MERKLE` / `_ALL` flags. Returns a `BlockCheckResult` enum carrying the validation state on failure.
-- Implemented `Debug` for `BlockValidationResult`, `BlockValidationStateRef`, `ProcessBlockHeaderresult` and `BlockCheckResult`, enabling inspection via `{:?}` in logs and test output.
+- Implemented `Debug` for `BlockValidationResult`, `BlockValidationStateRef`, `ProcessBlockHeaderResult` and `BlockCheckResult`, enabling inspection via `{:?}` in logs and test output.
 - Added `#[must_use]` to `BlockCheckResult` and `ProcessBlockHeaderResult` to warn when validation results are silently ignored.
 - Added `ScriptPubkeyExt::as_bytes` to return a zero-copy slice into kernel-managed memory. Unlike `to_bytes`, this does not allocate.
 - Added `Transaction::check` for context-free consensus validation of a transaction. Returns `TxCheckResult::Valid` on success or `TxCheckResult::Invalid(TxValidationResult)` on failure.
@@ -24,12 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
 - `BlockHeader::new` now returns `Err(KernelError::InvalidLength)` when passed a buffer that is not exactly 80 bytes, rather than delegating the check to the underlying library.
-- `ChainstateManager::process_block_header` now returns `Result<ProcessBlockHeaderResult, KernelError>` instead of `ProcessBlockHeaderResult` directly. `Err` indicates an internal failure; `Ok(ProcessBlockHeaderResult::Invalid(state)` indicates the header failed validation.
+- `ChainstateManager::process_block_header` now returns `Result<ProcessBlockHeaderResult, KernelError>` instead of `ProcessBlockHeaderResult` directly. `Err` indicates an internal failure; `Ok(ProcessBlockHeaderResult::Invalid(state))` indicates the header failed validation.
 - `ProcessBlockHeaderResult::Success` and `ProcessBlockHeaderResult::Failed` renamed to `ProcessBlockHeaderResult::Valid` and `ProcessBlockHeaderResult::Invalid` respectively. `Valid` no longer carries a `BlockValidationState`.
 
 ### Fixed
 - `verify` now uses an infallible conversion for the internal `ScriptVerifyStatus`, since an unrecognized status can only indicate a build-time mismatch between the bindings and the vendored `libbitcoinkernel` subtree rather than a runtime condition.
 - `ChainstateManager::get_block_tree_entry` now resolves the requested block instead of returning `None` for every input. It passed the address of the `BlockHash` wrapper to the kernel rather than the block hash handle the wrapper owns, so no lookup ever matched an entry in the block tree.
+
+### Dependencies
+- Bumped libbitcoinkernel-sys dependency to 0.4.0
 
 ## [0.2.1] 2026-05-20
 
