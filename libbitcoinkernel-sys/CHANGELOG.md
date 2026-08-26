@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Added build support for Android
+## [0.4.0] - 2026-08-26
 
 ### Added
+- Added build support for Android
 - New `btck_TxValidationState` opaque type for holding transaction validation state
 - New `btck_TxValidationResult` type with named constants for all transaction validation result variants
 - New `btck_tx_validation_state_create`, `btck_tx_validation_state_get_validation_mode`, `btck_tx_validation_state_get_tx_validation_result` and `btck_tx_validation_state_destroy` for managing and inspecting transaction validation state
@@ -65,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `data_directory` and `blocks_directory` parameters in `btck_chainstate_manager_options_create` now allow null values to represent empty paths (6657bcbdb4d0)
 - `btck_script_pubkey_verify` now takes a `btck_PrecomputedTransactionData` instead of an array of outputs for verifying taproot outputs (eb0594e23f0c)
 
-## [0.1.1] - 2025-24-11
+## [0.1.1] - 2025-11-24
 
 ### Fixed
 - Precise package excludes to ensure the test/fuzz directory is included
