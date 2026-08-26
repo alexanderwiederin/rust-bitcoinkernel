@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated to latest libbitcoinkernel-sys with btck_PrecomputedTransactionData` changes.
 - The `verify` function now takes a `PrecomputedTransactionData` instead of an array of outputs spent by the transaction. The user is now always required to pass this struct to the function. This is done to encourage its use and protect against quadratic hashing costs.
 
-## [0.1.1] - 2025-24-11
+## [0.1.1] - 2025-11-24
 
 ### Fixed
 - Updated to latest libbitcoinkernel-sys with cmake packaging include fix.
