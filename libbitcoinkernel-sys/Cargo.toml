@@ -40,14 +40,11 @@ exclude = [
     "bitcoin/src/node/data",
     "bitcoin/test/functional",
     "bitcoin/test/lint",
-    "bitcoin/test/sanitizer_suppresions",
+    "bitcoin/test/sanitizer_suppressions",
     "bitcoin/test/util",
-    "bitcoin/share",
     "bitcoin/src/qt",
-    "bitcoin/src/bench",
     "bitcoin/src/zmq",
     "bitcoin/src/wallet",
-    "bitcoin/src/bench",
     "bitcoin/src/fuzz"
 ]
 publish = true
