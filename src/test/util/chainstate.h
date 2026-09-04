@@ -17,7 +17,7 @@
 
 #include <univalue.h>
 
-inline constexpr auto NoMalleation = [](AutoFile& file, node::SnapshotMetadata& meta){};
+const auto NoMalleation = [](AutoFile& file, node::SnapshotMetadata& meta){};
 
 /**
  * Create and activate a UTXO snapshot, optionally providing a function to

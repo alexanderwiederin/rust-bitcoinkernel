@@ -24,7 +24,6 @@ add_executable(test_bitcoin
   blockfilter_index_tests.cpp
   blockfilter_tests.cpp
   blockmanager_tests.cpp
-  blockpolicyestimator_tests.cpp
   bloom_tests.cpp
   bswap_tests.cpp
   btcsignals_tests.cpp
@@ -45,7 +44,6 @@ add_executable(test_bitcoin
   denialofservice_tests.cpp
   descriptor_tests.cpp
   disconnected_transactions.cpp
-  fees_util_tests.cpp
   feefrac_tests.cpp
   feerounder_tests.cpp
   flatfile_tests.cpp
@@ -60,7 +58,6 @@ add_executable(test_bitcoin
   key_tests.cpp
   logging_tests.cpp
   mempool_tests.cpp
-  mempool_fee_estimator_tests.cpp
   merkle_tests.cpp
   merkleblock_tests.cpp
   miner_tests.cpp
@@ -79,6 +76,7 @@ add_executable(test_bitcoin
   pcp_tests.cpp
   peerman_tests.cpp
   pmt_tests.cpp
+  policyestimator_tests.cpp
   pool_tests.cpp
   pow_tests.cpp
   prevector_tests.cpp
@@ -111,6 +109,8 @@ add_executable(test_bitcoin
   sync_tests.cpp
   system_ram_tests.cpp
   system_tests.cpp
+  tapscript_v2_json_tests.cpp
+  tapscript_v2_tests.cpp
   testnet4_miner_tests.cpp
   threadpool_tests.cpp
   timeoffsets_tests.cpp
@@ -133,12 +133,16 @@ add_executable(test_bitcoin
   util_tests.cpp
   util_threadnames_tests.cpp
   util_trace_tests.cpp
+  val64_internal_tests.cpp
+  val64_semantics_tests.cpp
   validation_block_tests.cpp
   validation_chainstate_tests.cpp
   validation_chainstatemanager_tests.cpp
   validation_flush_tests.cpp
   validation_tests.cpp
   validationinterface_tests.cpp
+  valtype_stack_tests.cpp
+  varops_tests.cpp
   versionbits_tests.cpp
 )
 
@@ -152,8 +156,11 @@ target_json_data_sources(test_bitcoin
   data/script_tests.json
   data/sighash.json
   data/siphash.json
+  data/tapscript_v2_restored_ops.json
+  data/tapscript_v2_varops.json
   data/tx_invalid.json
   data/tx_valid.json
+  data/val64_conversion.json
 )
 target_raw_data_sources(test_bitcoin NAMESPACE test::data
   data/asmap.raw
@@ -170,6 +177,7 @@ target_link_libraries(test_bitcoin
   minisketch
   secp256k1
   Boost::headers
+  $<TARGET_NAME_IF_EXISTS:Boost::multiprecision>
   $<TARGET_NAME_IF_EXISTS:USDT::headers>
 )
 
@@ -194,6 +202,7 @@ function(add_boost_test source_file)
       SKIP_REGULAR_EXPRESSION
         "no test cases matching filter"
         "skipping script_assets_test"
+        "skipping total_ram"
     )
   endforeach()
 endfunction()

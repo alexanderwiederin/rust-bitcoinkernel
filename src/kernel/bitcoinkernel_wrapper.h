@@ -8,7 +8,6 @@
 #include <kernel/bitcoinkernel.h>
 
 #include <array>
-#include <chrono>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -132,6 +131,7 @@ enum class SigVersion : btck_SigVersion {
     WITNESS_V0 = btck_SigVersion_WITNESS_V0,
     TAPROOT = btck_SigVersion_TAPROOT,
     TAPSCRIPT = btck_SigVersion_TAPSCRIPT,
+    TAPSCRIPT_V2 = btck_SigVersion_TAPSCRIPT_V2,
 };
 
 template <typename T>
@@ -203,7 +203,7 @@ T check(T ptr)
     return ptr;
 }
 
-template <typename Collection, typename ValueType, auto GetFunc>
+template <typename Collection, typename ValueType>
 class Iterator
 {
 public:
@@ -222,7 +222,8 @@ public:
     Iterator(const Collection* ptr, size_t idx) : m_collection{ptr}, m_idx{idx} {}
 
     // This is just a view, so return a copy.
-    auto operator*() const { return std::invoke(GetFunc, *m_collection, m_idx); }
+    auto operator*() const { return (*m_collection)[m_idx]; }
+    auto operator->() const { return (*m_collection)[m_idx]; }
 
     auto& operator++() { m_idx++; return *this; }
     auto operator++(int) { Iterator tmp = *this; ++(*this); return tmp; }
@@ -238,7 +239,7 @@ public:
 
     auto operator-(const Iterator& other) const { return static_cast<difference_type>(m_idx) - static_cast<difference_type>(other.m_idx); }
 
-    ValueType operator[](difference_type n) const { return *(*this + n); }
+    ValueType operator[](difference_type n) const { return (*m_collection)[m_idx + n]; }
 
     auto operator<=>(const Iterator& other) const { return m_idx <=> other.m_idx; }
 
@@ -261,7 +262,7 @@ class Range
 public:
     using value_type = std::invoke_result_t<decltype(GetFunc), const Container&, size_t>;
     using difference_type = std::ptrdiff_t;
-    using iterator = Iterator<Container, value_type, GetFunc>;
+    using iterator = Iterator<Range, value_type>;
     using const_iterator = iterator;
 
 private:
@@ -273,8 +274,8 @@ public:
         static_assert(std::ranges::random_access_range<Range>);
     }
 
-    iterator begin() const { return iterator(m_container, 0); }
-    iterator end() const { return iterator(m_container, size()); }
+    iterator begin() const { return iterator(this, 0); }
+    iterator end() const { return iterator(this, size()); }
 
     const_iterator cbegin() const { return begin(); }
     const_iterator cend() const { return end(); }
@@ -1213,11 +1214,6 @@ public:
         btck_chainstate_manager_options_set_worker_threads_num(get(), worker_threads);
     }
 
-    bool SetDatabaseCacheBytes(uint64_t database_cache_bytes)
-    {
-        return btck_chainstate_manager_options_set_database_cache_bytes(get(), database_cache_bytes) == 0;
-    }
-
     bool SetWipeDbs(bool wipe_block_tree, bool wipe_chainstate)
     {
         return btck_chainstate_manager_options_set_wipe_dbs(get(), wipe_block_tree, wipe_chainstate) == 0;
@@ -1429,13 +1425,6 @@ public:
     }
 };
 
-inline void set_mock_time(std::chrono::seconds timestamp)
-{
-    if (btck_set_mock_time(timestamp.count()) != 0) {
-        throw std::runtime_error("timestamp out of range");
-    }
-}
-
 class ScriptEvalStackItemView : public View<btck_ScriptEvalStackItem>
 {
 public:
@@ -1479,6 +1468,7 @@ public:
     bool Exec() const { return btck_script_trace_frame_get_exec(get()) != 0; }
     uint8_t Opcode() const { return btck_script_trace_frame_get_opcode(get()); }
     int OpCount() const { return btck_script_trace_frame_get_op_count(get()); }
+    uint64_t Varops() const { return btck_script_trace_frame_get_varops(get()); }
     SigVersion GetSigVersion() const { return static_cast<SigVersion>(btck_script_trace_frame_get_sig_version(get())); }
     uint32_t CodeseparatorPos() const { return btck_script_trace_frame_get_codeseparator_pos(get()); }
     int32_t GetScriptError() const { return btck_script_trace_frame_get_script_error(get()); }

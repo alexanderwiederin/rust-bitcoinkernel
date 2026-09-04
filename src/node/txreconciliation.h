@@ -12,7 +12,7 @@
 #include <tuple>
 
 /** Supported transaction reconciliation protocol version */
-inline constexpr uint32_t TXRECONCILIATION_VERSION{1};
+static constexpr uint32_t TXRECONCILIATION_VERSION{1};
 
 enum class ReconciliationRegisterResult {
     NOT_FOUND,

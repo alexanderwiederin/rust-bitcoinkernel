@@ -11,18 +11,18 @@
 using namespace std::chrono_literals;
 
 /* A delay between model updates */
-inline constexpr auto MODEL_UPDATE_DELAY{250ms};
+static constexpr auto MODEL_UPDATE_DELAY{250ms};
 
 /* A delay between shutdown pollings */
-inline constexpr auto SHUTDOWN_POLLING_DELAY{200ms};
+static constexpr auto SHUTDOWN_POLLING_DELAY{200ms};
 
 /* AskPassphraseDialog -- Maximum passphrase length */
-inline constexpr int MAX_PASSPHRASE_SIZE = 1024;
+static const int MAX_PASSPHRASE_SIZE = 1024;
 
 /* BitcoinGUI -- Size of icons in status bar */
-inline constexpr int STATUSBAR_ICONSIZE = 16;
+static const int STATUSBAR_ICONSIZE = 16;
 
-inline constexpr bool DEFAULT_SPLASHSCREEN = true;
+static const bool DEFAULT_SPLASHSCREEN = true;
 
 /* Invalid field background style */
 #define STYLE_INVALID "border: 3px solid #FF8080"
@@ -41,7 +41,7 @@ inline constexpr bool DEFAULT_SPLASHSCREEN = true;
 /* Tooltips longer than this (in characters) are converted into rich text,
    so that they can be word-wrapped.
  */
-inline constexpr int TOOLTIP_WRAP_THRESHOLD = 80;
+static const int TOOLTIP_WRAP_THRESHOLD = 80;
 
 /* Number of frames in spinner animation */
 #define SPINNER_FRAMES 36
@@ -55,9 +55,9 @@ inline constexpr int TOOLTIP_WRAP_THRESHOLD = 80;
 #define QAPP_APP_NAME_REGTEST "Bitcoin-Qt-regtest"
 
 /* One gigabyte (GB) in bytes */
-inline constexpr uint64_t GB_BYTES{1'000'000'000};
+static constexpr uint64_t GB_BYTES{1000000000};
 
 // Default prune target displayed in GUI.
-inline constexpr int DEFAULT_PRUNE_TARGET_GB{2};
+static constexpr int DEFAULT_PRUNE_TARGET_GB{2};
 
 #endif // BITCOIN_QT_GUICONSTANTS_H

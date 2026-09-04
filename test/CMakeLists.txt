@@ -9,9 +9,9 @@ function(create_test_config)
 
   macro(set_configure_variable var conf_var)
     if(${var})
-      set(${conf_var}_VALUE true)
+      set(${conf_var}_TRUE "")
     else()
-      set(${conf_var}_VALUE false)
+      set(${conf_var}_TRUE "#")
     endif()
   endmacro()
 

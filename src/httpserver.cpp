@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <span>
@@ -50,8 +51,7 @@ static constexpr auto SELECT_TIMEOUT{50ms};
 static constexpr int SOCKET_OPTION_TRUE{1};
 
 using common::InvalidPortErrMsg;
-using util::LineReader;
-using namespace bitcoin_http;
+using http_bitcoin::HTTPRequest;
 
 struct HTTPPathHandler
 {
@@ -66,7 +66,9 @@ struct HTTPPathHandler
 
 /** HTTP module state */
 
-static std::unique_ptr<HTTPServer> g_http_server{nullptr};
+static std::unique_ptr<http_bitcoin::HTTPServer> g_http_server{nullptr};
+//! List of subnets to allow RPC connections from
+static std::vector<CSubNet> rpc_allow_subnets;
 //! Handlers for (sub)paths
 static GlobalMutex g_httppathhandlers_mutex;
 static std::vector<HTTPPathHandler> pathHandlers GUARDED_BY(g_httppathhandlers_mutex);
@@ -76,26 +78,22 @@ static ThreadPool g_threadpool_http("http");
 static int g_max_queue_depth{100};
 
 /** Check if a network address is allowed to access the HTTP server */
-bool HTTPServer::ClientAllowed(const CNetAddr& netaddr) const
+static bool ClientAllowed(const CNetAddr& netaddr)
 {
     if (!netaddr.IsValid())
         return false;
-    for(const CSubNet& subnet : m_allow_subnets)
+    for(const CSubNet& subnet : rpc_allow_subnets)
         if (subnet.Match(netaddr))
             return true;
     return false;
 }
 
 /** Initialize ACL list for HTTP server */
-bool HTTPServer::InitHTTPAllowList()
+static bool InitHTTPAllowList()
 {
-    // Must be run before StartSocketThreads() because ThreadSocketHandler()
-    // will check m_allow_subnets from the I/O thread.
-    Assume(!m_thread_socket_handler.joinable());
-
-    m_allow_subnets.clear();
-    m_allow_subnets.emplace_back(LookupHost("127.0.0.1", false).value(), 8);  // always allow IPv4 local subnet
-    m_allow_subnets.emplace_back(LookupHost("::1", false).value());  // always allow IPv6 localhost
+    rpc_allow_subnets.clear();
+    rpc_allow_subnets.emplace_back(LookupHost("127.0.0.1", false).value(), 8);  // always allow IPv4 local subnet
+    rpc_allow_subnets.emplace_back(LookupHost("::1", false).value());  // always allow IPv6 localhost
     for (const std::string& strAllow : gArgs.GetArgs("-rpcallowip")) {
         const CSubNet subnet{LookupSubNet(strAllow)};
         if (!subnet.IsValid()) {
@@ -104,10 +102,10 @@ bool HTTPServer::InitHTTPAllowList()
                 CClientUIInterface::MSG_ERROR);
             return false;
         }
-        m_allow_subnets.push_back(subnet);
+        rpc_allow_subnets.push_back(subnet);
     }
     std::string strAllowed;
-    for (const CSubNet& subnet : m_allow_subnets)
+    for (const CSubNet& subnet : rpc_allow_subnets)
         strAllowed += subnet.ToString() + " ";
     LogDebug(BCLog::HTTP, "Allowing HTTP connections from: %s\n", strAllowed);
     return true;
@@ -127,19 +125,21 @@ std::string_view RequestMethodString(HTTPRequestMethod m)
     assert(false);
 }
 
-static void WriteNoStoreErrorReply(HTTPRequest& req, HTTPStatusCode status, std::string_view reply = {})
-{
-    req.WriteHeader("Cache-Control", "no-store");
-    req.WriteReply(status, reply);
-}
-
 static void MaybeDispatchRequestToWorker(std::shared_ptr<HTTPRequest> hreq)
 {
+    // Early address-based allow check
+    if (!ClientAllowed(hreq->GetPeer())) {
+        LogDebug(BCLog::HTTP, "HTTP request from %s rejected: Client network is not allowed RPC access\n",
+                 hreq->GetPeer().ToStringAddrPort());
+        hreq->WriteReply(HTTP_FORBIDDEN);
+        return;
+    }
+
     // Early reject unknown HTTP methods
     if (hreq->GetRequestMethod() == HTTPRequestMethod::UNKNOWN) {
         LogDebug(BCLog::HTTP, "HTTP request from %s rejected: Unknown HTTP request method\n",
                  hreq->GetPeer().ToStringAddrPort());
-        WriteNoStoreErrorReply(*hreq, HTTP_BAD_METHOD);
+        hreq->WriteReply(HTTP_BAD_METHOD);
         return;
     }
 
@@ -165,7 +165,7 @@ static void MaybeDispatchRequestToWorker(std::shared_ptr<HTTPRequest> hreq)
     if (i != iend) {
         if (static_cast<int>(g_threadpool_http.WorkQueueSize()) >= g_max_queue_depth) {
             LogWarning("Request rejected because http work queue depth exceeded, it can be increased with the -rpcworkqueue= setting");
-            WriteNoStoreErrorReply(*hreq, HTTP_SERVICE_UNAVAILABLE, "Work queue depth exceeded");
+            hreq->WriteReply(HTTP_SERVICE_UNAVAILABLE, "Work queue depth exceeded");
             return;
         }
 
@@ -184,25 +184,25 @@ static void MaybeDispatchRequestToWorker(std::shared_ptr<HTTPRequest> hreq)
             // Reply so the client doesn't hang waiting for the response.
             req->WriteHeader("Connection", "close");
             // TODO: Implement specific error formatting for the REST and JSON-RPC servers responses.
-            WriteNoStoreErrorReply(*req, HTTP_INTERNAL_SERVER_ERROR, err_msg);
+            req->WriteReply(HTTP_INTERNAL_SERVER_ERROR, err_msg);
         };
 
         if (auto res = g_threadpool_http.Submit(std::move(item)); !res.has_value()) {
             Assume(hreq.use_count() == 1); // ensure request will be deleted
             // Both SubmitError::Inactive and SubmitError::Interrupted mean shutdown
             LogWarning("HTTP request rejected during server shutdown: '%s'", SubmitErrorString(res.error()));
-            WriteNoStoreErrorReply(*hreq, HTTP_SERVICE_UNAVAILABLE, "Request rejected during server shutdown");
+            hreq->WriteReply(HTTP_SERVICE_UNAVAILABLE, "Request rejected during server shutdown");
             return;
         }
     } else {
-        WriteNoStoreErrorReply(*hreq, HTTP_NOT_FOUND);
+        hreq->WriteReply(HTTP_NOT_FOUND);
     }
 }
 
-static void RejectRequest(std::unique_ptr<HTTPRequest> hreq)
+static void RejectRequest(std::unique_ptr<http_bitcoin::HTTPRequest> hreq)
 {
     LogDebug(BCLog::HTTP, "Rejecting request while shutting down");
-    WriteNoStoreErrorReply(*hreq, HTTP_SERVICE_UNAVAILABLE);
+    hreq->WriteReply(HTTP_SERVICE_UNAVAILABLE);
 }
 
 static std::vector<std::pair<std::string, uint16_t>> GetBindAddresses()
@@ -260,6 +260,7 @@ void UnregisterHTTPHandler(const std::string &prefix, bool exactMatch)
     }
 }
 
+namespace http_bitcoin {
 using util::Split;
 
 std::optional<std::string> HTTPHeaders::FindFirst(const std::string_view key) const
@@ -296,22 +297,17 @@ void HTTPHeaders::RemoveAll(std::string_view key)
     m_headers.erase(moved.begin(), moved.end());
 }
 
-bool HTTPHeaders::Read(util::LineReader& reader, bool write)
+bool HTTPHeaders::Read(util::LineReader& reader)
 {
     // Headers https://httpwg.org/specs/rfc9110.html#rfc.section.6.3
     // A sequence of Field Lines https://httpwg.org/specs/rfc9110.html#rfc.section.5.2
-    size_t start{reader.Consumed()};
     while (auto maybe_line = reader.ReadLine()) {
-        if (reader.Consumed() - start + m_consumed > MAX_HEADERS_SIZE) throw std::runtime_error("HTTP headers exceed size limit");
+        if (reader.Consumed() > MAX_HEADERS_SIZE) throw std::runtime_error("HTTP headers exceed size limit");
 
         const std::string_view& line = *maybe_line;
 
         // An empty line indicates end of the headers section https://www.rfc-editor.org/rfc/rfc2616#section-4
-        if (line.empty()) {
-            // Ensure all headers are accounted for in case there is a chunked trailer
-            m_consumed += reader.Consumed() - start;
-            return true;
-        }
+        if (line.empty()) return true;
 
         // "Field values containing CR, LF, or NUL characters are invalid and dangerous"
         // https://httpwg.org/specs/rfc9110.html#rfc.section.5.5
@@ -339,15 +335,8 @@ bool HTTPHeaders::Read(util::LineReader& reader, bool write)
         // that can not be empty.
         if (key.empty()) throw std::runtime_error("Empty HTTP header name");
 
-        if (write) {
-            Write(std::string(key), std::move(value));
-        }
+        Write(std::string(key), std::move(value));
     }
-
-    // We have not received all the request headers yet.
-    // Keep track of how much data we have already consumed to enforce
-    // the total limit over multiple read operations.
-    m_consumed += reader.Consumed() - start;
 
     return false;
 }
@@ -368,11 +357,11 @@ std::string HTTPHeaders::Stringify() const
 std::string HTTPResponse::StringifyHeaders() const
 {
     return strprintf("HTTP/%d.%d %d %s\r\n%s",
-                     version.major,
-                     version.minor,
-                     status,
-                     HTTPStatusReasonString(status),
-                     headers.Stringify());
+                     m_version.major,
+                     m_version.minor,
+                     m_status,
+                     HTTPStatusReasonString(m_status),
+                     m_headers.Stringify());
 }
 
 bool HTTPRequest::LoadControlData(LineReader& reader)
@@ -437,68 +426,62 @@ bool HTTPRequest::LoadBody(LineReader& reader)
         // Chunked Transfer Coding: https://datatracker.ietf.org/doc/html/rfc7230.html#section-4.1
         // see evhttp_handle_chunked_read() in libevent http.c
         while (reader.Remaining() > 0) {
-            if (!m_chunk_size) {
-                auto maybe_chunk_size = reader.ReadLine();
-                if (!maybe_chunk_size) return false;
+            auto maybe_chunk_size = reader.ReadLine();
+            if (!maybe_chunk_size) return false;
 
-                // Allow (but ignore) Chunk Extensions
-                // See https://www.rfc-editor.org/rfc/rfc9112.html#name-chunk-extensions
-                std::string_view chunk_size_noext{maybe_chunk_size.value()};
-                const auto semicolon_pos = chunk_size_noext.find(';');
-                if (semicolon_pos != chunk_size_noext.npos) {
-                    chunk_size_noext.remove_suffix(chunk_size_noext.size() - semicolon_pos);
-                }
-
-                m_chunk_size = ToIntegral<uint64_t>(util::TrimStringView(chunk_size_noext), /*base=*/16);
-                if (!m_chunk_size) throw std::runtime_error("Cannot parse chunk length value");
-
-                if ((m_body.size() > MAX_BODY_SIZE) ||
-                    (*m_chunk_size > MAX_BODY_SIZE - m_body.size()))
-                    throw ContentTooLargeError("Chunk will exceed max body size");
+            // Allow (but ignore) Chunk Extensions
+            // See https://www.rfc-editor.org/rfc/rfc9112.html#name-chunk-extensions
+            std::string_view chunk_size_noext{maybe_chunk_size.value()};
+            const auto semicolon_pos = chunk_size_noext.find(';');
+            if (semicolon_pos != chunk_size_noext.npos) {
+                chunk_size_noext.remove_suffix(chunk_size_noext.size() - semicolon_pos);
             }
 
-            // We either just read the chunk size, or we have it saved
-            // from a prior I/O loop iteration
-            Assume(m_chunk_size);
+            const auto chunk_size{ToIntegral<uint64_t>(util::TrimStringView(chunk_size_noext), /*base=*/16)};
+            if (!chunk_size) throw std::runtime_error("Cannot parse chunk length value");
+
+            if ((m_body.size() > MAX_BODY_SIZE) ||
+                (*chunk_size > MAX_BODY_SIZE - m_body.size()))
+                throw ContentTooLargeError("Chunk will exceed max body size");
 
             // Last chunk has size 0
-            if (*m_chunk_size == 0) {
-                // Validate Chunked Trailer section, which is used for
-                // additional headers sent at the end of the message.
-                // Data consumed here is counted towards MAX_HEADERS_SIZE
-                // along with the headers we read in the beginning of the request.
-                // At this time we ignore and drop these data after validating.
+            if (*chunk_size == 0) {
+                // Allow (but ignore) Chunked Trailer section, by
+                // reading CRLF-terminated lines until we read an empty line,
+                // which indicates the end of this request.
                 // See https://httpwg.org/specs/rfc9112.html#rfc.section.7.1.2
-                return m_headers.Read(reader, /*write=*/false);
+                const size_t trailer_start{reader.Consumed()};
+                while (true) {
+                    auto maybe_trailer = reader.ReadLine();
+                    if (reader.Consumed() - trailer_start > MAX_HEADERS_SIZE) {
+                        throw std::runtime_error("HTTP chunked trailer exceeds size limit");
+                    }
+                    if (!maybe_trailer) return false;
+                    if (maybe_trailer->empty()) break;
+                }
+                // Complete request has been parsed, reader is now pointing
+                // to beginning of next request or end of the buffer.
+                return true;
             }
 
-            // We have not read the entire chunk from the buffer yet
-            if (m_chunk_read < *m_chunk_size) {
-                // Get what we can from the buffer
-                const uint64_t chunk_need{*m_chunk_size - m_chunk_read};
-                const uint64_t buffer_has{std::min(chunk_need, static_cast<uint64_t>(reader.Remaining()))};
-
-                // Pack [partial] chunk onto body and update state
-                m_body += reader.ReadLength(buffer_has);
-                m_chunk_read += buffer_has;
+            // We are still expecting more data for this chunk
+            if (reader.Remaining() < *chunk_size) {
+                return false;
             }
+
+            // Pack chunk onto body
+            m_body += reader.ReadLength(*chunk_size);
 
             // Even though every chunk size is explicitly declared,
             // they are still terminated by a CRLF we don't need,
             // just consume it here.
-            if (m_chunk_read == *m_chunk_size) {
-                auto crlf = reader.ReadLine();
-                if (!crlf) {
-                    // CRLF not found before end of buffer: it has not been received by our socket yet.
-                    return false;
-                }
-                // CRLF was found but there was unexpected data after the chunk_sized chunk
-                if (!crlf.value().empty()) throw std::runtime_error("Improperly terminated chunk");
-
-                // Clear state for next chunk
-                m_chunk_size.reset();
-                m_chunk_read = 0;
+            auto crlf = reader.ReadLine();
+            if (!crlf) {
+                // CRLF not found before end of buffer: it has not been received by our socket yet.
+                return false;
             }
+            // CRLF was found but there was unexpected data after the chunk_sized chunk
+            if (!crlf.value().empty()) throw std::runtime_error("Improperly terminated chunk");
         }
 
         // We read all the chunks but never got the last chunk, wait for client to send more
@@ -520,15 +503,12 @@ bool HTTPRequest::LoadBody(LineReader& reader)
 
         if (*content_length > MAX_BODY_SIZE) throw ContentTooLargeError("Max body size exceeded");
 
-        // A large body may arrive over multiple I/O loop iterations. Copy
-        // whatever the buffer has now; m_body's size tracks our progress.
-        const uint64_t body_need{*content_length - m_body.size()};
-        const uint64_t buffer_has{std::min(body_need, static_cast<uint64_t>(reader.Remaining()))};
+        // Not enough data in buffer for expected body
+        if (reader.Remaining() < *content_length) return false;
 
-        // Pack [partial] body on and update state
-        m_body += reader.ReadLength(buffer_has);
+        m_body = reader.ReadLength(*content_length);
 
-        return m_body.size() == *content_length;
+        return true;
     }
 }
 
@@ -537,13 +517,13 @@ void HTTPRequest::WriteReply(HTTPStatusCode status, std::span<const std::byte> r
     HTTPResponse res;
 
     // Some response headers are determined in advance and stored in the request
-    res.headers = std::move(m_response_headers);
+    res.m_headers = std::move(m_response_headers);
 
     // Response version matches request version
-    res.version = m_version;
+    res.m_version = m_version;
 
     // Add response code
-    res.status = status;
+    res.m_status = status;
 
     // See libevent evhttp_response_needs_body()
     // Response headers are different if no body is needed
@@ -559,7 +539,7 @@ void HTTPRequest::WriteReply(HTTPStatusCode status, std::span<const std::byte> r
         if (m_version.minor == 0) {
             auto connection_header{m_headers.FindFirst("Connection")};
             if (connection_header && ToLower(connection_header.value()) == "keep-alive") {
-                res.headers.Write("Connection", "keep-alive");
+                res.m_headers.Write("Connection", "keep-alive");
                 keep_alive = true;
                 // HTTP/1.0 connections are closed by default so EOF is sufficient
                 // to indicate end of the body. Adding Content-Length a special case.
@@ -570,7 +550,7 @@ void HTTPRequest::WriteReply(HTTPStatusCode status, std::span<const std::byte> r
         // HTTP/1.1
         if (m_version.minor >= 1) {
             const int64_t now_seconds{TicksSinceEpoch<std::chrono::seconds>(NodeClock::now())};
-            res.headers.Write("Date", FormatRFC1123DateTime(now_seconds));
+            res.m_headers.Write("Date", FormatRFC1123DateTime(now_seconds));
 
             // HTTP/1.1 connections are kept alive by default and always require Content-Length.
             if (needs_body) needs_content_length = true;
@@ -581,31 +561,24 @@ void HTTPRequest::WriteReply(HTTPStatusCode status, std::span<const std::byte> r
     }
 
     if (needs_content_length) {
-        res.headers.Write("Content-Length", util::ToString(reply_body.size()));
+        res.m_headers.Write("Content-Length", util::ToString(reply_body.size()));
     }
 
-    if (needs_body && !res.headers.FindFirst("Content-Type")) {
+    if (needs_body && !res.m_headers.FindFirst("Content-Type")) {
         // Default type from libevent evhttp_new_object()
-        res.headers.Write("Content-Type", "text/html; charset=ISO-8859-1");
+        res.m_headers.Write("Content-Type", "text/html; charset=ISO-8859-1");
     }
 
     auto connection_header{m_headers.FindFirst("Connection")};
     if (connection_header && ToLower(connection_header.value()) == "close") {
         // Might not exist already but we need to replace it, not append to it
-        res.headers.RemoveAll("Connection");
+        res.m_headers.RemoveAll("Connection");
 
-        res.headers.Write("Connection", "close");
+        res.m_headers.Write("Connection", "close");
         keep_alive = false;
     }
 
-    if (std::shared_ptr client{m_client.lock()}) {
-        client->Send(res, reply_body, keep_alive);
-    }
-}
-
-void HTTPRemoteClient::Send(const HTTPResponse& res, std::span<const std::byte> reply_body, bool keep_alive)
-{
-    m_keep_alive = keep_alive;
+    m_client->m_keep_alive = keep_alive;
 
     // Serialize the response headers
     const std::string headers{res.StringifyHeaders()};
@@ -614,14 +587,14 @@ void HTTPRemoteClient::Send(const HTTPResponse& res, std::span<const std::byte> 
     bool send_buffer_was_empty{false};
     // Fill the send buffer with the complete serialized response headers + body
     {
-        LOCK(m_send_mutex);
-        send_buffer_was_empty = m_send_buffer.empty();
-        m_send_buffer.insert(m_send_buffer.end(), headers_bytes.begin(), headers_bytes.end());
+        LOCK(m_client->m_send_mutex);
+        send_buffer_was_empty = m_client->m_send_buffer.empty();
+        m_client->m_send_buffer.insert(m_client->m_send_buffer.end(), headers_bytes.begin(), headers_bytes.end());
 
         // We've been using std::span up until now but it is finally time to copy
         // data. The original data will go out of scope when WriteReply() returns.
         // This is analogous to the memcpy() in libevent's evbuffer_add()
-        m_send_buffer.insert(m_send_buffer.end(), reply_body.begin(), reply_body.end());
+        m_client->m_send_buffer.insert(m_client->m_send_buffer.end(), reply_body.begin(), reply_body.end());
 
         // If the buffer already held data, the I/O thread is (or soon will be)
         // draining it, so flag that there is more data to send. This must happen
@@ -631,36 +604,32 @@ void HTTPRemoteClient::Send(const HTTPResponse& res, std::span<const std::byte> 
         // between, leaving m_send_ready set on an empty buffer. The I/O loop would
         // then only ever poll the socket for writeability, never read the client's
         // next request, and wedge the connection.
-        if (!send_buffer_was_empty) m_send_ready = true;
+        if (!send_buffer_was_empty) m_client->m_send_ready = true;
     }
 
     LogDebug(
         BCLog::HTTP,
         "HTTPResponse (status code: %d size: %lld) added to send buffer for client %s (id=%llu)",
-        res.status,
+        status,
         headers_bytes.size() + reply_body.size(),
-        m_origin,
-        m_id);
+        m_client->m_origin,
+        m_client->m_id);
 
     // If the send buffer was empty before we wrote this reply, we can try an
     // optimistic send akin to CConnman::PushMessage() in which we
     // push the data directly out the socket to client right now, instead
     // of waiting for the next iteration of the I/O loop.
     if (send_buffer_was_empty) {
-        MaybeSendBytesFromBuffer();
+        m_client->MaybeSendBytesFromBuffer();
     }
 
     // Signal to the I/O loop that we are ready to handle the next request.
-    m_req_busy = false;
+    m_client->m_req_busy = false;
 }
 
 CService HTTPRequest::GetPeer() const
 {
-    if (std::shared_ptr c{m_client.lock()}) {
-        return c->GetPeer();
-    } else {
-        return {};
-    }
+    return m_client->m_addr;
 }
 
 std::optional<std::string> HTTPRequest::GetQueryParameter(const std::string_view key) const
@@ -695,9 +664,10 @@ std::optional<std::string> GetQueryParameterFromUri(const std::string_view uri, 
     return std::nullopt;
 }
 
-std::optional<std::string> HTTPRequest::GetHeader(const std::string_view hdr) const
+std::pair<bool, std::string> HTTPRequest::GetHeader(const std::string_view hdr) const
 {
-    return m_headers.FindFirst(hdr);
+    std::optional<std::string> found{m_headers.FindFirst(hdr)};
+    return std::pair{found.has_value(), std::move(found).value_or("")};
 }
 
 void HTTPRequest::WriteHeader(std::string&& hdr, std::string&& value)
@@ -788,11 +758,6 @@ void HTTPServer::StopListening()
 
 void HTTPServer::StartSocketsThreads()
 {
-    // The socket handler reads m_allow_subnets in ClientAllowed(). InitHTTPAllowList()
-    // must have populated it first; localhost entries are always added, so an empty
-    // list means it was never called and every connection is rejected.
-    Assume(!m_allow_subnets.empty());
-
     m_thread_socket_handler = std::thread(&util::TraceThread,
                                           "http",
                                           [this] { ThreadSocketHandler(); });
@@ -827,17 +792,11 @@ std::unique_ptr<Sock> HTTPServer::AcceptConnection(const Sock& listen_sock, CSer
     }
 
     // The OS handed us a valid socket but we can't determine its source address.
+    // In the unlikely event this occurs, the invalid address will be rejected
+    // by the downstream ClientAllowed() check.
     if (!addr.SetSockAddr(sa, len)) {
         LogDebug(BCLog::HTTP,
                  "Unknown socket family");
-    }
-
-    // Early address-based allow check
-    if (!ClientAllowed(addr)) {
-        LogDebug(BCLog::HTTP, "Connection from %s rejected: Client network is not allowed HTTP access\n",
-                 addr.ToStringAddrPort());
-        // Socket destroyed, connection aborted
-        return {};
     }
 
     return sock;
@@ -902,58 +861,49 @@ void HTTPServer::SocketHandlerConnected(const IOReadiness& io_readiness) const
         }
 
         if (recv_ready || err_ready) {
-            client->Receive();
+            std::byte buf[0x10000]; // typical socket buffer is 8K-64K
+
+            const ssize_t nrecv{WITH_LOCK(
+                client->m_sock_mutex,
+                return client->m_sock->Recv(buf, sizeof(buf), MSG_DONTWAIT);)};
+
+            if (nrecv < 0) {
+                const int err = WSAGetLastError();
+                if (IOErrorIsPermanent(err)) {
+                    LogDebug(
+                        BCLog::HTTP,
+                        "Permanent read error from %s (id=%llu): %s",
+                        client->m_origin,
+                        client->m_id,
+                        NetworkErrorString(err));
+                    client->m_disconnect = true;
+                }
+            } else if (nrecv == 0) {
+                LogDebug(
+                    BCLog::HTTP,
+                    "Received EOF from %s (id=%llu)",
+                    client->m_origin,
+                    client->m_id);
+                client->m_disconnect = true;
+            } else {
+                // Reset idle timeout
+                client->m_idle_since = Now<SteadySeconds>();
+
+                // Prevent disconnect until all requests are completely handled.
+                client->m_connection_busy = true;
+
+                // Copy data from socket buffer to client receive buffer
+                client->m_recv_buffer.insert(
+                    client->m_recv_buffer.end(),
+                    buf,
+                    buf + nrecv);
+            }
         }
         // Process as much received data as we can.
         // This executes for every client whether or not reading or writing
         // took place because it also (might) parse a request we have already
         // received and pass it to a worker thread.
-        if (std::unique_ptr<HTTPRequest> request{HTTPRemoteClient::TryReadRequest(client)})
-        {
-            LOCK(m_request_dispatcher_mutex);
-            m_request_dispatcher(std::move(request));
-        }
-    }
-}
-
-void HTTPRemoteClient::Receive()
-{
-    char buf[0x10000]; // typical socket buffer is 8K-64K
-
-    const ssize_t nrecv{WITH_LOCK(
-        m_sock_mutex,
-        return m_sock->Recv(buf, sizeof(buf), MSG_DONTWAIT);)};
-
-    if (nrecv < 0) {
-        const int err = WSAGetLastError();
-        if (IOErrorIsPermanent(err)) {
-            LogDebug(
-                BCLog::HTTP,
-                "Permanent read error from %s (id=%llu): %s",
-                m_origin,
-                m_id,
-                NetworkErrorString(err));
-            m_disconnect = true;
-        }
-    } else if (nrecv == 0) {
-        LogDebug(
-            BCLog::HTTP,
-            "Received EOF from %s (id=%llu)",
-            m_origin,
-            m_id);
-        m_disconnect = true;
-    } else {
-        // Reset idle timeout
-        m_idle_since = Now<SteadySeconds>();
-
-        // Prevent disconnect until all requests are completely handled.
-        m_connection_busy = true;
-
-        // Copy data from socket buffer to client receive buffer
-        m_recv_buffer.insert(
-            m_recv_buffer.end(),
-            buf,
-            buf + nrecv);
+        MaybeDispatchRequestsFromClient(client);
     }
 }
 
@@ -966,13 +916,11 @@ void HTTPServer::SocketHandlerListening(const Sock::EventsPerSock& events_per_so
         }
         const auto it = events_per_sock.find(sock);
         if (it != events_per_sock.end() && it->second.occurred & Sock::RecvEvent) {
-            // Drain all pending connections from this socket up to the limit.
-            // Stop early if the kernel queue is empty (AcceptConnection returns null)
-            // or if accepting the last connection brought us to the limit.
-            while (GetConnectionsCount() < static_cast<size_t>(m_rpcmaxconnections)) {
-                CService addr_accepted;
-                auto sock_accepted{AcceptConnection(*sock, addr_accepted)};
-                if (!sock_accepted) break;
+            CService addr_accepted;
+
+            auto sock_accepted{AcceptConnection(*sock, addr_accepted)};
+
+            if (sock_accepted) {
                 NewSockAccepted(std::move(sock_accepted), addr_accepted);
             }
         }
@@ -983,19 +931,13 @@ HTTPServer::IOReadiness HTTPServer::GenerateWaitSockets() const
 {
     IOReadiness io_readiness;
 
-    // If the server is already handling its max connected clients count,
-    // don't bother checking the listening sockets for new inbound connections.
-    // Leave them in the kernel's queue until space in the application opens
-    // up (or the client times out on its own).
-    if (GetConnectionsCount() < static_cast<size_t>(m_rpcmaxconnections)) {
-        for (const auto& sock : m_listen) {
-            io_readiness.events_per_sock.emplace(sock, Sock::Events{Sock::RecvEvent});
-        }
+    for (const auto& sock : m_listen) {
+        io_readiness.events_per_sock.emplace(sock, Sock::Events{Sock::RecvEvent});
     }
 
     for (const auto& http_client : m_connected) {
         // Safely copy the shared pointer to the socket
-        std::shared_ptr<Sock> sock{http_client->GetSock()};
+        std::shared_ptr<Sock> sock{WITH_LOCK(http_client->m_sock_mutex, return http_client->m_sock;)};
 
         // Check if client is ready to send data. Don't try to receive again
         // until the send buffer is cleared (all data sent to client).
@@ -1003,7 +945,8 @@ HTTPServer::IOReadiness HTTPServer::GenerateWaitSockets() const
         // never hold m_sock_mutex and m_send_mutex at the same time here.
         // MaybeSendBytesFromBuffer() locks m_send_mutex then m_sock_mutex, so nesting
         // them in the opposite order here would risk a lock-order inversion deadlock.
-        Sock::Event event = (http_client->ReadyToSend() ? Sock::SendEvent : Sock::RecvEvent);
+        const bool send_ready{WITH_LOCK(http_client->m_send_mutex, return http_client->m_send_ready;)};
+        Sock::Event event = (send_ready ? Sock::SendEvent : Sock::RecvEvent);
         io_readiness.events_per_sock.emplace(sock, Sock::Events{event});
         io_readiness.httpclients_per_sock.emplace(sock, http_client);
     }
@@ -1038,60 +981,65 @@ void HTTPServer::ThreadSocketHandler()
     }
 }
 
-std::unique_ptr<HTTPRequest> HTTPRemoteClient::TryReadRequest(const std::shared_ptr<HTTPRemoteClient>& client)
+void HTTPServer::MaybeDispatchRequestsFromClient(const std::shared_ptr<HTTPRemoteClient>& client) const
 {
-    // If we are already handling a request from
-    // this client, do nothing. We'll check again on the next I/O
-    // loop iteration.
-    if (client->m_req_busy) return nullptr;
+    // Try reading (potentially multiple) HTTP requests from the buffer
+    while (!client->m_recv_buffer.empty()) {
+        // Create a new request object and try to fill it with data from the receive buffer
+        auto req = std::make_unique<HTTPRequest>(client);
+        try {
+            // Stop reading if we need more data from the client to parse a complete request
+            if (!client->ReadRequest(*req)) break;
+        } catch (const ContentTooLargeError& e) {
+            LogDebug(
+                BCLog::HTTP,
+                "HTTP request body too large from client %s (id=%llu): %s",
+                client->m_origin,
+                client->m_id,
+                e.what());
 
-    if (!client->m_req) {
-        client->m_req = std::make_unique<HTTPRequest>(client);
-    }
+            req->WriteReply(HTTP_CONTENT_TOO_LARGE);
+            client->m_disconnect = true;
+            return;
+        } catch (const std::runtime_error& e) {
+            LogDebug(
+                BCLog::HTTP,
+                "Error reading HTTP request from client %s (id=%llu): %s",
+                client->m_origin,
+                client->m_id,
+                e.what());
 
-    try {
-        // Read data from the buffer into the current request
-        client->ReadRequest(*client->m_req);
-    } catch (const ContentTooLargeError& e) {
-        LogDebug(
-            BCLog::HTTP,
-            "HTTP request body too large from client %s (id=%llu): %s",
-            client->m_origin,
-            client->m_id,
-            e.what());
+            // We failed to read a complete request from the buffer
+            req->WriteReply(HTTP_BAD_REQUEST);
+            client->m_disconnect = true;
+            return;
+        }
 
-        WriteNoStoreErrorReply(*client->m_req, HTTP_CONTENT_TOO_LARGE);
-        client->m_disconnect = true;
-        return nullptr;
-    } catch (const std::runtime_error& e) {
-        LogDebug(
-            BCLog::HTTP,
-            "Error reading HTTP request from client %s (id=%llu): %s",
-            client->m_origin,
-            client->m_id,
-            e.what());
-
-        // We failed to read a complete request from the buffer
-        WriteNoStoreErrorReply(*client->m_req, HTTP_BAD_REQUEST);
-        client->m_disconnect = true;
-        return nullptr;
-    }
-
-    // If the request is ready, hand it to a worker.
-    if (client->m_req->GetState() == HTTPRequest::State::Complete) {
+        // We read a complete request from the buffer into the queue
         LogDebug(
             BCLog::HTTP,
             "Received a %s request for %s from %s (id=%llu)",
-            RequestMethodString(client->m_req->GetRequestMethod()),
-            client->m_req->GetURI(),
+            RequestMethodString(req->m_method),
+            req->m_target,
             client->m_origin,
             client->m_id);
 
-        client->m_req_busy = true;
-        return std::move(client->m_req);
+        // add request to client queue
+        client->m_req_queue.push_back(std::move(req));
     }
 
-    return nullptr;
+    // If we are already handling a request from
+    // this client, do nothing. We'll check again on the next I/O
+    // loop iteration.
+    if (client->m_req_busy) return;
+
+    // Otherwise, if there is a pending request in the queue, handle it.
+    if (!client->m_req_queue.empty()) {
+        LOCK(m_request_dispatcher_mutex);
+        client->m_req_busy = true;
+        m_request_dispatcher(std::move(client->m_req_queue.front()));
+        client->m_req_queue.pop_front();
+    }
 }
 
 void HTTPServer::DisconnectClients()
@@ -1099,62 +1047,54 @@ void HTTPServer::DisconnectClients()
     const auto now{Now<SteadySeconds>()};
     size_t erased = std::erase_if(m_connected,
                                   [&](auto& client) {
-                                      return client->MaybeDisconnect(now,
-                                                                     m_rpcservertimeout,
-                                                                     /*disconnect_all=*/m_disconnect_all_clients);
-                                  });
+                                        // First check for idle timeout. We reset the timer when we send and receive data,
+                                        // but if the server is busy handling a request we should ignore the timeout until
+                                        // the reply is sent. If we did erase the shared_ptr<HTTPRemoteClient> reference in m_connected
+                                        // while the server is busy with a request, there would still be a reference in a worker
+                                        // thread keeping the socket open even after "disconnecting".
+                                        const bool is_idle{m_rpcservertimeout.count() > 0 &&
+                                                           now - client->m_idle_since.load() > m_rpcservertimeout &&
+                                                           !client->m_req_busy};
+
+                                        // Disconnect this client due to error, end of communication, or idle timeout.
+                                        // May drop unsent data if we are closing due to error.
+                                        if (client->m_disconnect || is_idle) {
+                                            if (is_idle) {
+                                                LogDebug(BCLog::HTTP,
+                                                         "HTTP client idle timeout %s (id=%llu)",
+                                                         client->m_origin,
+                                                         client->m_id);
+                                            }
+                                        } else {
+                                            // Disconnect this client because the server is shutting
+                                            // down and we need to disconnect all clients...
+                                            if (m_disconnect_all_clients) {
+                                                // ...unless we still have data for this client.
+                                                if (client->m_connection_busy) {
+                                                    // There is still data for this healthy-connected client.
+                                                    // Continue the I/O loop until all data is sent or an error is encountered.
+                                                    return false;
+                                                } else {
+                                                    // This is a healthy persistent connection (e.g. keep-alive)
+                                                    // but it's time to say goodbye.
+                                                    ;
+                                                }
+                                            } else {
+                                                // No reason to disconnect.
+                                                return false;
+                                            }
+                                        }
+                                        // No reason NOT to disconnect, log and remove.
+                                        LogDebug(BCLog::HTTP,
+                                                 "Disconnecting HTTP client %s (id=%llu)",
+                                                 client->m_origin,
+                                                 client->m_id);
+                                        return true;
+                                    });
     if (erased > 0) {
         // Report back to the main thread
         m_connected_size.fetch_sub(erased, std::memory_order_relaxed);
     }
-}
-
-bool HTTPRemoteClient::MaybeDisconnect(std::chrono::time_point<SteadyClock> now, std::chrono::seconds rpcservertimeout, bool disconnect_all)
-{
-    // First check for idle timeout. We reset the timer when we send and receive data,
-    // but if the server is busy handling a request we should ignore the timeout until
-    // the reply is sent. If we did erase the shared_ptr<HTTPRemoteClient> reference in m_connected
-    // while the server is busy with a request, it might be prematurely dropped before
-    // the response has been sent, or if the HTTPRequest was holding a temporary shared_ptr
-    // client on a worker thread - it would keep the socket open even after "disconnecting".
-    const bool is_idle{rpcservertimeout.count() > 0 &&
-                       now - m_idle_since.load() > rpcservertimeout &&
-                       !m_req_busy};
-
-    // Disconnect this client due to error, end of communication, or idle timeout.
-    // May drop unsent data if we are closing due to error.
-    if (m_disconnect || is_idle) {
-        if (is_idle) {
-            LogDebug(BCLog::HTTP,
-                     "HTTP client idle timeout %s (id=%llu)",
-                     m_origin,
-                     m_id);
-        }
-    } else {
-        // Disconnect this client because the server is shutting
-        // down and we need to disconnect all clients...
-        if (disconnect_all) {
-            // ...unless we still have data for this client.
-            if (m_connection_busy) {
-                // There is still data for this healthy-connected client.
-                // Continue the I/O loop until all data is sent or an error is encountered.
-                return false;
-            } else {
-                // This is a healthy persistent connection (e.g. keep-alive)
-                // but it's time to say goodbye.
-                ;
-            }
-        } else {
-            // No reason to disconnect.
-            return false;
-        }
-    }
-    // No reason NOT to disconnect, log and remove.
-    LogDebug(BCLog::HTTP,
-             "Disconnecting HTTP client %s (id=%llu)",
-             m_origin,
-             m_id);
-    return true;
 }
 
 void HTTPServer::ClearConnectedClients()
@@ -1166,47 +1106,22 @@ void HTTPServer::ClearConnectedClients()
     m_connected.clear();
 }
 
-void HTTPRemoteClient::ReadRequest(HTTPRequest& req)
+bool HTTPRemoteClient::ReadRequest(HTTPRequest& req)
 {
-    if (m_recv_buffer.empty()) return;
-
     LineReader reader(m_recv_buffer, MAX_HEADERS_SIZE);
 
-    try {
-        switch (req.GetState()) {
-        case HTTPRequest::State::Init:
-            if (!req.LoadControlData(reader)) break;
-            req.SetState(HTTPRequest::State::NeedsHeaders);
-            [[fallthrough]];
-
-        case HTTPRequest::State::NeedsHeaders:
-            if (!req.LoadHeaders(reader)) break;
-            req.SetState(HTTPRequest::State::NeedsBody);
-            [[fallthrough]];
-
-        case HTTPRequest::State::NeedsBody:
-            if (!req.LoadBody(reader)) break;
-            req.SetState(HTTPRequest::State::Complete);
-            [[fallthrough]];
-
-        case HTTPRequest::State::Complete:
-            break;
-
-        case HTTPRequest::State::Error:
-            break;
-        }
-    } catch (...) {
-        // Don't try to read any more data for this request
-        req.SetState(HTTPRequest::State::Error);
-        // Clear the memory allocated to this client, caller must disconnect
-        m_recv_buffer.clear();
-        throw;
-    }
+    if (!req.LoadControlData(reader)) return false;
+    if (!req.LoadHeaders(reader)) return false;
+    if (!req.LoadBody(reader)) return false;
 
     // Remove the bytes read out of the buffer.
+    // If one of the above calls throws an error, the caller must
+    // catch it and disconnect the client.
     m_recv_buffer.erase(
         m_recv_buffer.begin(),
         m_recv_buffer.begin() + reader.Consumed());
+
+    return true;
 }
 
 bool HTTPRemoteClient::MaybeSendBytesFromBuffer()
@@ -1297,15 +1212,14 @@ bool HTTPRemoteClient::MaybeSendBytesFromBuffer()
 
 bool InitHTTPServer()
 {
-    // Create HTTPServer
-    g_http_server = std::make_unique<HTTPServer>(MaybeDispatchRequestToWorker);
-
-    if (!g_http_server->InitHTTPAllowList()) {
+    if (!InitHTTPAllowList()) {
         return false;
     }
 
+    // Create HTTPServer
+    g_http_server = std::make_unique<HTTPServer>(MaybeDispatchRequestToWorker);
+
     g_http_server->SetServerTimeout(std::chrono::seconds(gArgs.GetIntArg("-rpcservertimeout", DEFAULT_HTTP_SERVER_TIMEOUT)));
-    g_http_server->SetMaxConnections(std::max(gArgs.GetArg<int>("-rpcmaxconnections", DEFAULT_MAX_HTTP_CONNECTIONS), 1));
 
     // Bind HTTP server to specified addresses
     std::vector<std::pair<std::string, uint16_t>> endpoints{GetBindAddresses()};
@@ -1395,3 +1309,4 @@ void StopHTTPServer()
     }
     LogDebug(BCLog::HTTP, "Stopped HTTP server");
 }
+} // namespace http_bitcoin

@@ -23,25 +23,25 @@
 class NetGroupManager;
 
 /** Over how many buckets entries with tried addresses from a single group (/16 for IPv4) are spread */
-inline constexpr uint32_t ADDRMAN_TRIED_BUCKETS_PER_GROUP{8};
+static constexpr uint32_t ADDRMAN_TRIED_BUCKETS_PER_GROUP{8};
 /** Over how many buckets entries with new addresses originating from a single group are spread */
-inline constexpr uint32_t ADDRMAN_NEW_BUCKETS_PER_SOURCE_GROUP{64};
+static constexpr uint32_t ADDRMAN_NEW_BUCKETS_PER_SOURCE_GROUP{64};
 /** Maximum number of times an address can occur in the new table */
-inline constexpr int32_t ADDRMAN_NEW_BUCKETS_PER_ADDRESS{8};
+static constexpr int32_t ADDRMAN_NEW_BUCKETS_PER_ADDRESS{8};
 /** How old addresses can maximally be */
-inline constexpr auto ADDRMAN_HORIZON{30 * 24h};
+static constexpr auto ADDRMAN_HORIZON{30 * 24h};
 /** After how many failed attempts we give up on a new node */
-inline constexpr int32_t ADDRMAN_RETRIES{3};
+static constexpr int32_t ADDRMAN_RETRIES{3};
 /** How many successive failures are allowed ... */
-inline constexpr int32_t ADDRMAN_MAX_FAILURES{10};
+static constexpr int32_t ADDRMAN_MAX_FAILURES{10};
 /** ... in at least this duration */
-inline constexpr auto ADDRMAN_MIN_FAIL{7 * 24h};
+static constexpr auto ADDRMAN_MIN_FAIL{7 * 24h};
 /** How recent a successful connection should be before we allow an address to be evicted from tried */
-inline constexpr auto ADDRMAN_REPLACEMENT{4h};
+static constexpr auto ADDRMAN_REPLACEMENT{4h};
 /** The maximum number of tried addr collisions to store */
-inline constexpr size_t ADDRMAN_SET_TRIED_COLLISION_SIZE{10};
+static constexpr size_t ADDRMAN_SET_TRIED_COLLISION_SIZE{10};
 /** The maximum time we'll spend trying to resolve a tried table collision */
-inline constexpr auto ADDRMAN_TEST_WINDOW{40min};
+static constexpr auto ADDRMAN_TEST_WINDOW{40min};
 
 class InvalidAddrManVersionError : public std::ios_base::failure
 {
@@ -53,7 +53,7 @@ class AddrManImpl;
 class AddrInfo;
 
 /** Default for -checkaddrman */
-inline constexpr int32_t DEFAULT_ADDRMAN_CONSISTENCY_CHECKS{0};
+static constexpr int32_t DEFAULT_ADDRMAN_CONSISTENCY_CHECKS{0};
 
 /** Location information for an address in AddrMan */
 struct AddressPosition {

@@ -25,12 +25,12 @@ extern int nConnectTimeout;
 extern bool fNameLookup;
 
 //! -timeout default
-inline constexpr int DEFAULT_CONNECT_TIMEOUT = 5000;
+static const int DEFAULT_CONNECT_TIMEOUT = 5000;
 //! -dns default
-inline constexpr int DEFAULT_NAME_LOOKUP = true;
+static const int DEFAULT_NAME_LOOKUP = true;
 
 /** Prefix for unix domain socket addresses (which are local filesystem paths) */
-inline const std::string ADDR_PREFIX_UNIX = "unix:";
+const std::string ADDR_PREFIX_UNIX = "unix:";
 
 enum class ConnectionDirection {
     None = 0,

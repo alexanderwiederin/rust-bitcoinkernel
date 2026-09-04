@@ -22,7 +22,7 @@ class Node;
 }
 
 extern const char *DEFAULT_GUI_PROXY_HOST;
-inline constexpr uint16_t DEFAULT_GUI_PROXY_PORT = 9050;
+static constexpr uint16_t DEFAULT_GUI_PROXY_PORT = 9050;
 
 /**
  * Convert configured prune target MiB to displayed GB. Round up to avoid underestimating max disk usage.

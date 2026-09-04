@@ -6,22 +6,12 @@
 
 #include <common/netif.h>
 
-#include <compat/compat.h>
 #include <netbase.h>
 #include <util/check.h>
 #include <util/log.h>
 #include <util/sock.h>
 
-#include <cerrno>
-#include <cstdint>
-#include <cstring>
-#include <functional>
-#include <memory>
-#include <string>
-#include <type_traits>
-
 #if defined(__linux__)
-#include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #elif defined(__FreeBSD__)
 #include <netlink/netlink.h>
@@ -36,6 +26,8 @@
 #ifdef HAVE_IFADDRS
 #include <ifaddrs.h>
 #endif
+
+#include <type_traits>
 
 namespace {
 

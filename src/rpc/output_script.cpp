@@ -306,9 +306,8 @@ static RPCMethod deriveaddresses()
             int64_t range_begin = 0;
             int64_t range_end = 0;
 
-            const UniValue* range = self.MaybeArg<UniValue>("range");
-            if (range) {
-                std::tie(range_begin, range_end) = ParseDescriptorRange(*range);
+            if (request.params.size() >= 2 && !request.params[1].isNull()) {
+                std::tie(range_begin, range_end) = ParseDescriptorRange(request.params[1]);
             }
 
             FlatSigningProvider key_provider;
@@ -318,11 +317,11 @@ static RPCMethod deriveaddresses()
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, error);
             }
             auto& desc = descs.at(0);
-            if (!desc->IsRange() && range) {
+            if (!desc->IsRange() && request.params.size() > 1) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Range should not be specified for an un-ranged descriptor");
             }
 
-            if (desc->IsRange() && !range) {
+            if (desc->IsRange() && request.params.size() == 1) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Range must be specified for a ranged descriptor");
             }
 

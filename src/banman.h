@@ -16,10 +16,10 @@
 #include <memory>
 
 // NOTE: When adjusting this, update rpcnet:setban's help ("24h")
-inline constexpr unsigned int DEFAULT_MISBEHAVING_BANTIME = 60 * 60 * 24; // Default 24-hour ban
+static constexpr unsigned int DEFAULT_MISBEHAVING_BANTIME = 60 * 60 * 24; // Default 24-hour ban
 
 /// How often to dump banned addresses/subnets to disk.
-inline constexpr std::chrono::minutes DUMP_BANS_INTERVAL{15};
+static constexpr std::chrono::minutes DUMP_BANS_INTERVAL{15};
 
 class CClientUIInterface;
 class CNetAddr;

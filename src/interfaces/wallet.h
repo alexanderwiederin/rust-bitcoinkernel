@@ -10,34 +10,36 @@
 #include <common/types.h>
 #include <consensus/amount.h>
 #include <interfaces/chain.h>
-#include <primitives/transaction.h>
+#include <primitives/transaction_identifier.h>
+#include <pubkey.h>
+#include <script/script.h>
 #include <support/allocators/secure.h>
 #include <util/fs.h>
 #include <util/result.h>
 #include <util/ui_change_type.h>
 
-#include <compare>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
-#include <optional>
-#include <set>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
-class ArgsManager;
-class CKeyID;
-class CPubKey;
-class CScript;
-class PartiallySignedTransaction;
-class uint256;
+class CFeeRate;
+class CKey;
 enum class FeeReason;
 enum class OutputType;
+class PartiallySignedTransaction;
 struct bilingual_str;
+namespace common {
+enum class PSBTError;
+} // namespace common
+namespace node {
+enum class TransactionError;
+} // namespace node
 namespace wallet {
 struct CreatedTransactionResult;
 class CCoinControl;
@@ -240,7 +242,7 @@ public:
     //! Get minimum fee.
     virtual CAmount getMinimumFee(unsigned int tx_bytes,
         const wallet::CCoinControl& coin_control,
-        std::optional<int>* returned_target,
+        int* returned_target,
         FeeReason* reason) = 0;
 
     //! Get tx confirm target.
@@ -300,9 +302,6 @@ public:
 
     //! Return pointer to internal wallet class, useful for testing.
     virtual wallet::CWallet* wallet() { return nullptr; }
-
-    //! Export a watchonly wallet file. See CWallet::ExportWatchOnlyWallet
-    virtual util::Result<std::string> exportWatchOnlyWallet(const fs::path& destination) = 0;
 };
 
 //! Wallet chain client that in addition to having chain client methods for

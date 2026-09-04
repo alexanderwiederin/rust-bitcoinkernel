@@ -11,7 +11,7 @@
 #include <QMutex>
 #include <QThread>
 
-inline constexpr bool DEFAULT_CHOOSE_DATADIR = false;
+static const bool DEFAULT_CHOOSE_DATADIR = false;
 
 namespace interfaces {
     class Node;

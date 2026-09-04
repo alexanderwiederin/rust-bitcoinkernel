@@ -71,11 +71,14 @@ struct Params;
 namespace util {
 class SignalInterrupt;
 } // namespace util
+namespace varops {
+class Budget;
+} // namespace varops
 
 /** Block files containing a block-height within MIN_BLOCKS_TO_KEEP of ActiveChain().Tip() will not be pruned. */
-inline constexpr unsigned int MIN_BLOCKS_TO_KEEP = 288;
-inline constexpr signed int DEFAULT_CHECKBLOCKS = 6;
-inline constexpr int DEFAULT_CHECKLEVEL{3};
+static const unsigned int MIN_BLOCKS_TO_KEEP = 288;
+static const signed int DEFAULT_CHECKBLOCKS = 6;
+static constexpr int DEFAULT_CHECKLEVEL{3};
 // Require that user allocate at least 550 MiB for block & undo files (blk???.dat and rev???.dat)
 // At 1MB per block, 288 blocks = 288MB.
 // Add 15% for Undo data = 331MB
@@ -84,13 +87,13 @@ inline constexpr int DEFAULT_CHECKLEVEL{3};
 // full block file chunks, we need the high water mark which triggers the prune to be
 // one 128MB block file + added 15% undo data = 147MB greater for a total of 545MB
 // Setting the target to >= 550 MiB will make it likely we can respect the target.
-inline constexpr uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES{550_MiB};
+static const uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES{550_MiB};
 
 /** Maximum number of dedicated script-checking threads allowed */
-inline constexpr int MAX_SCRIPTCHECK_THREADS{15};
+static constexpr int MAX_SCRIPTCHECK_THREADS{15};
 
 /** Maximum number of dedicated threads allowed for prefetching block input prevouts */
-inline constexpr int32_t MAX_PREVOUTFETCH_THREADS{16};
+static constexpr int32_t MAX_PREVOUTFETCH_THREADS{16};
 
 /** Current sync state passed to tip changed callbacks. */
 enum class SynchronizationState {
@@ -348,10 +351,16 @@ private:
     bool cacheStore;
     PrecomputedTransactionData *txdata;
     SignatureCache* m_signature_cache;
+    std::shared_ptr<varops::Budget> m_varops_budget;
 
 public:
-    CScriptCheck(const CTxOut& outIn, const CTransaction& txToIn, SignatureCache& signature_cache, unsigned int nInIn, script_verify_flags flags, bool cacheIn, PrecomputedTransactionData* txdataIn) :
-        m_tx_out(outIn), ptxTo(&txToIn), nIn(nInIn), m_flags(flags), cacheStore(cacheIn), txdata(txdataIn), m_signature_cache(&signature_cache) { }
+    CScriptCheck(const CTxOut& outIn, const CTransaction& txToIn, SignatureCache& signature_cache, unsigned int nInIn, script_verify_flags flags,
+                 bool cacheIn, PrecomputedTransactionData* txdataIn, std::shared_ptr<varops::Budget> varops_budget)
+        : m_tx_out(outIn), ptxTo(&txToIn), nIn(nInIn), m_flags(flags), cacheStore(cacheIn), txdata(txdataIn), m_signature_cache(&signature_cache),
+          m_varops_budget(std::move(varops_budget))
+    {
+        Assert(m_varops_budget);
+    }
 
     CScriptCheck(const CScriptCheck&) = delete;
     CScriptCheck& operator=(const CScriptCheck&) = delete;

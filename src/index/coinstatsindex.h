@@ -22,7 +22,7 @@ namespace kernel {
 struct CCoinsStats;
 }
 
-inline constexpr bool DEFAULT_COINSTATSINDEX{false};
+static constexpr bool DEFAULT_COINSTATSINDEX{false};
 
 /**
  * CoinStatsIndex maintains statistics on the UTXO set.

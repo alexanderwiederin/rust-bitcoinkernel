@@ -66,14 +66,13 @@ protected:
     public:
         DB(const fs::path& path, size_t n_cache_size,
            bool f_memory = false, bool f_wipe = false, bool f_obfuscate = false, bool f_bloom = true);
-        virtual ~DB() = default;
 
         /// Read block locator of the chain that the index is in sync with.
         /// Note, the returned locator will be empty if no record exists.
-        virtual CBlockLocator ReadBestBlock() const;
+        CBlockLocator ReadBestBlock() const;
 
         /// Write block locator of the chain that the index is in sync with.
-        virtual void WriteBestBlock(CDBBatch& batch, const CBlockLocator& locator);
+        void WriteBestBlock(CDBBatch& batch, const CBlockLocator& locator);
     };
 
 private:
