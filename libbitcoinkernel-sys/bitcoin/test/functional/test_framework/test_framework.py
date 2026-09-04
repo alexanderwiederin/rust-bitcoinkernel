@@ -965,7 +965,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 return os.path.join(cache_node_dir, self.chain, *paths)
 
             os.rmdir(cache_path('wallets'))  # Remove empty wallets dir
-            shutil.rmtree(cache_path('fees'), ignore_errors=True)
             for entry in os.listdir(cache_path()):
                 if entry not in ['chainstate', 'blocks', 'indexes']:  # Only indexes, chainstate and blocks folders
                     os.remove(cache_path(entry))
@@ -1027,11 +1026,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         """Skip the running test if we are not on a Linux platform"""
         if platform.system() != "Linux":
             raise SkipTest("not on a Linux system")
-
-    def skip_if_no_lsof_on_nonlinux(self):
-        """Skip the running test if the lsof utility is not available on non-Linux platforms."""
-        if sys.platform != "linux" and shutil.which("lsof") is None:
-            raise SkipTest("lsof not available")
 
     def skip_if_platform_not_posix(self):
         """Skip the running test if we are not on a POSIX platform"""
@@ -1125,55 +1119,55 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def is_bench_compiled(self):
         """Checks whether bench_bitcoin was compiled."""
-        return self.config.getboolean("components", "BUILD_BENCH")
+        return self.config["components"].getboolean("BUILD_BENCH")
 
     def is_cli_compiled(self):
         """Checks whether bitcoin-cli was compiled."""
-        return self.config.getboolean("components", "ENABLE_CLI")
+        return self.config["components"].getboolean("ENABLE_CLI")
 
     def is_external_signer_compiled(self):
         """Checks whether external signer support was compiled."""
-        return self.config.getboolean("components", "ENABLE_EXTERNAL_SIGNER")
+        return self.config["components"].getboolean("ENABLE_EXTERNAL_SIGNER")
 
     def is_wallet_compiled(self):
         """Checks whether the wallet module was compiled."""
-        return self.config.getboolean("components", "ENABLE_WALLET")
+        return self.config["components"].getboolean("ENABLE_WALLET")
 
     def is_wallet_tool_compiled(self):
         """Checks whether bitcoin-wallet was compiled."""
-        return self.config.getboolean("components", "ENABLE_WALLET_TOOL")
+        return self.config["components"].getboolean("ENABLE_WALLET_TOOL")
 
     def is_bitcoin_tx_compiled(self):
         """Checks whether bitcoin-tx was compiled."""
-        return self.config.getboolean("components", "BUILD_BITCOIN_TX")
+        return self.config["components"].getboolean("BUILD_BITCOIN_TX")
 
     def is_bitcoin_util_compiled(self):
         """Checks whether bitcoin-util was compiled."""
-        return self.config.getboolean("components", "ENABLE_BITCOIN_UTIL")
+        return self.config["components"].getboolean("ENABLE_BITCOIN_UTIL")
 
     def is_bitcoin_chainstate_compiled(self):
         """Checks whether bitcoin-chainstate was compiled."""
-        return self.config.getboolean("components", "ENABLE_BITCOIN_CHAINSTATE")
+        return self.config["components"].getboolean("ENABLE_BITCOIN_CHAINSTATE")
 
     def is_zmq_compiled(self):
         """Checks whether the zmq module was compiled."""
-        return self.config.getboolean("components", "ENABLE_ZMQ")
+        return self.config["components"].getboolean("ENABLE_ZMQ")
 
     def is_embedded_asmap_compiled(self):
         """Checks whether ASMap data was embedded during compilation."""
-        return self.config.getboolean("components", "ENABLE_EMBEDDED_ASMAP")
+        return self.config["components"].getboolean("ENABLE_EMBEDDED_ASMAP")
 
     def is_usdt_compiled(self):
         """Checks whether the USDT tracepoints were compiled."""
-        return self.config.getboolean("components", "ENABLE_USDT_TRACEPOINTS")
+        return self.config["components"].getboolean("ENABLE_USDT_TRACEPOINTS")
 
     def is_ipc_compiled(self):
         """Checks whether ipc was compiled."""
-        return self.config.getboolean("components", "ENABLE_IPC")
+        return self.config["components"].getboolean("ENABLE_IPC")
 
     def is_gui_compiled(self):
         """Checks whether the GUI was compiled."""
-        return self.config.getboolean("components", "BUILD_GUI")
+        return self.config["components"].getboolean("BUILD_GUI", fallback=False)
 
     def has_blockfile(self, node, filenum: str):
         return (node.blocks_path/ f"blk{filenum}.dat").is_file()

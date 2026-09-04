@@ -17,7 +17,9 @@
 #include <utility>
 #include <vector>
 
-namespace cluster_linearize {
+namespace {
+
+using namespace cluster_linearize;
 
 using TestBitSet = BitSet<32>;
 
@@ -97,7 +99,7 @@ using TestBitSet = BitSet<32>;
 struct DepGraphFormatter
 {
     /** Convert x>=0 to 2x (even), x<0 to -2x-1 (odd). */
-    static uint64_t SignedToUnsigned(int64_t x) noexcept
+    [[maybe_unused]] static uint64_t SignedToUnsigned(int64_t x) noexcept
     {
         if (x < 0) {
             return 2 * uint64_t(-(x + 1)) + 1;
@@ -107,7 +109,7 @@ struct DepGraphFormatter
     }
 
     /** Convert even x to x/2 (>=0), odd x to -(x/2)-1 (<0). */
-    static int64_t UnsignedToSigned(uint64_t x) noexcept
+    [[maybe_unused]] static int64_t UnsignedToSigned(uint64_t x) noexcept
     {
         if (x & 1) {
             return -int64_t(x / 2) - 1;
@@ -414,6 +416,6 @@ inline uint64_t MaxOptimalLinearizationCost(DepGraphIndex cluster_count)
     return COSTS[cluster_count] * 2;
 }
 
-} // namespace cluster_linearize
+} // namespace
 
 #endif // BITCOIN_TEST_UTIL_CLUSTER_LINEARIZE_H

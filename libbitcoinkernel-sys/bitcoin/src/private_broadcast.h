@@ -42,18 +42,10 @@ public:
     /// Additions that would exceed this are rejected (see Add()).
     static constexpr size_t MAX_TRANSACTIONS{10'000};
 
-    /// Maximum number of send attempts for a transaction. Once this limit is
-    /// reached, the transaction remains tracked but is not sent again unless
-    /// explicitly re-added.
-    static constexpr size_t MAX_SEND_ATTEMPTS{1'000};
-
     /// @param[in] max_transactions Cap on the number of simultaneously tracked
     /// transactions. Defaults to MAX_TRANSACTIONS.
-    /// @param[in] max_send_attempts Cap on the number of send attempts per
-    /// transaction. Defaults to MAX_SEND_ATTEMPTS.
-    explicit PrivateBroadcast(size_t max_transactions = MAX_TRANSACTIONS,
-                              size_t max_send_attempts = MAX_SEND_ATTEMPTS)
-        : m_max_transactions{max_transactions}, m_max_send_attempts{max_send_attempts} {}
+    explicit PrivateBroadcast(size_t max_transactions = MAX_TRANSACTIONS)
+        : m_max_transactions{max_transactions} {}
 
     struct PeerSendInfo {
         CService address;
@@ -64,28 +56,24 @@ public:
     struct TxBroadcastInfo {
         CTransactionRef tx;
         NodeClock::time_point time_added;
-        /// Number of additional send attempts allowed for this transaction (0 if exhausted).
-        size_t attempts_remaining;
         std::vector<PeerSendInfo> peers;
     };
 
     /// Outcome of Add().
     enum class AddResult {
-        //! The transaction was newly added or reset after exhausting its send attempts.
+        //! The transaction was newly added.
         Added,
-        //! The transaction was already present with send attempts remaining; no change.
+        //! The transaction was already present; no change.
         AlreadyPresent,
         //! Rejected: the queue is already at MAX_TRANSACTIONS.
         QueueFull,
     };
 
     /**
-     * Add a transaction to the storage, or reset an exhausted transaction so it
-     * can be broadcast again.
+     * Add a transaction to the storage.
      * @param[in] tx The transaction to add.
-     * @return Whether the transaction was newly added or reset, was already
-     * present with send attempts remaining, or was rejected because the queue is
-     * full (see AddResult).
+     * @return Whether the transaction was newly added, was already present, or
+     * was rejected because the queue is full (see AddResult).
      */
     [[nodiscard]] AddResult Add(const CTransactionRef& tx)
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
@@ -109,8 +97,7 @@ public:
      * transaction to one node would be a privacy leak.
      * @param[in] will_send_to_address Address of the peer to which this transaction
      * will be sent.
-     * @return Most urgent transaction or nullopt if there are no transactions
-     * with send attempts remaining.
+     * @return Most urgent transaction or nullopt if there are no transactions.
      */
     std::optional<CTransactionRef> PickTxForSend(const NodeId& will_send_to_nodeid, const CService& will_send_to_address)
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
@@ -140,14 +127,13 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
 
     /**
-     * Check if there are transactions with send attempts remaining.
+     * Check if there are transactions that need to be broadcast.
      */
     bool HavePendingTransactions()
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
 
     /**
-     * Get the transactions that have not been broadcast recently and have send
-     * attempts remaining.
+     * Get the transactions that have not been broadcast recently.
      */
     std::vector<CTransactionRef> GetStale() const
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
@@ -226,14 +212,11 @@ private:
     std::optional<TxAndSendStatusForNode> GetSendStatusByNode(const NodeId& nodeid)
         EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
     struct TxSendStatus {
-        NodeClock::time_point time_added{NodeClock::now()};
+        const NodeClock::time_point time_added{NodeClock::now()};
         std::vector<SendStatus> send_statuses;
     };
-    bool IsPending(const TxSendStatus& status) const;
     /// Cap on the number of simultaneously tracked transactions (see Add()).
     const size_t m_max_transactions;
-    /// Cap on the number of send attempts per transaction (see PickTxForSend()).
-    const size_t m_max_send_attempts;
     mutable Mutex m_mutex;
     std::unordered_map<CTransactionRef, TxSendStatus, CTransactionRefHash, CTransactionRefComp>
         m_transactions GUARDED_BY(m_mutex);

@@ -12,7 +12,7 @@ class ArgsManager;
 
 namespace node {
 
-inline constexpr bool DEFAULT_PRINT_MODIFIED_FEE = false;
+static const bool DEFAULT_PRINT_MODIFIED_FEE = false;
 
 /**
  * Read the mining options set in \p args. Returns an error if one was

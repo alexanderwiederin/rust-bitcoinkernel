@@ -42,6 +42,7 @@
 #include <random.h>
 #include <script/script.h>
 #include <script/sigcache.h>
+#include <script/varops.h>
 #include <signet.h>
 #include <tinyformat.h>
 #include <txdb.h>
@@ -995,6 +996,8 @@ bool MemPoolAccept::ReplacementChecks(Workspace& ws)
     const Txid& hash = ws.m_hash;
     TxValidationState& state = ws.m_state;
 
+    CFeeRate newFeeRate(ws.m_modified_fees, ws.m_vsize);
+
     CTxMemPool::setEntries all_conflicts;
 
     // Calculate all conflicting entries and enforce Rule #5.
@@ -1142,7 +1145,11 @@ bool MemPoolAccept::PolicyScriptChecks(const ATMPArgs& args, Workspace& ws)
     const CTransaction& tx = *ws.m_ptx;
     TxValidationState& state = ws.m_state;
 
-    constexpr script_verify_flags scriptVerifyFlags = STANDARD_SCRIPT_VERIFY_FLAGS;
+    script_verify_flags scriptVerifyFlags{STANDARD_SCRIPT_VERIFY_FLAGS};
+    if (!DeploymentActiveAfter(m_active_chainstate.m_chain.Tip(), m_active_chainstate.m_chainman,
+                               Consensus::DEPLOYMENT_SCRIPT_RESTORATION)) {
+        scriptVerifyFlags |= SCRIPT_VERIFY_DISCOURAGE_SCRIPT_RESTORATION;
+    }
 
     // Check input scripts and signatures.
     // This is done last to help prevent CPU exhaustion denial-of-service attacks.
@@ -2025,7 +2032,9 @@ std::optional<std::pair<ScriptError, std::string>> CScriptCheck::operator()() {
     const CScript &scriptSig = ptxTo->vin[nIn].scriptSig;
     const CScriptWitness *witness = &ptxTo->vin[nIn].scriptWitness;
     ScriptError error{SCRIPT_ERR_UNKNOWN_ERROR};
-    if (VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, m_flags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *m_signature_cache, *txdata), &error)) {
+    if (VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, m_flags,
+                     CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *m_signature_cache, *txdata),
+                     &error, *m_varops_budget)) {
         return std::nullopt;
     } else {
         auto debug_str = strprintf("input %i of %s (wtxid %s), spending %s:%i", nIn, ptxTo->GetHash().ToString(), ptxTo->GetWitnessHash().ToString(), ptxTo->vin[nIn].prevout.hash.ToString(), ptxTo->vin[nIn].prevout.n);
@@ -2107,6 +2116,8 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
     }
     assert(txdata.m_spent_outputs.size() == tx.vin.size());
 
+    auto varops_budget{std::make_shared<varops::Budget>(varops::TxBudget(GetTransactionWeight(tx)))};
+
     for (unsigned int i = 0; i < tx.vin.size(); i++) {
 
         // We very carefully only pass in things to CScriptCheck which
@@ -2116,7 +2127,8 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
         // spent being checked as a part of CScriptCheck.
 
         // Verify signature
-        CScriptCheck check(txdata.m_spent_outputs[i], tx, validation_cache.m_signature_cache, i, flags, cacheSigStore, &txdata);
+        CScriptCheck check(txdata.m_spent_outputs[i], tx, validation_cache.m_signature_cache, i,
+                           flags, cacheSigStore, &txdata, varops_budget);
         if (pvChecks) {
             pvChecks->emplace_back(std::move(check));
         } else if (auto result = check(); result.has_value()) {
@@ -2293,6 +2305,10 @@ script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
     // Enforce BIP147 NULLDUMMY (activated simultaneously with segwit)
     if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_SEGWIT)) {
         flags |= SCRIPT_VERIFY_NULLDUMMY;
+    }
+
+    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_SCRIPT_RESTORATION)) {
+        flags |= SCRIPT_VERIFY_SCRIPT_RESTORATION;
     }
 
     return flags;
@@ -3087,19 +3103,14 @@ bool Chainstate::ConnectTip(
              Ticks<MillisecondsDouble>(time_5 - time_4),
              Ticks<SecondsDouble>(m_chainman.time_chainstate),
              Ticks<MillisecondsDouble>(m_chainman.time_chainstate) / m_chainman.num_blocks_total);
-    // Remove conflicting transactions from the mempool.
-    std::vector<RemovedMempoolTransactionInfo> txs_removed_for_block;
+    // Remove conflicting transactions from the mempool.;
     if (m_mempool) {
-        txs_removed_for_block = m_mempool->removeForBlock(block_to_connect->vtx);
+        m_mempool->removeForBlock(block_to_connect->vtx, pindexNew->nHeight);
         disconnectpool.removeForBlock(block_to_connect->vtx);
     }
     // Update m_chain & related variables.
     m_chain.SetTip(*pindexNew);
     m_chainman.UpdateIBDStatus();
-    // Not fired while IBD is active. removeForBlock() above still runs.
-    if (m_mempool && m_chainman.m_options.signals && !m_chainman.IsInitialBlockDownload()) {
-        m_chainman.m_options.signals->MempoolTransactionsRemovedForBlock(block_to_connect, std::move(txs_removed_for_block), pindexNew->nHeight);
-    }
     UpdateTip(pindexNew);
 
     const auto time_6{SteadyClock::now()};
@@ -6271,7 +6282,7 @@ bool ChainstateManager::DeleteChainstate(Chainstate& chainstate)
     }
     std::unique_ptr<Chainstate> prev_chainstate{Assert(RemoveChainstate(chainstate))};
     Chainstate& curr_chainstate{CurrentChainstate()};
-    assert(!prev_chainstate->m_mempool || prev_chainstate->m_mempool->size() == 0);
+    assert(prev_chainstate->m_mempool->size() == 0);
     assert(!curr_chainstate.m_mempool);
     std::swap(curr_chainstate.m_mempool, prev_chainstate->m_mempool);
     return true;

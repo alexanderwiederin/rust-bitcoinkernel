@@ -34,6 +34,7 @@ from test_framework.script import (
     CScriptOp,
     hash256,
     LEAF_VERSION_TAPSCRIPT,
+    LEAF_VERSION_TAPSCRIPT_V2,
     LegacySignatureMsg,
     LOCKTIME_THRESHOLD,
     MAX_SCRIPT_ELEMENT_SIZE,
@@ -1149,8 +1150,8 @@ def spenders_taproot_active():
 
     # Future leaf versions
     for leafver in range(0, 0x100, 2):
-        if leafver == LEAF_VERSION_TAPSCRIPT or leafver == ANNEX_TAG:
-            # Skip the defined LEAF_VERSION_TAPSCRIPT, and the ANNEX_TAG which is not usable as leaf version
+        if leafver in (LEAF_VERSION_TAPSCRIPT, LEAF_VERSION_TAPSCRIPT_V2, ANNEX_TAG):
+            # Skip defined leaf versions and ANNEX_TAG, which is not usable as a leaf version.
             continue
         scripts = [
             ("bare_c0", CScript([OP_NOP])),
@@ -1206,7 +1207,6 @@ def spenders_taproot_active():
         add_spender(spenders, "opsuccess/bigpush", standard=False, tap=tap, leaf="bigpush_success", failure={"leaf": "bigpush_nop"}, **ERR_PUSH_SIZE)
         add_spender(spenders, "opsuccess/1001push", standard=False, tap=tap, leaf="1001push_success", failure={"leaf": "1001push_nop"}, **ERR_STACK_SIZE)
         add_spender(spenders, "opsuccess/1001inputs", standard=False, tap=tap, leaf="bare_success", inputs=[b'']*1001, failure={"leaf": "bare_nop"}, **ERR_STACK_SIZE)
-        add_spender(spenders, "opsuccess/bigstackelem", standard=False, tap=tap, leaf="bare_success", inputs=[random.randbytes(MAX_SCRIPT_ELEMENT_SIZE+1)], failure={"leaf": "bare_nop"}, **ERR_PUSH_SIZE)
 
     # Non-OP_SUCCESSx (verify that those aren't accidentally treated as OP_SUCCESSx)
     for opval in range(0, 0x100):
@@ -1323,7 +1323,7 @@ def spenders_taproot_nonstandard():
     sec = generate_privkey()
     pub, _ = compute_xonly_pubkey(sec)
     scripts = [
-        ("future_leaf", CScript([pub, OP_CHECKSIG]), 0xc2),
+        ("future_leaf", CScript([pub, OP_CHECKSIG]), 0xc4),
         ("op_success", CScript([pub, OP_CHECKSIG, OP_0, OP_IF, CScriptOp(0x50), OP_ENDIF])),
     ]
     tap = taproot_construct(pub, scripts)

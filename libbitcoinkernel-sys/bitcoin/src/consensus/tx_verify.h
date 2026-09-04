@@ -9,7 +9,6 @@
 #include <script/verify_flags.h>
 
 #include <cstdint>
-#include <utility>
 #include <vector>
 
 class CBlockIndex;

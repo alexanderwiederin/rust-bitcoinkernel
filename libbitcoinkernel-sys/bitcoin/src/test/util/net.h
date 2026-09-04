@@ -118,7 +118,7 @@ struct ConnmanTestMsg : public CConnman {
         EXCLUSIVE_LOCKS_REQUIRED(!m_unused_i2p_sessions_mutex);
 };
 
-inline constexpr ServiceFlags ALL_SERVICE_FLAGS[]{
+constexpr ServiceFlags ALL_SERVICE_FLAGS[]{
     NODE_NONE,
     NODE_NETWORK,
     NODE_BLOOM,
@@ -128,7 +128,7 @@ inline constexpr ServiceFlags ALL_SERVICE_FLAGS[]{
     NODE_P2P_V2,
 };
 
-inline constexpr NetPermissionFlags ALL_NET_PERMISSION_FLAGS[]{
+constexpr NetPermissionFlags ALL_NET_PERMISSION_FLAGS[]{
     NetPermissionFlags::None,
     NetPermissionFlags::BloomFilter,
     NetPermissionFlags::Relay,
@@ -141,7 +141,7 @@ inline constexpr NetPermissionFlags ALL_NET_PERMISSION_FLAGS[]{
     NetPermissionFlags::All,
 };
 
-inline constexpr ConnectionType ALL_CONNECTION_TYPES[]{
+constexpr ConnectionType ALL_CONNECTION_TYPES[]{
     ConnectionType::INBOUND,
     ConnectionType::OUTBOUND_FULL_RELAY,
     ConnectionType::MANUAL,
@@ -151,7 +151,7 @@ inline constexpr ConnectionType ALL_CONNECTION_TYPES[]{
     ConnectionType::PRIVATE_BROADCAST,
 };
 
-inline constexpr auto ALL_NETWORKS = std::array{
+constexpr auto ALL_NETWORKS = std::array{
     Network::NET_UNROUTABLE,
     Network::NET_IPV4,
     Network::NET_IPV6,

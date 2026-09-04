@@ -12,7 +12,6 @@
 
 #include "../int_utils.h"
 #include "../lintrans.h"
-#include "../util.h"
 
 namespace {
 
@@ -29,7 +28,7 @@ namespace {
 #  define NO_SANITIZE_MEMORY
 #endif
 
-template<typename I, int BITS, I MOD> NO_SANITIZE_MEMORY MAYBE_UNUSED I MulWithClMulReduce(I a, I b)
+template<typename I, int BITS, I MOD> NO_SANITIZE_MEMORY I MulWithClMulReduce(I a, I b)
 {
     static constexpr I MASK = Mask<BITS, I>();
 
@@ -66,7 +65,7 @@ template<typename I, int BITS, I MOD> NO_SANITIZE_MEMORY MAYBE_UNUSED I MulWithC
     }
 }
 
-template<typename I, int BITS, int POS> NO_SANITIZE_MEMORY MAYBE_UNUSED I MulTrinomial(I a, I b)
+template<typename I, int BITS, int POS> NO_SANITIZE_MEMORY I MulTrinomial(I a, I b)
 {
     static constexpr I MASK = Mask<BITS, I>();
 

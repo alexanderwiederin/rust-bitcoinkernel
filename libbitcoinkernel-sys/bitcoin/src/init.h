@@ -9,9 +9,9 @@
 #include <atomic>
 
 //! Default value for -daemon option
-inline constexpr bool DEFAULT_DAEMON = false;
+static constexpr bool DEFAULT_DAEMON = false;
 //! Default value for -daemonwait option
-inline constexpr bool DEFAULT_DAEMONWAIT = false;
+static constexpr bool DEFAULT_DAEMONWAIT = false;
 
 class ArgsManager;
 namespace interfaces {

@@ -32,10 +32,10 @@
  * The maximum size of a serialized object in bytes or number of elements
  * (for eg vectors) when the size is encoded as CompactSize.
  */
-inline constexpr uint64_t MAX_SIZE = 0x02000000;
+static constexpr uint64_t MAX_SIZE = 0x02000000;
 
 /** Maximum amount of memory (in bytes) to allocate at once when deserializing vectors. */
-inline constexpr unsigned int MAX_VECTOR_ALLOCATE{5'000'000};
+static const unsigned int MAX_VECTOR_ALLOCATE = 5000000;
 
 /**
  * Dummy data type to identify deserializing constructors.
@@ -49,7 +49,7 @@ inline constexpr unsigned int MAX_VECTOR_ALLOCATE{5'000'000};
  * is likely the only way to do so.
  */
 struct deserialize_type {};
-inline constexpr deserialize_type deserialize {};
+constexpr deserialize_type deserialize {};
 
 /*
  * Lowest-level serialization and conversion.

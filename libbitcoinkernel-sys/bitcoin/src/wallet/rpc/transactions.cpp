@@ -38,12 +38,6 @@ static void WalletTxToJSON(const CWallet& wallet, const CWalletTx& wtx, UniValue
     }
     entry.pushKV("txid", wtx.GetHash().GetHex());
     entry.pushKV("wtxid", wtx.GetWitnessHash().GetHex());
-    UniValue alternate_wtxids(UniValue::VARR);
-    for (const auto& [wtxid, _] : wtx.GetTxs()) {
-        if (wtxid == wtx.GetWitnessHash()) continue;
-        alternate_wtxids.push_back(wtxid.GetHex());
-    }
-    entry.pushKV("alternate_wtxids", alternate_wtxids);
     UniValue conflicts(UniValue::VARR);
     for (const Txid& conflict : wallet.GetTxConflicts(wtx))
         conflicts.push_back(conflict.GetHex());
@@ -59,7 +53,7 @@ static void WalletTxToJSON(const CWallet& wallet, const CWalletTx& wtx, UniValue
     if (chain.rpcEnableDeprecated("bip125")) {
         std::string rbfStatus = "no";
         if (confirms <= 0) {
-            RBFTransactionState rbfState = chain.isRBFOptIn(*wtx.GetTx());
+            RBFTransactionState rbfState = chain.isRBFOptIn(*wtx.tx);
             if (rbfState == RBFTransactionState::UNKNOWN)
                 rbfStatus = "unknown";
             else if (rbfState == RBFTransactionState::REPLACEABLE_BIP125)
@@ -116,7 +110,7 @@ static UniValue ListReceived(const CWallet& wallet, const UniValue& params, cons
             continue;
         }
 
-        for (const CTxOut& txout : wtx.GetTx()->vout) {
+        for (const CTxOut& txout : wtx.tx->vout) {
             CTxDestination address;
             if (!ExtractDestination(txout.scriptPubKey, address))
                 continue;
@@ -139,17 +133,12 @@ static UniValue ListReceived(const CWallet& wallet, const UniValue& params, cons
     UniValue ret(UniValue::VARR);
     std::map<std::string, tallyitem> label_tally;
 
-    const auto& func = [&](const CTxDestination& address, const std::string& label, bool is_change,
-                            const std::optional<AddressPurpose>& purpose) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet) {
+    const auto& func = [&](const CTxDestination& address, const std::string& label, bool is_change, const std::optional<AddressPurpose>& purpose) {
         if (is_change) return; // no change addresses
 
-        // Entries in mapTally are only ever added for wallet.IsMine() addresses (see the tally
-        // loop above), so it's only addresses missing from mapTally that need the IsMine() check.
         auto it = mapTally.find(address);
-        if (it == mapTally.end()) {
-            if (!fIncludeEmpty) return;
-            if (!wallet.IsMine(address)) return; // exclude addresses not owned by the wallet (e.g. "send" purpose)
-        }
+        if (it == mapTally.end() && !fIncludeEmpty)
+            return;
 
         CAmount nAmount = 0;
         int nConf = std::numeric_limits<int>::max();
@@ -365,7 +354,7 @@ static void ListTransactions(const CWallet& wallet, const CWalletTx& wtx, int nM
             }
             UniValue entry(UniValue::VOBJ);
             MaybePushAddress(entry, r.destination);
-            PushParentDescriptors(wallet, wtx.GetTx()->vout.at(r.vout).scriptPubKey, entry);
+            PushParentDescriptors(wallet, wtx.tx->vout.at(r.vout).scriptPubKey, entry);
             if (wtx.IsCoinBase())
             {
                 if (wallet.GetTxDepthInMainChain(wtx) < 1)
@@ -406,10 +395,6 @@ static std::vector<RPCResult> TransactionDescriptionString()
            {RPCResult::Type::NUM_TIME, "blocktime", /*optional=*/true, "The block time expressed in " + UNIX_EPOCH_TIME + "."},
            {RPCResult::Type::STR_HEX, "txid", "The transaction id."},
            {RPCResult::Type::STR_HEX, "wtxid", "The hash of serialized transaction, including witness data."},
-           {RPCResult::Type::ARR, "alternate_wtxids", "The wtxids of transactions with different witness data but the same txid.",
-           {
-               {RPCResult::Type::STR_HEX, "wtxid", "The witness transaction id."},
-           }},
            {RPCResult::Type::ARR, "walletconflicts", "Confirmed transactions that have been detected by the wallet to conflict with this transaction.",
            {
                {RPCResult::Type::STR_HEX, "txid", "The transaction id."},
@@ -770,7 +755,7 @@ RPCMethod gettransaction()
     CAmount nCredit = CachedTxGetCredit(*pwallet, wtx, /*avoid_reuse=*/false);
     CAmount nDebit = CachedTxGetDebit(*pwallet, wtx, /*avoid_reuse=*/false);
     CAmount nNet = nCredit - nDebit;
-    CAmount nFee = (CachedTxIsFromMe(*pwallet, wtx) ? wtx.GetTx()->GetValueOut() - nDebit : 0);
+    CAmount nFee = (CachedTxIsFromMe(*pwallet, wtx) ? wtx.tx->GetValueOut() - nDebit : 0);
 
     entry.pushKV("amount", ValueFromAmount(nNet - nFee));
     if (CachedTxIsFromMe(*pwallet, wtx))
@@ -782,11 +767,11 @@ RPCMethod gettransaction()
     ListTransactions(*pwallet, wtx, 0, false, details, /*filter_label=*/std::nullopt);
     entry.pushKV("details", std::move(details));
 
-    entry.pushKV("hex", EncodeHexTx(*wtx.GetTx()));
+    entry.pushKV("hex", EncodeHexTx(*wtx.tx));
 
     if (verbose) {
         UniValue decoded(UniValue::VOBJ);
-        TxToUniv(*wtx.GetTx(),
+        TxToUniv(*wtx.tx,
                 /*block_hash=*/uint256(),
                 /*entry=*/decoded,
                 /*include_hex=*/false,

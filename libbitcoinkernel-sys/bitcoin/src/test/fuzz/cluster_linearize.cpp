@@ -611,6 +611,7 @@ FUZZ_TARGET(clusterlin_components)
     // Construct a depgraph.
     SpanReader reader(buffer);
     DepGraph<TestBitSet> depgraph;
+    std::vector<DepGraphIndex> linearization;
     try {
         reader >> Using<DepGraphFormatter>(depgraph);
     } catch (const std::ios_base::failure&) {}

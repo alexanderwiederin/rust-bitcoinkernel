@@ -21,15 +21,15 @@
 #include <thread>
 #include <vector>
 
-inline constexpr uint16_t DEFAULT_TOR_SOCKS_PORT{9050};
-inline constexpr int DEFAULT_TOR_CONTROL_PORT = 9051;
+constexpr uint16_t DEFAULT_TOR_SOCKS_PORT{9050};
+constexpr int DEFAULT_TOR_CONTROL_PORT = 9051;
 extern const std::string DEFAULT_TOR_CONTROL;
-inline constexpr bool DEFAULT_LISTEN_ONION = true;
+static const bool DEFAULT_LISTEN_ONION = true;
 
 /** Tor control reply code. Ref: https://spec.torproject.org/control-spec/replies.html */
-inline constexpr int TOR_REPLY_OK{250};
-inline constexpr int TOR_REPLY_UNRECOGNIZED{510};
-inline constexpr int TOR_REPLY_SYNTAX_ERROR{512}; //!< Syntax error in command argument
+constexpr int TOR_REPLY_OK{250};
+constexpr int TOR_REPLY_UNRECOGNIZED{510};
+constexpr int TOR_REPLY_SYNTAX_ERROR{512}; //!< Syntax error in command argument
 
 CService DefaultOnionServiceTarget(uint16_t port);
 
@@ -109,7 +109,7 @@ private:
     /** Response handlers */
     std::deque<ReplyHandlerCB> m_reply_handlers;
     /** Buffer for incoming data */
-    std::string m_recv_buffer;
+    std::vector<std::byte> m_recv_buffer;
     /** Process complete lines from the receive buffer */
     bool ProcessBuffer();
 };

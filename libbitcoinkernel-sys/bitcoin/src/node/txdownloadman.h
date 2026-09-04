@@ -22,23 +22,25 @@ class TxDownloadManagerImpl;
 
 /** Maximum number of in-flight transaction requests from a peer. It is not a hard limit, but the threshold at which
  *  point the OVERLOADED_PEER_TX_DELAY kicks in. */
-inline constexpr int32_t MAX_PEER_TX_REQUEST_IN_FLIGHT = 100;
+static constexpr int32_t MAX_PEER_TX_REQUEST_IN_FLIGHT = 100;
 /** Maximum number of transactions to consider for requesting, per peer. It provides a reasonable DoS limit to
  *  per-peer memory usage spent on announcements, while covering peers continuously sending INVs at the maximum
  *  rate (by our own policy, see DEFAULT_TX_SEND_RATE) for several minutes, while not receiving
  *  the actual transaction (from any peer) in response to requests for them. */
-inline constexpr int32_t MAX_PEER_TX_ANNOUNCEMENTS = 5000;
+static constexpr int32_t MAX_PEER_TX_ANNOUNCEMENTS = 5000;
 /** How long to delay requesting transactions via txids, if we have wtxid-relaying peers */
-inline constexpr auto TXID_RELAY_DELAY{2s};
+static constexpr auto TXID_RELAY_DELAY{2s};
 /** How long to delay requesting transactions from non-preferred peers */
-inline constexpr auto NONPREF_PEER_TX_DELAY{2s};
+static constexpr auto NONPREF_PEER_TX_DELAY{2s};
 /** How long to delay requesting transactions from overloaded peers (see MAX_PEER_TX_REQUEST_IN_FLIGHT). */
-inline constexpr auto OVERLOADED_PEER_TX_DELAY{2s};
+static constexpr auto OVERLOADED_PEER_TX_DELAY{2s};
 /** How long to wait before downloading a transaction from an additional peer */
-inline constexpr auto GETDATA_TX_INTERVAL{60s};
+static constexpr auto GETDATA_TX_INTERVAL{60s};
 struct TxDownloadOptions {
     /** Read-only reference to mempool. */
     const CTxMemPool& m_mempool;
+    /** RNG provided by caller. */
+    FastRandomContext& m_rng;
     /** Instantiate TxRequestTracker as deterministic (used for tests). */
     bool m_deterministic_txrequest{false};
 };

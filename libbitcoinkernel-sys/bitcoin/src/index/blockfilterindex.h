@@ -25,10 +25,10 @@ class BlockFilter;
 class CBlockIndex;
 enum class BlockFilterType : uint8_t;
 
-inline constexpr const char* DEFAULT_BLOCKFILTERINDEX{"0"};
+static const char* const DEFAULT_BLOCKFILTERINDEX = "0";
 
 /** Interval between compact filter checkpoints. See BIP 157. */
-inline constexpr int CFCHECKPT_INTERVAL = 1000;
+static constexpr int CFCHECKPT_INTERVAL = 1000;
 
 /**
  * BlockFilterIndex is used to store and retrieve block filters, hashes, and headers for a range of

@@ -25,7 +25,7 @@ namespace mp {
 class EventLoop;
 using ProcessId = int;
 using SocketId = int;
-inline constexpr SocketId SocketError{-1};
+constexpr SocketId SocketError{-1};
 
 using Stream = SocketId;
 inline Stream MakeStream(EventLoop&, SocketId socket)
