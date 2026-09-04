@@ -13,6 +13,11 @@ name = "scripttrace"
 path = "src/scripttrace.rs"
 required-features = ["script-trace"]
 
+[[bin]]
+name = "gsr_scripttrace"
+path = "src/gsr_scripttrace.rs"
+required-features = ["script-trace"]
+
 [dependencies]
 silentpayments = "0.1"
 bitcoin = "0.31"
