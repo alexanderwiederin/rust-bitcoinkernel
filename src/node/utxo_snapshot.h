@@ -25,7 +25,7 @@
 #include <string_view>
 
 // UTXO set snapshot magic bytes
-inline constexpr std::array<uint8_t, 5> SNAPSHOT_MAGIC_BYTES = {'u', 't', 'x', 'o', 0xff};
+static constexpr std::array<uint8_t, 5> SNAPSHOT_MAGIC_BYTES = {'u', 't', 'x', 'o', 0xff};
 
 class Chainstate;
 
@@ -110,7 +110,7 @@ public:
 //!
 //! Because we only allow loading a single snapshot at a time, there will only be one
 //! chainstate directory with this filename present within it.
-inline const fs::path SNAPSHOT_BLOCKHASH_FILENAME{"base_blockhash"};
+const fs::path SNAPSHOT_BLOCKHASH_FILENAME{"base_blockhash"};
 
 //! Write out the blockhash of the snapshot base block that was used to construct
 //! this chainstate. This value is read in during subsequent initializations and
@@ -125,7 +125,7 @@ std::optional<uint256> ReadSnapshotBaseBlockhash(fs::path chaindir)
 
 //! Suffix appended to the chainstate (leveldb) dir when created based upon
 //! a snapshot.
-inline constexpr std::string_view SNAPSHOT_CHAINSTATE_SUFFIX = "_snapshot";
+constexpr std::string_view SNAPSHOT_CHAINSTATE_SUFFIX = "_snapshot";
 
 
 //! Return a path to the snapshot-based chainstate dir, if one exists.

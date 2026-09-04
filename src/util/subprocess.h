@@ -48,16 +48,22 @@ Documentation for C++ subprocessing library.
 #include <future>
 #include <initializer_list>
 #include <iostream>
+#include <locale>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#ifdef WIN32
+  #include <codecvt>
+#endif
+
 extern "C" {
 #ifdef WIN32
   #include <windows.h>
   #include <io.h>
+  #include <cwchar>
 #else
   #include <sys/wait.h>
   #include <unistd.h>
@@ -110,12 +116,12 @@ namespace subprocess {
 
 // Max buffer size allocated on stack for read error
 // from pipe
-inline constexpr size_t SP_MAX_ERR_BUF_SIZ = 1024;
+static const size_t SP_MAX_ERR_BUF_SIZ = 1024;
 
 // Default buffer capacity for OutBuffer and ErrBuffer.
 // If the data exceeds this capacity, the buffer size is grown
 // by 1.5 times its previous capacity
-inline constexpr size_t DEFAULT_BUF_CAP_BYTES = 8192;
+static const size_t DEFAULT_BUF_CAP_BYTES = 8192;
 
 
 /*-----------------------------------------------
@@ -162,12 +168,9 @@ public:
 namespace util
 {
 #ifdef WIN32
-  inline void quote_argument(const std::string &argument, std::string &command_line,
+  inline void quote_argument(const std::wstring &argument, std::wstring &command_line,
                       bool force)
   {
-    constexpr char quote = '"';
-    constexpr char backslash = '\\';
-
     //
     // Unless we're told otherwise, don't quote unless we actually
     // need to do so --- hopefully avoid problems if programs won't
@@ -175,16 +178,16 @@ namespace util
     //
 
     if (force == false && argument.empty() == false &&
-        argument.find_first_of(" \t\n\v") == argument.npos) {
+        argument.find_first_of(L" \t\n\v") == argument.npos) {
       command_line.append(argument);
     }
     else {
-      command_line.push_back(quote);
+      command_line.push_back(L'"');
 
       for (auto it = argument.begin();; ++it) {
         unsigned number_backslashes = 0;
 
-        while (it != argument.end() && *it == backslash) {
+        while (it != argument.end() && *it == L'\\') {
           ++it;
           ++number_backslashes;
         }
@@ -197,17 +200,17 @@ namespace util
           // as a metacharacter.
           //
 
-          command_line.append(number_backslashes * 2, backslash);
+          command_line.append(number_backslashes * 2, L'\\');
           break;
         }
-        else if (*it == quote) {
+        else if (*it == L'"') {
 
           //
           // Escape all backslashes and the following
           // double quotation mark.
           //
 
-          command_line.append(number_backslashes * 2 + 1, backslash);
+          command_line.append(number_backslashes * 2 + 1, L'\\');
           command_line.push_back(*it);
         }
         else {
@@ -216,12 +219,12 @@ namespace util
           // Backslashes aren't special here.
           //
 
-          command_line.append(number_backslashes, backslash);
+          command_line.append(number_backslashes, L'\\');
           command_line.push_back(*it);
         }
       }
 
-      command_line.push_back(quote);
+      command_line.push_back(L'"');
     }
   }
 
@@ -1082,36 +1085,37 @@ inline void Popen::execute_process() noexcept(false)
   }
   this->exe_name_ = vargs_[0];
 
-  std::string argument;
-  std::string command_line;
+  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  std::wstring argument;
+  std::wstring command_line;
   bool first_arg = true;
 
   for (auto arg : this->vargs_) {
     if (!first_arg) {
-      command_line += " ";
+      command_line += L" ";
     } else {
       first_arg = false;
     }
-    argument = arg;
-    util::quote_argument(argument, command_line, /*force=*/false);
+    argument = converter.from_bytes(arg);
+    util::quote_argument(argument, command_line, false);
   }
 
-  // CreateProcessA can modify szCmdLine so we allocate needed memory
-  char *szCmdline = new char[command_line.size() + 1];
-  strcpy_s(szCmdline, command_line.size() + 1, command_line.c_str());
+  // CreateProcessW can modify szCmdLine so we allocate needed memory
+  wchar_t *szCmdline = new wchar_t[command_line.size() + 1];
+  wcscpy_s(szCmdline, command_line.size() + 1, command_line.c_str());
   PROCESS_INFORMATION piProcInfo;
-  STARTUPINFOA siStartInfo;
+  STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
-  DWORD creation_flags = CREATE_NO_WINDOW;
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW;
 
   // Set up members of the PROCESS_INFORMATION structure.
   ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
 
-  // Set up members of the STARTUPINFOA structure.
+  // Set up members of the STARTUPINFOW structure.
   // This structure specifies the STDIN and STDOUT handles for redirection.
 
-  ZeroMemory(&siStartInfo, sizeof(STARTUPINFOA));
-  siStartInfo.cb = sizeof(STARTUPINFOA);
+  ZeroMemory(&siStartInfo, sizeof(STARTUPINFOW));
+  siStartInfo.cb = sizeof(STARTUPINFOW);
 
   siStartInfo.hStdError = this->stream_.g_hChildStd_ERR_Wr;
   siStartInfo.hStdOutput = this->stream_.g_hChildStd_OUT_Wr;
@@ -1120,7 +1124,7 @@ inline void Popen::execute_process() noexcept(false)
   siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
   // Create the child process.
-  bSuccess = CreateProcessA(NULL,
+  bSuccess = CreateProcessW(NULL,
                             szCmdline,    // command line
                             NULL,         // process security attributes
                             NULL,         // primary thread security attributes
@@ -1128,7 +1132,7 @@ inline void Popen::execute_process() noexcept(false)
                             creation_flags, // creation flags
                             NULL,         // use parent's environment
                             NULL,         // use parent's current directory
-                            &siStartInfo, // STARTUPINFOA pointer
+                            &siStartInfo, // STARTUPINFOW pointer
                             &piProcInfo); // receives PROCESS_INFORMATION
 
   // If an error occurs, exit the application.

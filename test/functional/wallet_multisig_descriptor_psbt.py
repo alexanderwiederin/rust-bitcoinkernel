@@ -13,8 +13,6 @@ from test_framework.util import (
     assert_equal,
 )
 
-from test_framework.descriptors import descsum_create
-
 
 class WalletMultisigDescriptorPSBTTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -27,13 +25,12 @@ class WalletMultisigDescriptorPSBTTest(BitcoinTestFramework):
 
     @staticmethod
     def _get_xpub(wallet):
-        """Derive an xpub at m/44h/1h/0h using `derivehdkey`. This derivation matches the `pkh` descriptor since it's least likely to be accidentally reused (legacy addresses)."""
-        # Ideally we would use m/87h/1h/0h but the wallet currently can't sign
-        # for a derivation path that's not used in one of its descriptors.
-        hdkey_info = wallet.derivehdkey("m/44h/1h/0h")
+        """Extract the wallet's xpubs using `listdescriptors` and pick the one from the `pkh` descriptor since it's least likely to be accidentally reused (legacy addresses)."""
+        pkh_descriptor = next(filter(lambda d: d["desc"].startswith("pkh(") and not d["internal"], wallet.listdescriptors()["descriptors"]))
         # Keep all key origin information (master key fingerprint and all derivation steps) for proper support of hardware devices
         # See section 'Key origin identification' in 'doc/descriptors.md' for more details...
-        return f"{hdkey_info['origin']}{hdkey_info['xpub']}/<0;1>/*"
+        # Replace the change index with the multipath convention
+        return pkh_descriptor["desc"].split("pkh(")[1].split(")")[0].replace("/0/*", "/<0;1>/*")
 
     @staticmethod
     def _check_psbt(psbt, to, value, multisig):
@@ -52,14 +49,14 @@ class WalletMultisigDescriptorPSBTTest(BitcoinTestFramework):
         for i in range(self.N):
             self.node.createwallet(wallet_name=f"{self.name}_{i}", blank=True, disable_private_keys=True)
             multisig = self.node.get_wallet_rpc(f"{self.name}_{i}")
-            desc = descsum_create(f"wsh(sortedmulti({self.M},{','.join(xpubs)}))")
-            self.log.debug(desc)
+            multisig_desc = f"wsh(sortedmulti({self.M},{','.join(xpubs)}))"
+            checksum = multisig.getdescriptorinfo(multisig_desc)["checksum"]
             result = multisig.importdescriptors([
-                {
-                    "desc": desc,
+                {  # Multipath descriptor expands to receive and change
+                    "desc": f"{multisig_desc}#{checksum}",
                     "active": True,
                     "timestamp": "now",
-                },
+                }
             ])
             assert all(r["success"] for r in result)
             yield multisig
@@ -124,7 +121,6 @@ class WalletMultisigDescriptorPSBTTest(BitcoinTestFramework):
 
         self.log.info("Finally, collect the signed PSBTs with combinepsbt, finalizepsbt, then broadcast the resulting transaction...")
         combined = coordinator_wallet.combinepsbt(psbts)
-        self.log.debug(coordinator_wallet.analyzepsbt(combined))
         finalized = coordinator_wallet.finalizepsbt(combined)
         coordinator_wallet.sendrawtransaction(finalized["hex"])
 

@@ -547,13 +547,15 @@ typedef uint32_t btck_ScriptVerificationFlags;
 #define btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY ((btck_ScriptVerificationFlags)(1U << 10)) //!< enable CHECKSEQUENCEVERIFY (BIP112)
 #define btck_ScriptVerificationFlags_WITNESS ((btck_ScriptVerificationFlags)(1U << 11))             //!< enable WITNESS (BIP141)
 #define btck_ScriptVerificationFlags_TAPROOT ((btck_ScriptVerificationFlags)(1U << 17))             //!< enable TAPROOT (BIPs 341 & 342)
+#define btck_ScriptVerificationFlags_SCRIPT_RESTORATION ((btck_ScriptVerificationFlags)(1U << 21))  //!< enable script restoration and tapscript v2 (BIP 440 & 441)
 #define btck_ScriptVerificationFlags_ALL ((btck_ScriptVerificationFlags)(btck_ScriptVerificationFlags_P2SH |                \
                                                                          btck_ScriptVerificationFlags_DERSIG |              \
                                                                          btck_ScriptVerificationFlags_NULLDUMMY |           \
                                                                          btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY | \
                                                                          btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY | \
                                                                          btck_ScriptVerificationFlags_WITNESS |             \
-                                                                         btck_ScriptVerificationFlags_TAPROOT))
+                                                                         btck_ScriptVerificationFlags_TAPROOT |             \
+                                                                         btck_ScriptVerificationFlags_SCRIPT_RESTORATION))
 
 typedef uint8_t btck_ChainType;
 #define btck_ChainType_MAINNET ((btck_ChainType)(0))
@@ -1209,22 +1211,6 @@ BITCOINKERNEL_API btck_ChainstateManagerOptions* BITCOINKERNEL_WARN_UNUSED_RESUL
 BITCOINKERNEL_API void btck_chainstate_manager_options_set_worker_threads_num(
     btck_ChainstateManagerOptions* chainstate_manager_options,
     int worker_threads) BITCOINKERNEL_ARG_NONNULL(1);
-
-/**
- * @brief Set the total database cache used by the chainstate manager.
- *
- * The total cache is split internally between the block tree database,
- * chainstate database, and in-memory coins cache. If this function is not
- * called, the total cache defaults to 450 MiB.
- *
- * @param[in] chainstate_manager_options Non-null, options to be set.
- * @param[in] database_cache_bytes       The total database cache size in bytes. Values below 4 MiB are rejected.
- *                                       On 32-bit systems, values above 1 GiB are also rejected.
- * @return                               0 if the set was successful, non-zero if the set failed.
- */
-BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_options_set_database_cache_bytes(
-    btck_ChainstateManagerOptions* chainstate_manager_options,
-    uint64_t database_cache_bytes) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
  * @brief Sets wipe db in the options. In combination with calling
@@ -2081,28 +2067,6 @@ BITCOINKERNEL_API void btck_block_header_destroy(btck_BlockHeader* header);
 
 ///@}
 
-/** @name Testing
- * Functions intended for testing purposes only.
- */
-///@{
-
-/**
- * @brief Override the current time with a fixed timestamp for testing.
- *
- * Affects all kernel time reads globally. The caller is responsible
- * for gating usage (e.g. restricting to regtest) if desired.
- *
- * The upper bound (4294967295) matches the maximum value of a block header
- * timestamp.
- *
- * @param[in] timestamp Unix epoch seconds, or 0 to restore the system clock.
- * @return              0 on success, non-zero if timestamp is outside the
- *                      valid [0, 4294967295] range.
- */
-BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_set_mock_time(int64_t timestamp);
-
-///@}
-
 /** @name ScriptTrace
  * Functions for script execution tracing.
  */
@@ -2118,6 +2082,7 @@ typedef uint8_t btck_SigVersion;
 #define btck_SigVersion_WITNESS_V0 ((btck_SigVersion)(1))
 #define btck_SigVersion_TAPROOT    ((btck_SigVersion)(2))
 #define btck_SigVersion_TAPSCRIPT  ((btck_SigVersion)(3))
+#define btck_SigVersion_TAPSCRIPT_V2 ((btck_SigVersion)(4))
 
 /**
  * Callback function type for script trace frames.
@@ -2160,7 +2125,8 @@ BITCOINKERNEL_API int btck_script_trace_frame_get_exec(
 BITCOINKERNEL_API uint8_t btck_script_trace_frame_get_opcode(
     const btck_ScriptTraceFrame* frame) BITCOINKERNEL_ARG_NONNULL(1);
 
-/// Counter towards the ops script limit.
+/// Counter towards the ops script limit. Always 0 for TAPSCRIPT_V2, which has
+/// no op count limit; see BIP 441.
 BITCOINKERNEL_API int btck_script_trace_frame_get_op_count(
     const btck_ScriptTraceFrame* frame) BITCOINKERNEL_ARG_NONNULL(1);
 

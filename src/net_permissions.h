@@ -17,9 +17,9 @@ struct bilingual_str;
 extern const std::vector<std::string> NET_PERMISSIONS_DOC;
 
 /** Default for -whitelistrelay. */
-inline constexpr bool DEFAULT_WHITELISTRELAY = true;
+constexpr bool DEFAULT_WHITELISTRELAY = true;
 /** Default for -whitelistforcerelay. */
-inline constexpr bool DEFAULT_WHITELISTFORCERELAY = false;
+constexpr bool DEFAULT_WHITELISTFORCERELAY = false;
 
 enum class NetPermissionFlags : uint32_t {
     None = 0,
@@ -46,7 +46,7 @@ enum class NetPermissionFlags : uint32_t {
     Implicit = (1U << 31),
     All = BloomFilter | ForceRelay | Relay | NoBan | Mempool | Download | Addr,
 };
-constexpr NetPermissionFlags operator|(NetPermissionFlags a, NetPermissionFlags b)
+static inline constexpr NetPermissionFlags operator|(NetPermissionFlags a, NetPermissionFlags b)
 {
     using t = std::underlying_type_t<NetPermissionFlags>;
     return static_cast<NetPermissionFlags>(static_cast<t>(a) | static_cast<t>(b));

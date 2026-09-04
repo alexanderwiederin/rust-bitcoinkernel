@@ -18,14 +18,19 @@ void TestPotentialDeadLockDetected(MutexType& mutex1, MutexType& mutex2)
         LOCK2(mutex1, mutex2);
     }
     BOOST_CHECK(LockStackEmpty());
-    {
-#ifdef DEBUG_LOCKORDER
-        BOOST_CHECK_EXCEPTION(LOCK2(mutex2, mutex1), std::logic_error, HasReason{"potential deadlock detected: mutex1 -> mutex2 -> mutex1"});
-#else
+    bool error_thrown = false;
+    try {
         LOCK2(mutex2, mutex1);
-#endif
+    } catch (const std::logic_error& e) {
+        BOOST_CHECK_EQUAL(e.what(), "potential deadlock detected: mutex1 -> mutex2 -> mutex1");
+        error_thrown = true;
     }
     BOOST_CHECK(LockStackEmpty());
+    #ifdef DEBUG_LOCKORDER
+    BOOST_CHECK(error_thrown);
+    #else
+    BOOST_CHECK(!error_thrown);
+    #endif
 }
 
 #ifdef DEBUG_LOCKORDER

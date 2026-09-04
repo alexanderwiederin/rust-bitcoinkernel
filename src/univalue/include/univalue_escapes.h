@@ -5,7 +5,7 @@
 
 #ifndef BITCOIN_UNIVALUE_INCLUDE_UNIVALUE_ESCAPES_H
 #define BITCOIN_UNIVALUE_INCLUDE_UNIVALUE_ESCAPES_H
-inline constexpr const char* escapes[256]{
+static const char *escapes[256] = {
     "\\u0000",
     "\\u0001",
     "\\u0002",

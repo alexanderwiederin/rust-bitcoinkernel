@@ -43,7 +43,7 @@ namespace node {
 enum class TransactionError;
 } // namespace node
 
-inline constexpr bool DEFAULT_RPC_DOC_CHECK{
+static constexpr bool DEFAULT_RPC_DOC_CHECK{
 #ifdef RPC_DOC_CHECK
     true
 #else
@@ -155,9 +155,6 @@ std::pair<int64_t, int64_t> ParseDescriptorRange(const UniValue& value);
 
 /** Evaluate a descriptor given as a string, or as a {"desc":...,"range":...} object, with default range of 1000. */
 std::vector<CScript> EvalDescriptorStringOrObject(const UniValue& scanobject, FlatSigningProvider& provider, bool expand_priv = false);
-
-//! Parse BIP32 path
-std::vector<uint32_t> ParsePathBIP32(const std::string& path);
 
 /**
  * Serializing JSON objects depends on the outer type. Only arrays and
@@ -316,7 +313,7 @@ struct RPCResult {
         NUM,
         BOOL,
         NONE,
-        ANY,        //!< Special type to disable type checks
+        ANY,        //!< Special type to disable type checks (for testing only)
         STR_AMOUNT, //!< Special string to represent a floating point amount
         STR_HEX,    //!< Special string with only hex chars
         OBJ_DYN,    //!< Special dictionary with keys that are not literals

@@ -3,6 +3,8 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 //
 
+#include <bitcoin-build-config.h> // IWYU pragma: keep
+
 #include <common/run_command.h>
 #include <test/util/common.h>
 #include <test/util/setup_common.h>
@@ -13,7 +15,9 @@
 #include <iostream>
 #include <string_view>
 
+#ifdef ENABLE_EXTERNAL_SIGNER
 #include <util/subprocess.h>
+#endif // ENABLE_EXTERNAL_SIGNER
 
 #include <boost/test/unit_test.hpp>
 
@@ -55,6 +59,8 @@ const bool g_maybe_run_mock_dispatcher_before_main{[]() {
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(system_tests, BasicTestingSetup)
+
+#ifdef ENABLE_EXTERNAL_SIGNER
 
 static std::vector<std::string> mock_executable(const std::string& name)
 {
@@ -121,5 +127,6 @@ BOOST_AUTO_TEST_CASE(run_command)
         BOOST_CHECK_EQUAL(success.get_bool(), true);
     }
 }
+#endif // ENABLE_EXTERNAL_SIGNER
 
 BOOST_AUTO_TEST_SUITE_END()
