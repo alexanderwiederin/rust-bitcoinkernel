@@ -32,7 +32,6 @@
 #include <util/vector.h>
 
 #include <map>
-#include <ranges>
 #include <string_view>
 #include <utility>
 
@@ -147,8 +146,7 @@ static RPCMethod getprivatebroadcastinfo()
 {
     return RPCMethod{
         "getprivatebroadcastinfo",
-        "Returns information about transactions tracked for private broadcast.\n"
-        "Transactions that have reached the send-attempt limit remain in the result with attempts_remaining=0.\n"
+        "Returns information about transactions that are currently being privately broadcast.\n"
         "This method is only available when running with -privatebroadcast enabled.\n",
         {},
         RPCResult{
@@ -162,7 +160,6 @@ static RPCMethod getprivatebroadcastinfo()
                                 {RPCResult::Type::STR_HEX, "wtxid", "The transaction witness hash in hex"},
                                 {RPCResult::Type::STR_HEX, "hex", "The serialized, hex-encoded transaction data"},
                                 {RPCResult::Type::NUM_TIME, "time_added", "The time this transaction was added to the private broadcast queue (seconds since epoch)"},
-                                {RPCResult::Type::NUM, "attempts_remaining", "The number of additional private broadcast send attempts allowed for this transaction"},
                                 {RPCResult::Type::ARR, "peers", "Per-peer send and acknowledgment information for this transaction",
                                     {
                                         {RPCResult::Type::OBJ, "", "",
@@ -196,7 +193,6 @@ static RPCMethod getprivatebroadcastinfo()
                 o.pushKV("wtxid", tx_info.tx->GetWitnessHash().ToString());
                 o.pushKV("hex", EncodeHexTx(*tx_info.tx));
                 o.pushKV("time_added", TicksSinceEpoch<std::chrono::seconds>(tx_info.time_added));
-                o.pushKV("attempts_remaining", tx_info.attempts_remaining);
                 UniValue peers(UniValue::VARR);
                 for (const auto& peer : tx_info.peers) {
                     UniValue p(UniValue::VOBJ);
@@ -456,11 +452,11 @@ static std::vector<RPCResult> ClusterDescription()
 static std::vector<RPCResult> MempoolEntryDescription()
 {
     std::vector<RPCResult> list = {
-        {RPCResult::Type::NUM, "vsize", "(DEPRECATED) Was previously erroneously described as the BIP 141 vsize, but is actually sigops-adjusted vsize.\n"
+        {RPCResult::Type::NUM, "vsize", /*optional=*/true, "(DEPRECATED) Was previously erroneously described as the BIP 141 vsize, but is actually sigops-adjusted vsize.\n"
         "Use vsize_bip141 to actually get that behavior or switch to the explicit vsize_adjusted for retained behavior."},
-        {RPCResult::Type::NUM, "vsize_bip141", "Virtual transaction size as defined in BIP 141.\n"
-        "This is different from actual serialized size for witness transactions as witness data is discounted."},
-        {RPCResult::Type::NUM, "vsize_adjusted", "Maximum of sigop-adjusted size (-bytespersigop) and virtual transaction size as defined in BIP 141."},
+        {RPCResult::Type::NUM, "vsize_bip141", /*optional=*/true, "Virtual transaction size as defined in BIP 141.\n"
+        "This is different from actual serialized size for witness transactions as witness data is discounted (only present when 'allowed' is true)."},
+        {RPCResult::Type::NUM, "vsize_adjusted", /*optional=*/true, "Maximum of sigop-adjusted size (-bytespersigop) and virtual transaction size as defined in BIP 141 (only present when 'allowed' is true)."},
         RPCResult{RPCResult::Type::NUM, "weight", "transaction weight as defined in BIP 141."},
         RPCResult{RPCResult::Type::NUM_TIME, "time", "local time transaction entered pool in seconds since 1 Jan 1970 GMT"},
         RPCResult{RPCResult::Type::NUM, "height", "block height when transaction entered pool"},
@@ -988,11 +984,11 @@ static RPCMethod gettxspendingprevout()
             // Worklist of outpoints to resolve
             struct Entry {
                 COutPoint outpoint;
-                size_t request_index;
+                const UniValue* raw;
             };
             std::vector<Entry> prevouts_to_process;
             prevouts_to_process.reserve(output_params.size());
-            for (const size_t idx : std::views::iota(size_t{0}, output_params.size())) {
+            for (unsigned int idx = 0; idx < output_params.size(); idx++) {
                 const UniValue& o = output_params[idx].get_obj();
 
                 RPCTypeCheckObj(o,
@@ -1006,11 +1002,11 @@ static RPCMethod gettxspendingprevout()
                 if (nOutput < 0) {
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout cannot be negative");
                 }
-                prevouts_to_process.emplace_back(COutPoint{txid, static_cast<uint32_t>(nOutput)}, idx);
+                prevouts_to_process.emplace_back(COutPoint{txid, static_cast<uint32_t>(nOutput)}, &o);
             }
 
-            auto make_output = [&output_params, return_spending_tx](const Entry& prevout, const CTransaction* spending_tx = nullptr) {
-                UniValue o{output_params[prevout.request_index]};
+            auto make_output = [return_spending_tx](const Entry& prevout, const CTransaction* spending_tx = nullptr) {
+                UniValue o{*prevout.raw};
                 if (spending_tx) {
                     o.pushKV("spendingtxid", spending_tx->GetHash().ToString());
                     if (return_spending_tx) {
@@ -1020,35 +1016,41 @@ static RPCMethod gettxspendingprevout()
                 return o;
             };
 
-            std::vector<UniValue> results(output_params.size());
+            UniValue result{UniValue::VARR};
 
             // Search the mempool first
-            std::vector<Entry> unresolved;
-            unresolved.reserve(prevouts_to_process.size());
             {
                 const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
                 LOCK(mempool.cs);
 
                 // Make the result if the spending tx appears in the mempool or this is a mempool_only request
-                for (const auto& prevout : prevouts_to_process) {
-                    const auto* spending_tx{mempool.GetConflictTx(prevout.outpoint)};
+                for (auto it = prevouts_to_process.begin(); it != prevouts_to_process.end(); ) {
+                    const CTransaction* spending_tx{mempool.GetConflictTx(it->outpoint)};
 
                     // If the outpoint is not spent in the mempool and this is not a mempool-only
                     // request, we cannot answer it yet.
                     if (!spending_tx && !mempool_only) {
-                        unresolved.push_back(prevout);
-                    } else {
-                        results[prevout.request_index] = make_output(prevout, spending_tx);
+                        ++it;
+                        continue;
                     }
+
+                    result.push_back(make_output(*it, spending_tx));
+                    it = prevouts_to_process.erase(it);
                 }
             }
 
-            // mempool_only requests resolve every outpoint above, so only other requests reach the index.
-            if (!unresolved.empty() && (!g_txospenderindex || !g_txospenderindex->BlockUntilSyncedToCurrentChain())) {
+            // Return early if all requests have been handled by the mempool search
+            if (prevouts_to_process.empty()) {
+                return result;
+            }
+
+            // At this point the request was not limited to the mempool and some outpoints remain
+            // unresolved. We now rely on the index to determine whether they were spent or not.
+            if (!g_txospenderindex || !g_txospenderindex->BlockUntilSyncedToCurrentChain()) {
                 throw JSONRPCError(RPC_MISC_ERROR, "Mempool lacks a relevant spend, and txospenderindex is unavailable.");
             }
 
-            for (const auto& prevout : unresolved) {
+            for (const auto& prevout : prevouts_to_process) {
                 const auto spender{g_txospenderindex->FindSpender(prevout.outpoint)};
                 if (!spender) {
                     throw JSONRPCError(RPC_MISC_ERROR, spender.error());
@@ -1057,16 +1059,13 @@ static RPCMethod gettxspendingprevout()
                 if (const auto& spender_opt{spender.value()}) {
                     UniValue o{make_output(prevout, spender_opt->tx.get())};
                     o.pushKV("blockhash", spender_opt->block_hash.GetHex());
-                    results[prevout.request_index] = std::move(o);
+                    result.push_back(std::move(o));
                 } else {
                     // Only return the input outpoint itself, which indicates it is unspent.
-                    results[prevout.request_index] = make_output(prevout);
+                    result.push_back(make_output(prevout));
                 }
             }
 
-            UniValue result{UniValue::VARR};
-            result.reserve(results.size());
-            for (auto& output : results) result.push_back(std::move(output));
             return result;
         },
     };

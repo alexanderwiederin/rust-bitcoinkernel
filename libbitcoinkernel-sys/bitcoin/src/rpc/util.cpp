@@ -20,7 +20,6 @@
 #include <tinyformat.h>
 #include <uint256.h>
 #include <univalue.h>
-#include <util/bip32.h>
 #include <util/check.h>
 #include <util/result.h>
 #include <util/strencodings.h>
@@ -617,16 +616,14 @@ std::string RPCResults::ToDescriptionString() const
 {
     std::string result;
     for (const auto& r : m_results) {
-        Sections sections;
-        r.ToSections(sections);
-        // A result can be empty via HelpElisionSkip
-        if (sections.m_sections.empty()) continue;
-
+        if (r.m_type == RPCResult::Type::ANY) continue; // for testing only
         if (r.m_cond.empty()) {
             result += "\nResult:\n";
         } else {
             result += "\nResult (" + r.m_cond + "):\n";
         }
+        Sections sections;
+        r.ToSections(sections);
         result += sections.ToString();
     }
     return result;
@@ -1365,7 +1362,7 @@ std::vector<CScript> EvalDescriptorStringOrObject(const UniValue& scanobject, Fl
         range.second = 0;
     }
     std::vector<CScript> ret;
-    for (int64_t i = range.first; i <= range.second; ++i) {
+    for (int i = range.first; i <= range.second; ++i) {
         for (const auto& desc : descs) {
             std::vector<CScript> scripts;
             if (!desc->Expand(i, provider, scripts, provider)) {
@@ -1378,15 +1375,6 @@ std::vector<CScript> EvalDescriptorStringOrObject(const UniValue& scanobject, Fl
         }
     }
     return ret;
-}
-
-std::vector<uint32_t> ParsePathBIP32(const std::string& path)
-{
-    std::vector<uint32_t> out;
-    if (!ParseHDKeypath(path, out)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid BIP32 keypath");
-    }
-    return out;
 }
 
 /** Convert a vector of bilingual strings to a UniValue::VARR containing their original untranslated values. */

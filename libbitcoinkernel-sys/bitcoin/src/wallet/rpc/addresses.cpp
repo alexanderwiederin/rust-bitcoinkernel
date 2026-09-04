@@ -365,6 +365,7 @@ static UniValue DescribeWalletAddress(const CWallet& wallet, const CTxDestinatio
     return ret;
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 static std::vector<RPCResult> GetAddressInfoBaseFields()
 {
     return {

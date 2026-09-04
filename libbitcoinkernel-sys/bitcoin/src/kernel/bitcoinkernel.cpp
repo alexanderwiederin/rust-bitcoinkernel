@@ -37,7 +37,6 @@
 #include <util/result.h>
 #include <util/signalinterrupt.h>
 #include <util/task_runner.h>
-#include <util/time.h>
 #include <util/translation.h>
 #include <validation.h>
 #include <validationinterface.h>
@@ -46,7 +45,6 @@
 #include <cstring>
 #include <exception>
 #include <functional>
-#include <limits>
 #include <list>
 #include <memory>
 #include <optional>
@@ -261,6 +259,8 @@ btck_SigVersion cast_btck_sig_version(SigVersion version)
         return btck_SigVersion_TAPROOT;
     case SigVersion::WITNESS_V0:
         return btck_SigVersion_WITNESS_V0;
+    case SigVersion::TAPSCRIPT_V2:
+        return btck_SigVersion_TAPSCRIPT_V2;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -487,7 +487,6 @@ struct ChainstateManagerOptions {
     node::BlockManager::Options m_blockman_options GUARDED_BY(m_mutex);
     std::shared_ptr<const Context> m_context;
     node::ChainstateLoadOptions m_chainstate_load_options GUARDED_BY(m_mutex);
-    uint64_t m_db_cache_bytes GUARDED_BY(m_mutex){DEFAULT_KERNEL_CACHE};
 
     ChainstateManagerOptions(const std::shared_ptr<const Context>& context, const fs::path& data_dir, const fs::path& blocks_dir)
         : m_chainman_options{ChainstateManager::Options{
@@ -1068,20 +1067,6 @@ void btck_chainstate_manager_options_set_worker_threads_num(btck_ChainstateManag
     btck_ChainstateManagerOptions::get(opts).m_chainman_options.worker_threads_num = worker_threads;
 }
 
-int btck_chainstate_manager_options_set_database_cache_bytes(btck_ChainstateManagerOptions* chainman_opts, uint64_t database_cache_bytes)
-{
-    if (database_cache_bytes < MIN_DBCACHE_BYTES || database_cache_bytes > MAX_DBCACHE_BYTES) {
-        LogError("Failed to set database cache: size is outside the supported range.");
-        return -1;
-    }
-
-    auto& opts{btck_ChainstateManagerOptions::get(chainman_opts)};
-    LOCK(opts.m_mutex);
-    opts.m_db_cache_bytes = database_cache_bytes;
-    opts.m_blockman_options.block_tree_db_params.cache_bytes = kernel::CacheSizes{database_cache_bytes}.block_tree_db;
-    return 0;
-}
-
 void btck_chainstate_manager_options_destroy(btck_ChainstateManagerOptions* options)
 {
     delete options;
@@ -1134,7 +1119,7 @@ btck_ChainstateManager* btck_chainstate_manager_create(
     try {
         const auto chainstate_load_opts{WITH_LOCK(opts.m_mutex, return opts.m_chainstate_load_options)};
 
-        const kernel::CacheSizes cache_sizes{WITH_LOCK(opts.m_mutex, return opts.m_db_cache_bytes)};
+        kernel::CacheSizes cache_sizes{DEFAULT_KERNEL_CACHE};
         auto [status, chainstate_err]{node::LoadChainstate(*chainman, cache_sizes, chainstate_load_opts)};
         if (status != node::ChainstateLoadStatus::SUCCESS) {
             LogError("Failed to load chain state from your data directory: %s", chainstate_err.original);
@@ -1585,16 +1570,6 @@ int btck_transaction_check(const btck_Transaction* tx, btck_TxValidationState* v
     return ok ? 1 : 0;
 }
 
-int btck_set_mock_time(int64_t timestamp)
-{
-    constexpr int64_t max_time{std::numeric_limits<uint32_t>::max()};
-    if (timestamp < 0 || timestamp > max_time) {
-        return -1;
-    }
-    SetMockTime(std::chrono::seconds{timestamp});
-    return 0;
-}
-
 int btck_script_trace_register_callback(btck_ScriptTraceCallback callback, void* user_data, btck_DestroyCallback user_data_destroy_callback)
 {
 #ifndef ENABLE_SCRIPT_TRACE
@@ -1672,6 +1647,11 @@ uint8_t btck_script_trace_frame_get_opcode(const btck_ScriptTraceFrame* frame)
 int btck_script_trace_frame_get_op_count(const btck_ScriptTraceFrame* frame)
 {
     return btck_ScriptTraceFrame::get(frame).op_count;
+}
+
+uint64_t btck_script_trace_frame_get_varops(const btck_ScriptTraceFrame* frame)
+{
+    return btck_ScriptTraceFrame::get(frame).varops;
 }
 
 btck_SigVersion btck_script_trace_frame_get_sig_version(const btck_ScriptTraceFrame* frame)

@@ -20,7 +20,6 @@ add_executable(fuzz
   block_header.cpp
   block_index.cpp
   block_index_tree.cpp
-  block_policy_estimator.cpp
   blockfilter.cpp
   bloom_filter.cpp
   buffered_file.cpp
@@ -30,7 +29,6 @@ add_executable(fuzz
   cmpctblock.cpp
   coins_view.cpp
   coinscache_sim.cpp
-  connect_block.cpp
   connman.cpp
   crypto.cpp
   crypto_aes256.cpp
@@ -91,6 +89,7 @@ add_executable(fuzz
   parse_script.cpp
   parse_univalue.cpp
   partially_downloaded_block.cpp
+  policy_estimator.cpp
   policy_estimator_io.cpp
   poolresource.cpp
   pow.cpp
@@ -126,6 +125,11 @@ add_executable(fuzz
   strprintf.cpp
   system.cpp
   threadpool.cpp
+  tapscript_v2_budget_accounting.cpp
+  tapscript_v2_eval_invariants.cpp
+  tapscript_v2_signature_timelock.cpp
+  tapscript_v2_stack_programs.cpp
+  tapscript_v2_stack_resource_limits.cpp
   timeoffsets.cpp
   torcontrol.cpp
   transaction.cpp
@@ -137,6 +141,7 @@ add_executable(fuzz
   txorphan.cpp
   txrequest.cpp
   utxo_snapshot.cpp
+  val64_ops.cpp
   utxo_total_supply.cpp
   validation_load_mempool.cpp
   vecdeque.cpp
@@ -161,6 +166,7 @@ target_link_libraries(fuzz
   univalue
   secp256k1
   Boost::headers
+  $<TARGET_NAME_IF_EXISTS:Boost::multiprecision>
 )
 
 if(ENABLE_WALLET)

@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <compare>
 #include <cstdint>
 #include <cstring>
 #include <optional>
@@ -59,13 +58,14 @@ public:
         std::fill(m_data.begin(), m_data.end(), 0);
     }
 
-    constexpr bool operator==(const base_blob&) const = default;
-
     /** Lexicographic ordering
      * @note Does NOT match the ordering on the corresponding \ref
      *       base_uint::CompareTo, which starts comparing from the end.
      */
-    constexpr std::strong_ordering operator<=>(const base_blob& other) const = default;
+    constexpr int Compare(const base_blob& other) const { return std::memcmp(m_data.data(), other.m_data.data(), WIDTH); }
+
+    friend constexpr bool operator==(const base_blob& a, const base_blob& b) { return a.Compare(b) == 0; }
+    friend constexpr bool operator<(const base_blob& a, const base_blob& b) { return a.Compare(b) < 0; }
 
     /** @name Hex representation
      *

@@ -4,7 +4,6 @@
 
 #include <clientversion.h>
 #include <common/signmessage.h>
-#include <compat/compat.h>
 #include <hash.h>
 #include <key.h>
 #include <script/parsing.h>

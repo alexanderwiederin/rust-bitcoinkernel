@@ -5,8 +5,10 @@
 #ifndef BITCOIN_SCRIPT_TRACE_H
 #define BITCOIN_SCRIPT_TRACE_H
 
+#include <cstdint>
 #include <script/script.h>
 #include <script/script_error.h>
+#include <script/valtype_stack.h>
 
 #include <functional>
 #include <span>
@@ -26,7 +28,13 @@ struct ScriptTraceFrame {
     uint32_t opcode_pos;
     bool exec;
     uint8_t opcode;
+    //! Counter towards the ops limit. Always 0 for SigVersion::TAPSCRIPT_V2,
+    //! which has no op count limit; see BIP 441.
     int op_count;
+    //! Cumulative varops charged by this evaluation, not including the current
+    //! opcode. Always 0 for sigversions that are not varops-metered. On an End
+    //! frame with SCRIPT_ERR_VAROP_COUNT this includes the cost that was refused.
+    uint64_t varops;
     uint8_t sig_version;
     const unsigned char* tapleaf_hash;
     uint32_t codeseparator_pos;
@@ -43,34 +51,36 @@ ScriptTraceCallback ScriptTraceGetCallback();
 
 struct ScriptTraceScope {
     const ScriptTraceCallback m_callback;
-    std::vector<std::vector<unsigned char>>& m_stack;
+    const std::vector<valtype>& m_stack;
     const CScript& m_script;
     uint32_t& m_opcode_pos;
-    std::vector<std::vector<unsigned char>>& m_altstack;
-    int& m_op_count;
+    const std::vector<valtype>& m_altstack;
+    //! nullptr for sigversions that do not maintain an op count.
+    const int* m_op_count;
+    //! nullptr for sigversions that are not varops-metered.
+    const uint64_t* m_varops;
     uint8_t m_sig_version;
     const unsigned char* m_tapleaf_hash;
     uint32_t& m_codeseparator_pos;
     const ScriptError* m_error;
 
-    ScriptTraceScope(std::vector<std::vector<unsigned char>>& stack, const CScript& script, uint32_t& opcode_pos,
-                          std::vector<std::vector<unsigned char>>& altstack,
-                          int& nOpCount, uint8_t sigversion, const unsigned char* tapleaf_hash,
+    //! EvalScript(): BASE, WITNESS_V0 and TAPSCRIPT operate on plain vectors
+    //! and maintain an op count.
+    ScriptTraceScope(const std::vector<valtype>& stack, const CScript& script, uint32_t& opcode_pos,
+                          const std::vector<valtype>& altstack,
+                          const int& nOpCount, uint8_t sigversion, const unsigned char* tapleaf_hash,
                           uint32_t& codeseparator_pos, const ScriptError* error) :
-        m_callback{ScriptTraceGetCallback()},
-        m_stack{stack},
-        m_script{script},
-        m_opcode_pos{opcode_pos},
-        m_altstack{altstack},
-        m_op_count{nOpCount},
-        m_sig_version{sigversion},
-        m_tapleaf_hash{tapleaf_hash},
-        m_codeseparator_pos{codeseparator_pos},
-        m_error{error}
-    {
-        assert(!m_callback || error);
-        Emit(ScriptTraceFrameKind::Begin, /*exec=*/true, /*opcode=*/0, SCRIPT_ERR_OK);
-    }
+        ScriptTraceScope{stack, script, opcode_pos, altstack, &nOpCount, /*varops=*/nullptr,
+                        sigversion, tapleaf_hash, codeseparator_pos, error} {}
+
+    //! EvalTapscriptV2(): TAPSCRIPT_V2 operates on size-accounting stacks and
+    //! meters a varops budget instead of counting ops.
+    ScriptTraceScope(const ValtypeStack& stack, const CScript& script, uint32_t& opcode_pos,
+            const ValtypeStack& altstack, const uint64_t& varops_spent, uint8_t sigversion,
+            const unsigned char* tapleaf_hash, uint32_t& codeseparator_pos, const ScriptError* error) :
+        ScriptTraceScope{stack.GetStack(), script, opcode_pos, altstack.GetStack(),
+            /*nOpCount=*/nullptr, &varops_spent, sigversion, tapleaf_hash,
+            codeseparator_pos, error} {}
 
     void Step(bool exec, uint8_t opcode)
     {
@@ -83,6 +93,27 @@ struct ScriptTraceScope {
     }
 
 private:
+    ScriptTraceScope(const std::vector<valtype>& stack, const CScript& script, uint32_t& opcode_pos,
+            const std::vector<valtype>& altstack,
+            const int* nOpCount, const uint64_t* varops, uint8_t sigversion,
+            const unsigned char* tapleaf_hash,
+            uint32_t& codeseparator_pos, const ScriptError* error) :
+        m_callback{ScriptTraceGetCallback()},
+        m_stack{stack},
+        m_script{script},
+        m_opcode_pos{opcode_pos},
+        m_altstack{altstack},
+        m_op_count{nOpCount},
+        m_varops{varops},
+        m_sig_version{sigversion},
+        m_tapleaf_hash{tapleaf_hash},
+        m_codeseparator_pos{codeseparator_pos},
+        m_error{error}
+    {
+        assert(!m_callback || error);
+        Emit(ScriptTraceFrameKind::Begin, /*exec=*/true, /*opcode=*/0, SCRIPT_ERR_OK);
+    }
+
     void Emit(ScriptTraceFrameKind kind, bool exec, uint8_t opcode, ScriptError error) const
     {
         if (!m_callback) return;
@@ -94,7 +125,8 @@ private:
             .opcode_pos = m_opcode_pos,
             .exec = exec,
             .opcode = opcode,
-            .op_count = m_op_count,
+            .op_count = m_op_count ? *m_op_count : 0,
+            .varops = m_varops ? *m_varops : 0,
             .sig_version = m_sig_version,
             .tapleaf_hash = m_tapleaf_hash,
             .codeseparator_pos = m_codeseparator_pos,
@@ -107,11 +139,15 @@ private:
 #define SCRIPT_TRACE_SCOPE(stack, script, opcode_pos, altstack, nOpCount, sigversion, tapleaf_hash, codeseparator_pos, error) \
     ScriptTraceScope script_trace_scope { stack, script, opcode_pos, altstack, nOpCount, static_cast<uint8_t>(sigversion), tapleaf_hash, codeseparator_pos, error }
 
+#define SCRIPT_TRACE_SCOPE_V2(stack, script, opcode_pos, altstack, varops_spent, sigversion, tapleaf_hash, codeseparator_pos, error) \
+    ScriptTraceScope script_trace_scope { stack, script, opcode_pos, altstack, varops_spent, static_cast<uint8_t>(sigversion), tapleaf_hash, codeseparator_pos, error }
+
 #define SCRIPT_TRACE_STEP(fExec, opcode) \
     script_trace_scope.Step(fExec, static_cast<uint8_t>(opcode))
 
 #else
 #define SCRIPT_TRACE_SCOPE(stack, script, opcode_pos, altstack, nOpCount, sigversion, tapleaf_hash, codeseparator_pos, error) static_assert(true)
+#define SCRIPT_TRACE_SCOPE_V2(stack, script, opcode_pos, altstack, varops_spent, sigversion, tapleaf_hash, codeseparator_pos, error) static_assert(true)
 #define SCRIPT_TRACE_STEP(fExec, opcode) static_assert(true)
 #endif // ENABLE_SCRIPT_TRACE
 

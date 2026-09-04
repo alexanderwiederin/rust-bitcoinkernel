@@ -43,6 +43,7 @@
 #include <validationinterface.h>
 
 #include <cstdint>
+#include <numeric>
 
 #include <univalue.h>
 
@@ -151,7 +152,8 @@ PartiallySignedTransaction ProcessPSBT(const std::string& psbt_string, const std
 
         // Look in the txindex
         if (g_txindex) {
-            if (auto result{g_txindex->FindTx(psbt_input.prev_txid)}) tx = result->tx;
+            uint256 block_hash;
+            g_txindex->FindTx(psbt_input.prev_txid, block_hash, tx);
         }
         // If we still don't have it look in the mempool
         if (!tx) {
@@ -194,8 +196,7 @@ PartiallySignedTransaction ProcessPSBT(const std::string& psbt_string, const std
         // We only actually care about those if our signing provider doesn't hide private
         // information, as is the case with `descriptorprocesspsbt`
         // Only error for mismatching sighash types as it is critical that the sighash to sign with matches the PSBT's
-        const auto sign_result = SignPSBTInput(provider, psbtx, /*index=*/i, &txdata, {.sighash_type = sighash_type, .finalize = finalize}, /*out_sigdata=*/nullptr);
-        if (!sign_result.has_value() && sign_result.error() == common::PSBTError::SIGHASH_MISMATCH) {
+        if (SignPSBTInput(provider, psbtx, /*index=*/i, &txdata, {.sighash_type = sighash_type, .finalize = finalize}, /*out_sigdata=*/nullptr) == common::PSBTError::SIGHASH_MISMATCH) {
             throw JSONRPCPSBTError(common::PSBTError::SIGHASH_MISMATCH);
         }
     }
@@ -518,7 +519,7 @@ static RPCMethod decodescript()
         for (CScript::const_iterator it{script.begin()}; it != script.end();) {
             opcodetype op;
             CHECK_NONFATAL(script.GetOp(it, op));
-            if (op == OP_CHECKSIGADD || IsOpSuccess(op)) {
+            if (op == OP_CHECKSIGADD || IsOpSuccess(op, SigVersion::TAPSCRIPT)) {
                 return false;
             }
         }
@@ -1927,17 +1928,37 @@ static RPCMethod joinpsbts()
         for (const PSBTOutput& output : psbt.outputs) {
             merged_psbt.AddOutput(output);
         }
-        merged_psbt.MergeGlobalXPubs(psbt);
-        merged_psbt.m_proprietary.insert(psbt.m_proprietary.begin(), psbt.m_proprietary.end());
+        for (auto& xpub_pair : psbt.m_xpubs) {
+            if (!merged_psbt.m_xpubs.contains(xpub_pair.first)) {
+                merged_psbt.m_xpubs[xpub_pair.first] = xpub_pair.second;
+            } else {
+                merged_psbt.m_xpubs[xpub_pair.first].insert(xpub_pair.second.begin(), xpub_pair.second.end());
+            }
+        }
         merged_psbt.unknown.insert(psbt.unknown.begin(), psbt.unknown.end());
     }
 
-    // Shuffle the inputs and outputs for privacy
-    std::shuffle(merged_psbt.inputs.begin(), merged_psbt.inputs.end(), FastRandomContext());
-    std::shuffle(merged_psbt.outputs.begin(), merged_psbt.outputs.end(), FastRandomContext());
+    // Generate list of shuffled indices for shuffling inputs and outputs of the merged PSBT
+    std::vector<int> input_indices(merged_psbt.inputs.size());
+    std::iota(input_indices.begin(), input_indices.end(), 0);
+    std::vector<int> output_indices(merged_psbt.outputs.size());
+    std::iota(output_indices.begin(), output_indices.end(), 0);
+
+    // Shuffle input and output indices lists
+    std::shuffle(input_indices.begin(), input_indices.end(), FastRandomContext());
+    std::shuffle(output_indices.begin(), output_indices.end(), FastRandomContext());
+
+    PartiallySignedTransaction shuffled_psbt(tx, merged_psbt.GetVersion());
+    for (int i : input_indices) {
+        shuffled_psbt.AddInput(merged_psbt.inputs[i]);
+    }
+    for (int i : output_indices) {
+        shuffled_psbt.AddOutput(merged_psbt.outputs[i]);
+    }
+    shuffled_psbt.unknown.insert(merged_psbt.unknown.begin(), merged_psbt.unknown.end());
 
     DataStream ssTx{};
-    ssTx << merged_psbt;
+    ssTx << shuffled_psbt;
     return EncodeBase64(ssTx);
 },
     };
@@ -2120,6 +2141,12 @@ RPCMethod descriptorprocesspsbt()
         complete = complete && PSBTInputSignedAndVerified(psbtx, i, &txdata);
     }
 
+    CMutableTransaction mtx;
+    if (complete) {
+        PartiallySignedTransaction psbtx_copy = psbtx;
+        complete = FinalizeAndExtractPSBT(psbtx_copy, mtx);
+    }
+
     DataStream ssTx{};
     ssTx << psbtx;
 
@@ -2128,9 +2155,6 @@ RPCMethod descriptorprocesspsbt()
     result.pushKV("psbt", EncodeBase64(ssTx));
     result.pushKV("complete", complete);
     if (complete) {
-        CMutableTransaction mtx;
-        PartiallySignedTransaction psbtx_copy = psbtx;
-        CHECK_NONFATAL(FinalizeAndExtractPSBT(psbtx_copy, mtx));
         DataStream ssTx_final;
         ssTx_final << TX_WITH_WITNESS(mtx);
         result.pushKV("hex", HexStr(ssTx_final));

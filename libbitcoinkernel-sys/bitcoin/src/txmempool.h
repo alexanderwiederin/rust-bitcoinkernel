@@ -47,15 +47,15 @@ class ValidationSignals;
 struct bilingual_str;
 
 /** Fake height value used in Coin to signify they are only in the memory pool (since 0.8) */
-inline constexpr uint32_t MEMPOOL_HEIGHT = 0x7FFFFFFF;
+static const uint32_t MEMPOOL_HEIGHT = 0x7FFFFFFF;
 
 /** How much linearization cost required for TxGraph clusters to have
  * "acceptable" quality, if they cannot be optimally linearized with less cost. */
-inline constexpr uint64_t ACCEPTABLE_COST = 75'000;
+static constexpr uint64_t ACCEPTABLE_COST = 75'000;
 
 /** How much work we ask TxGraph to do after a mempool change occurs (either
  * due to a changeset being applied, a new block being found, or a reorg). */
-inline constexpr uint64_t POST_CHANGE_COST = 5 * ACCEPTABLE_COST;
+static constexpr uint64_t POST_CHANGE_COST = 5 * ACCEPTABLE_COST;
 
 /**
  * Test whether the LockPoints height and time are still valid on the current chain
@@ -329,7 +329,7 @@ public:
      *                                        and updates an entry's LockPoints.
      * */
     void removeForReorg(CChain& chain, std::function<bool(txiter)> filter_final_and_mature) EXCLUSIVE_LOCKS_REQUIRED(cs, cs_main);
-    std::vector<RemovedMempoolTransactionInfo> removeForBlock(const std::vector<CTransactionRef>& vtx) EXCLUSIVE_LOCKS_REQUIRED(cs);
+    void removeForBlock(const std::vector<CTransactionRef>& vtx, unsigned int nBlockHeight) EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** Look up wtxids in the mempool and (partially) sort by mining score.
      *

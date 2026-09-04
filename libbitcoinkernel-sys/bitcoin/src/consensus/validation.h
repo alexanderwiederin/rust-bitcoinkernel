@@ -6,24 +6,16 @@
 #ifndef BITCOIN_CONSENSUS_VALIDATION_H
 #define BITCOIN_CONSENSUS_VALIDATION_H
 
-#include <consensus/consensus.h>
-#include <primitives/block.h>
-#include <primitives/transaction.h>
-#include <script/script.h>
-#include <serialize.h>
-
-#include <cstddef>
-#include <cstdint>
-#include <memory>
 #include <string>
-#include <vector>
-
+#include <consensus/consensus.h>
+#include <primitives/transaction.h>
+#include <primitives/block.h>
 
 /** Index marker for when no witness commitment is present in a coinbase transaction. */
-inline constexpr int NO_WITNESS_COMMITMENT{-1};
+static constexpr int NO_WITNESS_COMMITMENT{-1};
 
 /** Minimum size of a witness commitment structure. Defined in BIP 141. **/
-inline constexpr size_t MINIMUM_WITNESS_COMMITMENT{38};
+static constexpr size_t MINIMUM_WITNESS_COMMITMENT{38};
 
 /** A "reason" why a transaction was invalid, suitable for determining whether the
   * provider of the transaction should be banned/ignored/disconnected/etc.
