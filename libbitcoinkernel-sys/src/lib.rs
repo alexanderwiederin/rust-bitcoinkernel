@@ -1031,6 +1031,8 @@ extern "C" {
 
     pub fn btck_script_trace_frame_get_op_count(frame: *const btck_ScriptTraceFrame) -> c_int;
 
+    pub fn btck_script_trace_frame_get_varops(frame: *const btck_ScriptTraceFrame) -> u64;
+
     pub fn btck_script_trace_frame_get_sig_version(
         frame: *const btck_ScriptTraceFrame,
     ) -> btck_SigVersion;
