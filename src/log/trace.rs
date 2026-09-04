@@ -18,8 +18,8 @@ use libbitcoinkernel_sys::{
     btck_script_trace_frame_get_opcode, btck_script_trace_frame_get_opcode_pos,
     btck_script_trace_frame_get_script, btck_script_trace_frame_get_script_error,
     btck_script_trace_frame_get_sig_version, btck_script_trace_frame_get_stack,
-    btck_script_trace_frame_get_tapleaf_hash, btck_script_trace_register_callback,
-    btck_script_trace_unregister_callback,
+    btck_script_trace_frame_get_tapleaf_hash, btck_script_trace_frame_get_varops,
+    btck_script_trace_register_callback, btck_script_trace_unregister_callback,
 };
 
 use crate::{
@@ -257,6 +257,13 @@ impl<'a> ScriptTraceFrameRef<'a> {
         unsafe { btck_script_trace_frame_get_op_count(self.as_ptr()) }
     }
 
+    /// Cumulative varops charged by this evaluation, excluding the current opcode.
+    /// Always 0 for sigversions that aren't varops-metered; on an `End` frame with
+    /// `SCRIPT_ERR_VAROP_COUNT` it includes the cost that was refused.
+    pub fn varops(&self) -> u64 {
+        unsafe { btck_script_trace_frame_get_varops(self.as_ptr()) }
+    }
+
     /// The signature hashing scheme of the script being evaluated.
     pub fn sig_version(&self) -> SigVersion {
         unsafe { btck_script_trace_frame_get_sig_version(self.as_ptr()) }.into()
@@ -294,6 +301,7 @@ impl<'a> ScriptTraceFrameRef<'a> {
             exec: self.exec(),
             opcode: self.opcode(),
             op_count: self.op_count(),
+            varops: self.varops(),
             sig_version: self.sig_version(),
             tapleaf_hash: self.tapleaf_hash(),
             codeseparator_pos: self.codeseparator_pos(),
@@ -335,6 +343,7 @@ pub struct ScriptTraceFrame {
     pub exec: bool,
     pub opcode: u8,
     pub op_count: i32,
+    pub varops: u64,
     pub sig_version: SigVersion,
     pub tapleaf_hash: Option<[u8; 32]>,
     pub codeseparator_pos: u32,
