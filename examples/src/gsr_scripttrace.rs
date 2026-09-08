@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use bitcoin::{
     absolute::LockTime,
     consensus::serialize,
@@ -8,9 +10,9 @@ use bitcoin::{
 };
 use bitcoinkernel::{
     core::{TransactionExt, TxOutExt},
-    verify, KernelError, PrecomputedTransactionData, ScriptEvalStackRef, ScriptTraceFrameKind,
-    ScriptTraceFrameRef, ScriptTracer, ScriptVerificationFlags, Transaction, VERIFY_ALL,
-    VERIFY_P2SH, VERIFY_TAPROOT, VERIFY_WITNESS,
+    verify, KernelError, PrecomputedTransactionData, ScriptEvalStackRef, ScriptTraceCallback,
+    ScriptTraceFrameKind, ScriptTraceFrameRef, ScriptTracer, ScriptVerificationFlags, Transaction,
+    VERIFY_ALL, VERIFY_P2SH, VERIFY_TAPROOT, VERIFY_WITNESS,
 };
 use secp256k1::Secp256k1;
 
@@ -26,13 +28,133 @@ const AMOUNT: Amount = Amount::from_sat(50_000);
 const VERIFY_NO_RESTORATION: ScriptVerificationFlags =
     VERIFY_P2SH | VERIFY_WITNESS | VERIFY_TAPROOT;
 
+/// Per-evaluation accumulator for the varops delta.
+///
+/// varops() is cumulative, so a per-opcode charge mean remembering the
+/// previous total. Thread-local because frames carry no evaluation id: one
+/// evaluation's frames are sequential on one thread, while the tracer is a
+/// signle global registration the kernel may invoke from several.
+#[derive(Clone, Copy)]
+struct EvalState {
+    prev_varops: u64,
+    seen_frame: bool,
+}
+
+impl EvalState {
+    const NEW: Self = Self {
+        prev_varops: 0,
+        seen_frame: false,
+    };
+}
+
+thread_local! {
+    static EVAL: Cell<EvalState> = const { Cell::new(EvalState::NEW) };
+}
+
+/// Prints each frame with its running varops total and the charge attributable
+/// to the preceding opcode.
+struct VaropsTracer;
+
+impl VaropsTracer {
+    /// Each evaluation meters from scratch, so seed from the frame rather than
+    /// assuming zero.
+    fn reset(&self, varops: u64) {
+        EVAL.with(|eval| {
+            eval.set(EvalState {
+                prev_varops: varops,
+                seen_frame: false,
+            })
+        });
+    }
+
+    /// The varops charged since the previous frame of this evaluation, or
+    /// `None` on the first frame after `Begin`, where no previous opcode exists
+    /// to attribute a charge to.
+    fn delta(&self, varops: u64) -> Option<u64> {
+        EVAL.with(|eval| {
+            let state = eval.get();
+            eval.set(EvalState {
+                prev_varops: varops,
+                seen_frame: true,
+            });
+            state
+                .seen_frame
+                .then(|| varops.saturating_sub(state.prev_varops))
+        })
+    }
+}
+
+impl ScriptTraceCallback for VaropsTracer {
+    fn on_script_trace<'a>(&self, frame: ScriptTraceFrameRef<'a>) {
+        let varops = frame.varops();
+
+        match frame.kind() {
+            ScriptTraceFrameKind::Begin => {
+                self.reset(varops);
+                // `script()` copies the whole script out of the kernel, so it is
+                // read here and not once per step.
+                let script_len = frame.script().map(|script| script.len()).unwrap_or(0);
+                println!(
+                    "== begin: {} byte script, sig_version {:?}, tapleaf {}, varops {} ==",
+                    script_len,
+                    frame.sig_version(),
+                    frame
+                        .tapleaf_hash()
+                        .map(hex::encode)
+                        .unwrap_or_else(|| "<none>".into()),
+                    varops
+                );
+                dump_stacks(frame);
+            }
+            ScriptTraceFrameKind::Step => {
+                let delta = self.delta(varops);
+                println!(
+                    "[step {}] opcode=0x{:02x} exec={} {}",
+                    frame.opcode_pos(),
+                    frame.opcode(),
+                    frame.exec(),
+                    format_varops(varops, delta)
+                );
+                dump_stacks(frame);
+            }
+            ScriptTraceFrameKind::End => {
+                let delta = self.delta(varops);
+                println!(
+                    "== end: script_error={} {} ==",
+                    frame.script_error(),
+                    format_varops(varops, delta)
+                );
+                dump_stacks(frame);
+            }
+        }
+    }
+}
+
+fn format_varops(varops: u64, delta: Option<u64>) -> String {
+    match delta {
+        Some(delta) => format!("varops={varops} (+{delta} charged by the previous opcode)"),
+        None => format!("varops={varops} (nothing charged yet)"),
+    }
+}
+
 fn main() {
-    let _tracer = ScriptTracer::new(print_frame).expect("failed to register the script tracer");
+    let _tracer = ScriptTracer::new(VaropsTracer).expect("failed to register the script tracer");
+
     let script = ScriptBuf::builder()
         .push_opcode(opcodes::OP_CAT)
         .into_script();
     let stack = vec![vec![0x01u8], vec![0x02u8]];
 
+    // Every case below opens with two `Base` evaluations before the tapscript
+    // one: the empty scriptSig, then the 34-byte scriptPubKey holding the
+    // witness program. That is the ordinary P2TR spend path, not an artifact of
+    // this harness. Neither is varops-metered, so both report 0 throughout.
+    //
+    // Note also that the kernel's single-input `verify()` has no
+    // transaction-wide budget to draw on, so the evluation runs against
+    // `varops::Budget::Unmetered()`: costs are accumulated and reported
+    // faithfully, but nothing is ever refused. SCRIPT_ERR_VAROP_COUNT is
+    // uncreachable here regardless of operand size.
     println!("### tapscript v2, restoration enabled ###");
     {
         let result = run(&script, &stack, VERIFY_ALL);
@@ -40,16 +162,19 @@ fn main() {
     }
 
     // Same spend without the restoration flag: the 0xc2 leaf is an unknown
-    // leaf version, so it succeeds without executing anything. Expect no
-    // frames at all.
-    println!("### same spend, restoration disabled (expect no frames) ###");
+    // leaf version, so it succeeds without executing anything. The two Base frames
+    // still appear; what is missing is the TapscriptV2 evaluation, and with it
+    // any varops reading at all. A missing reading is not the same as a zero one.
+    println!("### same spend, restoration disabled (expect no tapscript frames) ###");
     {
         let result = run(&script, &stack, VERIFY_NO_RESTORATION);
         println!("verify -> {result:?}\n");
     }
 
     // --- case 2: a script that fails ---------------------------------------
-    // OP_CAT with only one item on the stack: INVALID_STACK_OPERATION.
+    // OP_CAT with only one item on the stack: INVALID_STACK_OPERATION. Nothing
+    // is charged, because the interpreter returns on the stack-depth check
+    // before reaching the cost calculation.
     println!("### tapscript v2, failing script ###");
     {
         let result = run(&script, &[vec![0x01u8]], VERIFY_ALL);
@@ -57,8 +182,13 @@ fn main() {
     }
 
     // --- case 3: leaves the stack empty -----------------------------------
-    // NOTE: this fails CLEANSTACK, but that check runs *after* the trace
-    // scope is destroyed, so the END frame will report script_error=0.
+    // NOTE: this fails CLEANSTACK, but that check runs *after* the trace scope
+    // is destroyed, so the END frame will report script_error=0. Two things to watch
+    // in the frames below. The step 1 frame reports the total carried over from
+    // OP_CAT, which reads as though OP_DROP cost 6 -- the delta on the END frame
+    // is OP_DROP's real cost of 0. And the END total omits the CompareZeroCost
+    // charged by the result check, which is spent against the budget after the
+    // trace scope closes and so is invisible to every frame.
     let drop_script = ScriptBuf::builder()
         .push_opcode(opcodes::OP_CAT)
         .push_opcode(opcodes::OP_DROP)
@@ -67,37 +197,6 @@ fn main() {
     {
         let result = run(&drop_script, &stack, VERIFY_ALL);
         println!("verify -> {result:?}\n");
-    }
-}
-
-fn print_frame(frame: ScriptTraceFrameRef<'_>) {
-    match frame.kind() {
-        ScriptTraceFrameKind::Begin => {
-            let script_len = frame.script().map(|script| script.len()).unwrap_or(0);
-            println!(
-                "== begin: {} byte script, sig_version {:?}, tapleaf {} ==",
-                script_len,
-                frame.sig_version(),
-                frame
-                    .tapleaf_hash()
-                    .map(hex::encode)
-                    .unwrap_or_else(|| "<none>".into())
-            );
-            dump_stacks(frame);
-        }
-        ScriptTraceFrameKind::Step => {
-            println!(
-                "[step {}] opcode=0x{:02x} exec={}",
-                frame.opcode_pos(),
-                frame.opcode(),
-                frame.exec()
-            );
-            dump_stacks(frame);
-        }
-        ScriptTraceFrameKind::End => {
-            println!("== end: script_error={} ==", frame.script_error());
-            dump_stacks(frame);
-        }
     }
 }
 
