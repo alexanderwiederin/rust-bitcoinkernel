@@ -1,0 +1,186 @@
+name: Cross
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: '0 0 * * 1' # weekly on Monday at midnight UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Cross-compile the kernel and the Rust bindings for a foreign Linux triple
+  # with a GNU cross toolchain, then run the test suite under qemu-user.
+  #
+  # To add a triple: install `gcc-<prefix>` / `g++-<prefix>` from the Ubuntu
+  # archive, and add a matrix entry. `sysroot` is always /usr/<prefix>.
+  #
+  # The cross setup below - host Boost headers, the cmake toolchain file, and
+  # the qemu-user runners - is adapted from bdk-floresta's cross workflow:
+  # https://github.com/luisschwab/bdk-floresta/pull/183
+  linux:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: riscv64gc-unknown-linux-gnu
+            prefix: riscv64-linux-gnu
+            processor: riscv64
+            emulator: qemu-riscv64-static
+
+          - target: powerpc64le-unknown-linux-gnu
+            prefix: powerpc64le-linux-gnu
+            processor: ppc64le
+            emulator: qemu-ppc64le-static
+
+          # Big-endian. These exercise byte-order assumptions across the FFI
+          # boundary that no little-endian target can catch.
+          - target: s390x-unknown-linux-gnu
+            prefix: s390x-linux-gnu
+            processor: s390x
+            emulator: qemu-s390x-static
+
+          - target: powerpc64-unknown-linux-gnu
+            prefix: powerpc64-linux-gnu
+            processor: ppc64
+            emulator: qemu-ppc64-static
+
+          - target: sparc64-unknown-linux-gnu
+            prefix: sparc64-linux-gnu
+            processor: sparc64
+            emulator: qemu-sparc64-static
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          # rust-cache's automatic key uses the job id, which is the same for
+          # every matrix entry, so the triple has to be added explicitly or
+          # all five jobs write to one cache.
+          key: ${{ matrix.target }}
+
+      - name: Install cross toolchain, QEMU and Boost
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libboost-all-dev \
+            qemu-user-static \
+            "gcc-${{ matrix.prefix }}" \
+            "g++-${{ matrix.prefix }}"
+
+      - name: Configure cross build
+        run: |
+          set -euo pipefail
+
+          sysroot="/usr/${{ matrix.prefix }}"
+
+          # Bitcoin Core only uses Boost headers, which are architecture
+          # independent, so point cmake at the host's BoostConfig.cmake
+          # rather than installing Boost into the cross sysroot.
+          boost_configs=(/usr/lib/"$(gcc -print-multiarch)"/cmake/Boost-*/BoostConfig.cmake)
+          if [ ! -f "${boost_configs[0]}" ]; then
+            echo "no BoostConfig.cmake found; is libboost-dev installed?" >&2
+            exit 1
+          fi
+          boost_dir=$(dirname "${boost_configs[0]}")
+
+          # build.rs invokes cmake directly and has no cross-compilation
+          # knobs outside of Android, so hand it a toolchain file through the
+          # CMAKE_TOOLCHAIN_FILE environment variable, which cmake honours on
+          # its own.
+          #
+          # CMAKE_TRY_COMPILE_TARGET_TYPE builds cmake's probes as archives
+          # instead of executables. Core has no probes that need to *run*, so
+          # this is not strictly required here, but it is the usual cross
+          # idiom.
+          toolchain="$RUNNER_TEMP/${{ matrix.target }}.cmake"
+          cat > "$toolchain" <<EOF
+          set(CMAKE_SYSTEM_NAME Linux)
+          set(CMAKE_SYSTEM_PROCESSOR ${{ matrix.processor }})
+          set(CMAKE_C_COMPILER ${{ matrix.prefix }}-gcc)
+          set(CMAKE_CXX_COMPILER ${{ matrix.prefix }}-g++)
+          set(CMAKE_AR ${{ matrix.prefix }}-ar)
+          set(CMAKE_RANLIB ${{ matrix.prefix }}-ranlib)
+          set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+          set(CMAKE_FIND_ROOT_PATH $sysroot)
+          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+          set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+          set(Boost_DIR "$boost_dir")
+          EOF
+
+          # cc-rs wants the lowercased triple, cargo the uppercased one. Both
+          # are scoped to the target so host build scripts stay native.
+          #
+          # CMAKE_TOOLCHAIN_FILE is not scoped: it applies to every later step
+          # in this job, so a host-side cmake build added below would silently
+          # be cross-configured.
+          cc_suffix=$(echo '${{ matrix.target }}' | tr '-' '_')
+          cargo_suffix=$(echo '${{ matrix.target }}' | tr 'a-z-' 'A-Z_')
+
+          {
+            echo "CMAKE_TOOLCHAIN_FILE=$toolchain"
+            echo "AR_${cc_suffix}=${{ matrix.prefix }}-ar"
+            echo "CC_${cc_suffix}=${{ matrix.prefix }}-gcc"
+            echo "CXX_${cc_suffix}=${{ matrix.prefix }}-g++"
+            echo "RANLIB_${cc_suffix}=${{ matrix.prefix }}-ranlib"
+            echo "CARGO_TARGET_${cargo_suffix}_LINKER=${{ matrix.prefix }}-gcc"
+            echo "CARGO_TARGET_${cargo_suffix}_RUNNER=${{ matrix.emulator }} -L $sysroot"
+          } >> "$GITHUB_ENV"
+
+      - name: Build
+        run: cargo build -p bitcoinkernel --target ${{ matrix.target }}
+
+      # #220: local-exec TLS relocations are illegal in a shared object, so a
+      # kernel built without PIC breaks any consumer that links it into one.
+      #
+      # --whole-archive forces in every member, not just those a caller
+      # reaches: this crate exports no C symbols, so an ordinary cdylib link
+      # pulls in almost nothing and passes either way. Undefined symbols are
+      # fine in a .so, so nothing needs to resolve here.
+      - name: Check kernel links into a shared object
+        run: |
+          set -euo pipefail
+          archive=$(find "target/${{ matrix.target }}" -name libbitcoinkernel.a | head -n1)
+          test -f "$archive"
+          ${{ matrix.prefix }}-gcc -shared -o "$RUNNER_TEMP/pic-probe.so" \
+            -Wl,--whole-archive "$archive" -Wl,--no-whole-archive
+
+      - name: Run tests under QEMU
+        run: cargo test -p bitcoinkernel --target ${{ matrix.target }}
+
+  android:
+    name: Android (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - libbitcoinkernel-android-aarch64
+          - libbitcoinkernel-android-armv7
+          # Build-only: Rust 1.71 compiler_builtins lacks f128 routines
+          # required by bionic on x86_64. Tests are skipped until the
+          # MSRV is bumped or a workaround is found. See #198
+          - libbitcoinkernel-android-x86_64
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Build ${{ matrix.package != 'libbitcoinkernel-android-x86_64' && ' and Test' || '' }}
+      run: nix build .#${{ matrix.package }} -L
