@@ -1,0 +1,29 @@
+name: Zizmor
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: Audit GitHub Actions
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        persist-credentials: false
+
+    - name: Run zizmor
+      uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+      with:
+        # Bitcoin Core is vendored under libbitcoinkernel-sys/bitcoin and ships
+        # its own workflows. Audit only what this repository maintains.
+        inputs: .github/workflows
+        advanced-security: false
+        annotations: true
