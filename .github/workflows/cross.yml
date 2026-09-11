@@ -57,13 +57,13 @@ jobs:
             emulator: qemu-sparc64-static
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # rust-cache's automatic key uses the job id, which is the same for
           # every matrix entry, so the triple has to be added explicitly or
@@ -175,10 +175,10 @@ jobs:
           # MSRV is bumped or a workaround is found. See #198
           - libbitcoinkernel-android-x86_64
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install Nix
-      uses: cachix/install-nix-action@v31
+      uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
 
     - name: Build ${{ matrix.package != 'libbitcoinkernel-android-x86_64' && ' and Test' || '' }}
       run: nix build .#${{ matrix.package }} -L
