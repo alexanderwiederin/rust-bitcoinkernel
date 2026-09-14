@@ -1,0 +1,23 @@
+version: 2
+
+updates:
+  # Actions are pinned to commit hashes, so Dependabot is what keeps them
+  # current. It rewrites both the hash and the trailing version comment.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      # Do not pick up a release the day it is published, so a compromised
+      # version has a window to be caught and yanked first.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(workflows)"
+      # pr-checks.yml requires a CHANGELOG.md entry unless this label is set.
+    labels:
+      - "no-changelog"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

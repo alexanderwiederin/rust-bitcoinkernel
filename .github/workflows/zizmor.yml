@@ -24,6 +24,6 @@ jobs:
       with:
         # Bitcoin Core is vendored under libbitcoinkernel-sys/bitcoin and ships
         # its own workflows. Audit only what this repository maintains.
-        inputs: .github/workflows
+        inputs: .github/workflows .github/dependabot.yml
         advanced-security: false
         annotations: true
