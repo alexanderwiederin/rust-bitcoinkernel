@@ -381,6 +381,17 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
 bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_flags flags, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, varops::Budget& varops_budget, ScriptError* error = nullptr);
 /** Check Tapscript v2 cleanstack and truthiness after execution. Consumes the final stack element. */
 bool CheckTapscriptV2ScriptResult(ValtypeStack& stack, varops::Budget& varops_budget, ScriptError* error = nullptr);
+/** Execute a Tapscript v2 leaf script against an initial stack.
+ *
+ *  This is the complete consensus entry path for a leaf with version
+ *  TAPROOT_LEAF_TAPSCRIPT_V2: OP_SUCCESSx handling, the initial stack limits,
+ *  evaluation, and the cleanstack/truthiness check. It does not verify the
+ *  taproot commitment, and does not itself check that SCRIPT_VERIFY_SCRIPT_RESTORATION
+ *  is set; callers reaching a v2 leaf from a witness program must do both first.
+ *
+ *  execdata must have m_annex_init set, and m_tapleaf_hash_init set if the
+ *  checker may be asked for a signature check. */
+bool ExecuteTapscriptV2(std::span<const std::vector<unsigned char>> stack_span, const CScript& exec_script, script_verify_flags flags, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, varops::Budget& varops_budget, ScriptError* error = nullptr);
 /** Use only when transaction-wide varops budget context is unavailable. */
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, script_verify_flags flags, const BaseSignatureChecker& checker, ScriptError* serror = nullptr);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, script_verify_flags flags, const BaseSignatureChecker& checker, ScriptError* serror, varops::Budget& varops_budget);

@@ -2853,8 +2853,38 @@ bool CheckTapscriptV2ScriptResult(ValtypeStack& stack, varops::Budget& varops_bu
     return set_success(serror);
 }
 
+bool ExecuteTapscriptV2(std::span<const valtype> stack_span, const CScript& exec_script, script_verify_flags flags, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, varops::Budget& varops_budget, ScriptError* serror)
+{
+    const auto op_success{CheckTapscriptOpSuccess(exec_script, flags, SigVersion::TAPSCRIPT_V2, serror)};
+    if (op_success.has_value()) {
+        return *op_success;
+    }
+
+    if (stack_span.size() > MAX_TAPSCRIPT_V2_STACK_SIZE) return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+
+    size_t total_size{0};
+    size_t max_element_size{0};
+    for (const valtype& element : stack_span) {
+        if (element.size() > MAX_TAPSCRIPT_V2_TOTAL_STACK_SIZE - total_size) {
+            return set_error(serror, SCRIPT_ERR_TOTAL_STACK_SIZE);
+        }
+        total_size += element.size();
+        max_element_size = std::max(max_element_size, element.size());
+    }
+    if (max_element_size > MAX_TAPSCRIPT_V2_STACK_ELEMENT_SIZE) return set_error(serror, SCRIPT_ERR_STACK_ELEMENT_SIZE);
+
+    ValtypeStack valtype_stack{stack_span};
+
+    if (!EvalTapscriptV2(valtype_stack, exec_script, flags, checker, execdata, varops_budget, serror)) return false;
+    return CheckTapscriptV2ScriptResult(valtype_stack, varops_budget, serror);
+}
+
 static bool ExecuteWitnessScript(const std::span<const valtype>& stack_span, const CScript& exec_script, script_verify_flags flags, SigVersion sigversion, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, ScriptError* serror, varops::Budget& varops_budget)
 {
+    if (sigversion == SigVersion::TAPSCRIPT_V2) {
+        return ExecuteTapscriptV2(stack_span, exec_script, flags, checker, execdata, varops_budget, serror);
+    }
+
     if (IsTapscript(sigversion)) {
         const auto result{CheckTapscriptOpSuccess(exec_script, flags, sigversion, serror)};
         if (result.has_value()) {
@@ -2864,26 +2894,6 @@ static bool ExecuteWitnessScript(const std::span<const valtype>& stack_span, con
         if (sigversion == SigVersion::TAPSCRIPT) {
             if (stack_span.size() > MAX_STACK_SIZE) return set_error(serror, SCRIPT_ERR_STACK_SIZE);
         }
-    }
-
-    if (sigversion == SigVersion::TAPSCRIPT_V2) {
-        if (stack_span.size() > MAX_TAPSCRIPT_V2_STACK_SIZE) return set_error(serror, SCRIPT_ERR_STACK_SIZE);
-
-        size_t total_size{0};
-        size_t max_element_size{0};
-        for (const valtype& element : stack_span) {
-            if (element.size() > MAX_TAPSCRIPT_V2_TOTAL_STACK_SIZE - total_size) {
-                return set_error(serror, SCRIPT_ERR_TOTAL_STACK_SIZE);
-            }
-            total_size += element.size();
-            max_element_size = std::max(max_element_size, element.size());
-        }
-        if (max_element_size > MAX_TAPSCRIPT_V2_STACK_ELEMENT_SIZE) return set_error(serror, SCRIPT_ERR_STACK_ELEMENT_SIZE);
-
-        ValtypeStack valtype_stack{stack_span};
-
-        if (!EvalTapscriptV2(valtype_stack, exec_script, flags, checker, execdata, varops_budget, serror)) return false;
-        return CheckTapscriptV2ScriptResult(valtype_stack, varops_budget, serror);
     }
 
     std::vector<valtype> stack{stack_span.begin(), stack_span.end()};

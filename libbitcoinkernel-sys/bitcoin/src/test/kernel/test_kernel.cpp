@@ -464,6 +464,84 @@ BOOST_AUTO_TEST_CASE(btck_script_trace_tests)
 #endif
 }
 
+BOOST_AUTO_TEST_CASE(btck_tapscript_v2_eval_tests)
+{
+    constexpr auto FLAGS{VERIFY_ALL_PRE_TAPROOT | ScriptVerificationFlags::TAPROOT | ScriptVerificationFlags::SCRIPT_RESTORATION};
+
+    const auto eval{[&](std::string_view script_hex,
+                        const ScriptStack& stack,
+                        ScriptVerificationFlags flags,
+                        uint64_t budget,
+                        uint64_t* remaining,
+                        int32_t* script_error,
+                        TapscriptV2EvalStatus& status) {
+        return EvalTapscriptV2(ScriptPubkey{hex_string_to_byte_vec(script_hex)}, stack, flags,
+                               /*spend_context=*/nullptr, budget, remaining, script_error, status);
+    }};
+
+    auto status{TapscriptV2EvalStatus::OK};
+    int32_t script_error{-1};
+    uint64_t remaining{0};
+
+    // OP_1 leaves a single true element on the stack.
+    BOOST_CHECK(eval("51", ScriptStack{}, FLAGS, VAROPS_BUDGET_UNMETERED, &remaining, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::OK);
+    BOOST_CHECK_EQUAL(script_error, 0);
+    BOOST_CHECK_EQUAL(remaining, VAROPS_BUDGET_UNMETERED);
+
+    // OP_0 leaves a single false element on the stack.
+    BOOST_CHECK(!eval("00", ScriptStack{}, FLAGS, VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::OK);
+    BOOST_CHECK(script_error != 0);
+
+    // Two elements left on the stack violate cleanstack.
+    BOOST_CHECK(!eval("5151", ScriptStack{}, FLAGS, VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK(script_error != 0);
+
+    // An empty script succeeds if the initial stack already satisfies it.
+    ScriptStack stack;
+    stack.Push(hex_string_to_byte_vec("01"));
+    BOOST_CHECK_EQUAL(stack.CountItems(), 1);
+    BOOST_CHECK(stack.GetItem(0) == hex_string_to_byte_vec("01"));
+    BOOST_CHECK(eval("", stack, FLAGS, VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK_EQUAL(script_error, 0);
+
+    // A copied stack is independent of the original.
+    ScriptStack copied{stack};
+    copied.Push(hex_string_to_byte_vec("02"));
+    BOOST_CHECK_EQUAL(stack.CountItems(), 1);
+    BOOST_CHECK_EQUAL(copied.CountItems(), 2);
+
+    // Varops are metered when a budget is given, and exhausting it fails the script.
+    BOOST_CHECK(eval("51", ScriptStack{}, FLAGS, 1'000'000, &remaining, &script_error, status));
+    BOOST_CHECK_EQUAL(script_error, 0);
+    BOOST_CHECK(remaining < 1'000'000);
+
+    BOOST_CHECK(!eval("51", ScriptStack{}, FLAGS, 0, &remaining, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::OK);
+    BOOST_CHECK(script_error != 0);
+    BOOST_CHECK_EQUAL(remaining, 0);
+
+    // Tapscript v2 cannot be evaluated without the script restoration flag.
+    BOOST_CHECK(!eval("51", ScriptStack{}, VERIFY_ALL_PRE_TAPROOT | ScriptVerificationFlags::TAPROOT,
+                      VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::ERROR_SCRIPT_RESTORATION_REQUIRED);
+
+    // A spending transaction without precomputed spent outputs is rejected.
+    auto tx{Transaction{hex_string_to_byte_vec("02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700")}};
+    const std::array<unsigned char, 32> tapleaf_hash{};
+    TapscriptV2SpendContext spend_context{.tx_to = &tx, .tapleaf_hash = &tapleaf_hash};
+    BOOST_CHECK(!EvalTapscriptV2(ScriptPubkey{hex_string_to_byte_vec("51")}, ScriptStack{}, FLAGS,
+                                 &spend_context, VAROPS_BUDGET_UNMETERED, nullptr, nullptr, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::ERROR_SPENT_OUTPUTS_REQUIRED);
+
+    // An out of range input index is rejected before anything is evaluated.
+    spend_context.input_index = 99;
+    BOOST_CHECK(!EvalTapscriptV2(ScriptPubkey{hex_string_to_byte_vec("51")}, ScriptStack{}, FLAGS,
+                                 &spend_context, VAROPS_BUDGET_UNMETERED, nullptr, nullptr, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::ERROR_INVALID_INPUT_INDEX);
+}
+
 BOOST_AUTO_TEST_CASE(btck_transaction_tests)
 {
     auto tx_data{hex_string_to_byte_vec("02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700")};

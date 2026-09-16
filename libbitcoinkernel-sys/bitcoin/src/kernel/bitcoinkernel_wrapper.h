@@ -95,6 +95,15 @@ enum class TxValidationResult : btck_TxValidationResult {
     UNKNOWN             = btck_TxValidationResult_UNKNOWN
 };
 
+enum class TapscriptV2EvalStatus : btck_TapscriptV2EvalStatus {
+    OK = btck_TapscriptV2EvalStatus_OK,
+    ERROR_INVALID_FLAGS_COMBINATION = btck_TapscriptV2EvalStatus_ERROR_INVALID_FLAGS_COMBINATION,
+    ERROR_SCRIPT_RESTORATION_REQUIRED = btck_TapscriptV2EvalStatus_ERROR_SCRIPT_RESTORATION_REQUIRED,
+    ERROR_SPENT_OUTPUTS_REQUIRED = btck_TapscriptV2EvalStatus_ERROR_SPENT_OUTPUTS_REQUIRED,
+    ERROR_TAPLEAF_HASH_REQUIRED = btck_TapscriptV2EvalStatus_ERROR_TAPLEAF_HASH_REQUIRED,
+    ERROR_INVALID_INPUT_INDEX = btck_TapscriptV2EvalStatus_ERROR_INVALID_INPUT_INDEX,
+};
+
 enum class ScriptVerifyStatus : btck_ScriptVerifyStatus {
     OK = btck_ScriptVerifyStatus_OK,
     ERROR_INVALID_FLAGS_COMBINATION = btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION,
@@ -110,6 +119,7 @@ enum class ScriptVerificationFlags : btck_ScriptVerificationFlags {
     CHECKSEQUENCEVERIFY = btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY,
     WITNESS = btck_ScriptVerificationFlags_WITNESS,
     TAPROOT = btck_ScriptVerificationFlags_TAPROOT,
+    SCRIPT_RESTORATION = btck_ScriptVerificationFlags_SCRIPT_RESTORATION,
     ALL = btck_ScriptVerificationFlags_ALL
 };
 
@@ -1500,6 +1510,83 @@ void ScriptTraceSetCallback(std::unique_ptr<T> trace)
 inline void ScriptTraceUnsetCallback()
 {
     btck_script_trace_unregister_callback();
+}
+
+class ScriptStack : public Handle<btck_ScriptStack, btck_script_stack_copy, btck_script_stack_destroy>
+{
+public:
+    ScriptStack() : Handle{btck_script_stack_create()} {}
+
+    explicit ScriptStack(std::span<const std::span<const std::byte>> elements)
+        : Handle{btck_script_stack_create()}
+    {
+        for (const auto& element : elements) Push(element);
+    }
+
+    void Push(std::span<const std::byte> element)
+    {
+        btck_script_stack_push(get(), element.data(), element.size());
+    }
+
+    size_t CountItems() const { return btck_script_stack_count_items(get()); }
+
+    std::vector<std::byte> GetItem(size_t index) const
+    {
+        struct Item { const btck_ScriptStack* stack; size_t index; };
+        Item item{get(), index};
+        return write_bytes(&item, +[](const Item* c, btck_WriteBytes w, void* ud) {
+            return btck_script_stack_item_to_bytes(c->stack, c->index, w, ud);
+        });
+    }
+
+    MAKE_RANGE_METHOD(Items, ScriptStack, &ScriptStack::CountItems, &ScriptStack::GetItem, *this)
+};
+
+/** The spending context a tapscript v2 evaluation is run in. Signature and
+ *  locktime opcodes can only succeed when a spending transaction is set. */
+struct TapscriptV2SpendContext {
+    const Transaction* tx_to{nullptr};
+    const PrecomputedTransactionData* precomputed_txdata{nullptr};
+    int64_t amount{0};
+    unsigned int input_index{0};
+    std::span<const std::byte> annex{};
+    const std::array<unsigned char, 32>* tapleaf_hash{nullptr};
+};
+
+inline constexpr uint64_t VAROPS_BUDGET_UNMETERED{btck_VaropsBudget_UNMETERED};
+
+/** Evaluate a tapscript v2 leaf script against an initial stack. Does not
+ *  verify that the script is committed to by any output. */
+inline bool EvalTapscriptV2(const ScriptPubkey& script,
+                            const ScriptStack& stack,
+                            ScriptVerificationFlags flags,
+                            const TapscriptV2SpendContext* spend_context,
+                            uint64_t varops_budget,
+                            uint64_t* varops_remaining,
+                            int32_t* script_error,
+                            TapscriptV2EvalStatus& status)
+{
+    btck_TapscriptV2SpendContext c_spend_context{};
+    if (spend_context) {
+        c_spend_context.tx_to = spend_context->tx_to ? spend_context->tx_to->get() : nullptr;
+        c_spend_context.precomputed_txdata = spend_context->precomputed_txdata ? spend_context->precomputed_txdata->get() : nullptr;
+        c_spend_context.amount = spend_context->amount;
+        c_spend_context.input_index = spend_context->input_index;
+        c_spend_context.annex = spend_context->annex.empty() ? nullptr : spend_context->annex.data();
+        c_spend_context.annex_len = spend_context->annex.size();
+        c_spend_context.tapleaf_hash = spend_context->tapleaf_hash ? spend_context->tapleaf_hash->data() : nullptr;
+    }
+
+    auto result = btck_tapscript_v2_eval(
+        script.get(),
+        stack.get(),
+        static_cast<btck_ScriptVerificationFlags>(flags),
+        spend_context ? &c_spend_context : nullptr,
+        varops_budget,
+        varops_remaining,
+        script_error,
+        reinterpret_cast<btck_TapscriptV2EvalStatus*>(&status));
+    return result == 1;
 }
 
 } // namespace btck
