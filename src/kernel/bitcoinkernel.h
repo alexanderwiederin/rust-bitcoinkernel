@@ -353,6 +353,14 @@ typedef struct btck_ScriptEvalStack btck_ScriptEvalStack;
  */
 typedef struct btck_ScriptEvalStackItem btck_ScriptEvalStackItem;
 
+/**
+ * Opaque data structure for holding an owned stack of script elements. Used to
+ * supply the initial stack to a standalone script evaluation. Unlike
+ * btck_ScriptEvalStack, which is a borrowed view into a live evaluation, this
+ * type is created and destroyed by the caller.
+ */
+typedef struct btck_ScriptStack btck_ScriptStack;
+
 /** Current sync state passed to tip changed callbacks. */
 typedef uint8_t btck_SynchronizationState;
 #define btck_SynchronizationState_INIT_REINDEX ((btck_SynchronizationState)(0))
@@ -2064,6 +2072,137 @@ BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_block_header_to_byte
  * Destroy the btck_BlockHeader.
  */
 BITCOINKERNEL_API void btck_block_header_destroy(btck_BlockHeader* header);
+
+///@}
+
+/** @name ScriptStack
+ * Functions for building the initial stack of a standalone script evaluation.
+ */
+///@{
+
+/**
+ * @brief Create an empty script stack.
+ */
+BITCOINKERNEL_API btck_ScriptStack* BITCOINKERNEL_WARN_UNUSED_RESULT btck_script_stack_create();
+
+/**
+ * @brief Copy a script stack.
+ *
+ * @param[in] stack Non-null.
+ * @return          The copied script stack.
+ */
+BITCOINKERNEL_API btck_ScriptStack* BITCOINKERNEL_WARN_UNUSED_RESULT btck_script_stack_copy(
+    const btck_ScriptStack* stack) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Append an element to the top of the stack.
+ *
+ * @param[in] stack       Non-null.
+ * @param[in] element     Nullable if element_len is zero.
+ * @param[in] element_len Length of the element data.
+ */
+BITCOINKERNEL_API void btck_script_stack_push(
+    btck_ScriptStack* stack,
+    const void* element,
+    size_t element_len) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief The number of elements on the stack.
+ */
+BITCOINKERNEL_API size_t btck_script_stack_count_items(
+    const btck_ScriptStack* stack) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Write out the bytes of one of the elements on the stack. The index
+ * must be smaller than the number of elements on the stack.
+ *
+ * @return 0 on success.
+ */
+BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_script_stack_item_to_bytes(
+    const btck_ScriptStack* stack,
+    size_t index,
+    btck_WriteBytes writer,
+    void* user_data) BITCOINKERNEL_ARG_NONNULL(1, 3);
+
+/**
+ * Destroy the script stack.
+ */
+BITCOINKERNEL_API void btck_script_stack_destroy(btck_ScriptStack* stack);
+
+///@}
+
+/** @name TapscriptV2
+ * Functions for evaluating tapscript v2 (BIP 440 & 441) leaf scripts directly.
+ */
+///@{
+
+/**
+ * A collection of status codes that may be issued by the tapscript v2 evaluation function.
+ */
+typedef uint8_t btck_TapscriptV2EvalStatus;
+#define btck_TapscriptV2EvalStatus_OK ((btck_TapscriptV2EvalStatus)(0))
+#define btck_TapscriptV2EvalStatus_ERROR_INVALID_FLAGS_COMBINATION ((btck_TapscriptV2EvalStatus)(1))  //!< The flags were combined in an invalid way.
+#define btck_TapscriptV2EvalStatus_ERROR_SCRIPT_RESTORATION_REQUIRED ((btck_TapscriptV2EvalStatus)(2)) //!< The script restoration flag was not set.
+#define btck_TapscriptV2EvalStatus_ERROR_SPENT_OUTPUTS_REQUIRED ((btck_TapscriptV2EvalStatus)(3))     //!< A spending transaction was provided without precomputed data containing the spent outputs.
+#define btck_TapscriptV2EvalStatus_ERROR_TAPLEAF_HASH_REQUIRED ((btck_TapscriptV2EvalStatus)(4))      //!< A spending transaction was provided without a tapleaf hash.
+#define btck_TapscriptV2EvalStatus_ERROR_INVALID_INPUT_INDEX ((btck_TapscriptV2EvalStatus)(5))        //!< The input index is out of range for the provided transaction.
+
+/** Sentinel varops budget disabling varops metering entirely. */
+#define btck_VaropsBudget_UNMETERED ((uint64_t)UINT64_MAX)
+
+/**
+ * The spending context a tapscript v2 evaluation is run in.
+ *
+ * Signature and locktime opcodes can only succeed if a spending transaction is
+ * provided. Without one they fail as if the signature were invalid, which is
+ * usually what is wanted when stepping through a script that does not depend on
+ * a signature check.
+ */
+typedef struct {
+    const btck_Transaction* tx_to;                             //!< Nullable, transaction spending the leaf script.
+    const btck_PrecomputedTransactionData* precomputed_txdata; //!< Required when tx_to is set, and must contain the spent outputs.
+    int64_t amount;                                            //!< Amount of the output being spent.
+    unsigned int input_index;                                  //!< Index of the input in tx_to spending the leaf script.
+    const void* annex;                                         //!< Nullable, the annex of that input's witness, including its 0x50 tag byte.
+    size_t annex_len;                                          //!< Length of the annex data.
+    const unsigned char* tapleaf_hash;                         //!< Nullable unless tx_to is set, 32 bytes, the BIP 341 tapleaf hash of the leaf script.
+} btck_TapscriptV2SpendContext;
+
+/**
+ * @brief Evaluate a tapscript v2 leaf script against an initial stack.
+ *
+ * This runs the full consensus path for a leaf with version 0xc2: OP_SUCCESSx
+ * handling, the initial stack limits, evaluation, and the final cleanstack and
+ * truthiness check. It does not verify a taproot commitment, so the caller is
+ * responsible for establishing that the script is committed to by the output
+ * being spent. `btck_ScriptVerificationFlags_SCRIPT_RESTORATION` must be set.
+ *
+ * The evaluation does not mutate the stack that was passed in. Intermediate and
+ * final stack states are observable through a registered script trace callback.
+ *
+ * @param[in] script            Non-null, the leaf script to evaluate.
+ * @param[in] stack             Non-null, the initial stack. The top of the stack is the last element.
+ * @param[in] flags             Bitfield of btck_ScriptVerificationFlags controlling validation constraints.
+ * @param[in] spend_context     Nullable, the spending context. Without one, signature checks fail.
+ * @param[in] varops_budget     The varops budget for this evaluation, or btck_VaropsBudget_UNMETERED
+ *                              to evaluate without metering. Consensus derives this from the weight
+ *                              of the whole transaction, so a single-script evaluation can only
+ *                              approximate it.
+ * @param[out] varops_remaining Nullable, set to the unspent budget, or to btck_VaropsBudget_UNMETERED
+ *                              if the evaluation was unmetered.
+ * @param[out] script_error     Nullable, set to the script error of the evaluation, 0 on success.
+ * @param[out] status           Nullable, will be set to an error code if the operation fails, or OK otherwise.
+ * @return                      1 if the script evaluated successfully, 0 otherwise.
+ */
+BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_tapscript_v2_eval(
+    const btck_ScriptPubkey* script,
+    const btck_ScriptStack* stack,
+    btck_ScriptVerificationFlags flags,
+    const btck_TapscriptV2SpendContext* spend_context,
+    uint64_t varops_budget,
+    uint64_t* varops_remaining,
+    int32_t* script_error,
+    btck_TapscriptV2EvalStatus* status) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
 ///@}
 

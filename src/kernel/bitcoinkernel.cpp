@@ -11,6 +11,7 @@
 #include <consensus/tx_check.h>
 #include <consensus/validation.h>
 #include <dbwrapper.h>
+#include <hash.h>
 #include <kernel/caches.h>
 #include <kernel/chainparams.h>
 #include <kernel/checks.h>
@@ -26,6 +27,7 @@
 #include <script/script.h>
 #include <script/script_error.h>
 #include <script/trace.h>
+#include <script/varops.h>
 #include <script/verify_flags.h>
 #include <serialize.h>
 #include <streams.h>
@@ -541,6 +543,7 @@ struct btck_ConsensusParams: Handle<btck_ConsensusParams, Consensus::Params> {};
 struct btck_ScriptTraceFrame: Handle<btck_ScriptTraceFrame, ScriptTraceFrame> {};
 struct btck_ScriptEvalStack : Handle<btck_ScriptEvalStack, std::span<const std::vector<unsigned char>>> {};
 struct btck_ScriptEvalStackItem : Handle<btck_ScriptEvalStackItem, std::vector<unsigned char>> {};
+struct btck_ScriptStack : Handle<btck_ScriptStack, std::vector<std::vector<unsigned char>>> {};
 
 btck_Transaction* btck_transaction_create(const void* raw_transaction, size_t raw_transaction_len)
 {
@@ -1682,4 +1685,133 @@ void btck_script_trace_unregister_callback()
 #ifdef ENABLE_SCRIPT_TRACE
     ScriptTraceRegisterCallback(nullptr);
 #endif // ENABLE_SCRIPT_TRACE
+}
+
+btck_ScriptStack* btck_script_stack_create()
+{
+    return btck_ScriptStack::create();
+}
+
+btck_ScriptStack* btck_script_stack_copy(const btck_ScriptStack* stack)
+{
+    return btck_ScriptStack::copy(stack);
+}
+
+void btck_script_stack_push(btck_ScriptStack* stack, const void* element, size_t element_len)
+{
+    auto& items{btck_ScriptStack::get(stack)};
+    if (element_len == 0) {
+        items.emplace_back();
+        return;
+    }
+    assert(element);
+    const auto* bytes{static_cast<const unsigned char*>(element)};
+    items.emplace_back(bytes, bytes + element_len);
+}
+
+size_t btck_script_stack_count_items(const btck_ScriptStack* stack)
+{
+    return btck_ScriptStack::get(stack).size();
+}
+
+int btck_script_stack_item_to_bytes(const btck_ScriptStack* stack, size_t index, btck_WriteBytes writer, void* user_data)
+{
+    const auto& items{btck_ScriptStack::get(stack)};
+    assert(index < items.size());
+    const auto& bytes{items[index]};
+    return writer(bytes.data(), bytes.size(), user_data);
+}
+
+void btck_script_stack_destroy(btck_ScriptStack* stack)
+{
+    delete stack;
+}
+
+int btck_tapscript_v2_eval(const btck_ScriptPubkey* script,
+                           const btck_ScriptStack* stack,
+                           const btck_ScriptVerificationFlags flags,
+                           const btck_TapscriptV2SpendContext* spend_context,
+                           const uint64_t varops_budget,
+                           uint64_t* varops_remaining,
+                           int32_t* script_error,
+                           btck_TapscriptV2EvalStatus* status)
+{
+    // Assert that all specified flags are part of the interface before continuing
+    assert((flags & ~btck_ScriptVerificationFlags_ALL) == 0);
+
+    if (script_error) *script_error = static_cast<int32_t>(SCRIPT_ERR_UNKNOWN_ERROR);
+
+    const auto fail{[&](btck_TapscriptV2EvalStatus error) {
+        if (status) *status = error;
+        return 0;
+    }};
+
+    const auto verify_flags{script_verify_flags::from_int(flags)};
+
+    if (!is_valid_flag_combination(verify_flags)) {
+        return fail(btck_TapscriptV2EvalStatus_ERROR_INVALID_FLAGS_COMBINATION);
+    }
+    if (!(flags & btck_ScriptVerificationFlags_SCRIPT_RESTORATION)) {
+        return fail(btck_TapscriptV2EvalStatus_ERROR_SCRIPT_RESTORATION_REQUIRED);
+    }
+
+    ScriptExecutionData execdata;
+    execdata.m_annex_present = false;
+    execdata.m_annex_init = true;
+
+    static const BaseSignatureChecker no_signature_checker{};
+    const BaseSignatureChecker* checker{&no_signature_checker};
+    std::optional<TransactionSignatureChecker> tx_checker;
+
+    if (spend_context) {
+        if (spend_context->tapleaf_hash) {
+            execdata.m_tapleaf_hash = uint256{std::span{spend_context->tapleaf_hash, 32}};
+            execdata.m_tapleaf_hash_init = true;
+        }
+        if (spend_context->annex) {
+            const auto* annex_bytes{static_cast<const unsigned char*>(spend_context->annex)};
+            const std::vector<unsigned char> annex{annex_bytes, annex_bytes + spend_context->annex_len};
+            execdata.m_annex_hash = (HashWriter{} << annex).GetSHA256();
+            execdata.m_annex_present = true;
+        }
+
+        if (spend_context->tx_to) {
+            const CTransaction& tx{*btck_Transaction::get(spend_context->tx_to)};
+            if (spend_context->input_index >= tx.vin.size()) {
+                return fail(btck_TapscriptV2EvalStatus_ERROR_INVALID_INPUT_INDEX);
+            }
+            if (!execdata.m_tapleaf_hash_init) {
+                return fail(btck_TapscriptV2EvalStatus_ERROR_TAPLEAF_HASH_REQUIRED);
+            }
+            if (!spend_context->precomputed_txdata) {
+                return fail(btck_TapscriptV2EvalStatus_ERROR_SPENT_OUTPUTS_REQUIRED);
+            }
+            const PrecomputedTransactionData& txdata{btck_PrecomputedTransactionData::get(spend_context->precomputed_txdata)};
+            if (txdata.m_spent_outputs.empty()) {
+                return fail(btck_TapscriptV2EvalStatus_ERROR_SPENT_OUTPUTS_REQUIRED);
+            }
+            tx_checker.emplace(&tx, spend_context->input_index, spend_context->amount, txdata, MissingDataBehavior::FAIL);
+            checker = &tx_checker.value();
+        }
+    }
+
+    if (status) *status = btck_TapscriptV2EvalStatus_OK;
+
+    varops::Budget budget = varops_budget == btck_VaropsBudget_UNMETERED
+                                ? varops::Budget::Unmetered()
+                                : varops::Budget{varops_budget};
+
+    ScriptError error{SCRIPT_ERR_UNKNOWN_ERROR};
+    const bool result{ExecuteTapscriptV2(btck_ScriptStack::get(stack),
+                                         btck_ScriptPubkey::get(script),
+                                         verify_flags,
+                                         *checker,
+                                         execdata,
+                                         budget,
+                                         &error)};
+
+    if (script_error) *script_error = static_cast<int32_t>(error);
+    if (varops_remaining) *varops_remaining = budget.Remaining().value_or(btck_VaropsBudget_UNMETERED);
+
+    return result ? 1 : 0;
 }
