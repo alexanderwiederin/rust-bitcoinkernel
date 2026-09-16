@@ -20,6 +20,7 @@ pub type btck_ScriptVerificationFlags = u32;
 pub type btck_ScriptVerifyStatus = u8;
 pub type btck_SigVersion = u8;
 pub type btck_SynchronizationState = u8;
+pub type btck_TapscriptV2EvalStatus = u8;
 pub type btck_TxValidationResult = u32;
 pub type btck_ValidationMode = u8;
 pub type btck_Warning = u8;
@@ -120,6 +121,21 @@ pub const btck_BlockCheckFlags_ALL: btck_BlockCheckFlags =
 pub const btck_ScriptVerifyStatus_OK: btck_ScriptVerifyStatus = 0;
 pub const btck_ScriptVerifyStatus_ERROR_INVALID_FLAGS_COMBINATION: btck_ScriptVerifyStatus = 1;
 pub const btck_ScriptVerifyStatus_ERROR_SPENT_OUTPUTS_REQUIRED: btck_ScriptVerifyStatus = 2;
+
+// btck_TapscriptV2EvalStatus
+
+pub const btck_TapscriptV2EvalStatus_OK: btck_TapscriptV2EvalStatus = 0;
+pub const btck_TapscriptV2EvalStatus_ERROR_INVALID_FLAGS_COMBINATION: btck_TapscriptV2EvalStatus =
+    1;
+pub const btck_TapscriptV2EvalStatus_ERROR_SCRIPT_RESTORATION_REQUIRED: btck_TapscriptV2EvalStatus =
+    2;
+pub const btck_TapscriptV2EvalStatus_ERROR_SPENT_OUTPUTS_REQUIRED: btck_TapscriptV2EvalStatus = 3;
+pub const btck_TapscriptV2EvalStatus_ERROR_TAPLEAF_HASH_REQUIRED: btck_TapscriptV2EvalStatus = 4;
+pub const btck_TapscriptV2EvalStatus_ERROR_INVALID_INPUT_INDEX: btck_TapscriptV2EvalStatus = 5;
+
+// Varops budget
+
+pub const btck_VaropsBudget_UNMETERED: u64 = u64::MAX;
 
 // btck_SigVersion
 
@@ -222,6 +238,10 @@ pub struct btck_ScriptEvalStackItem {
 }
 #[repr(C)]
 pub struct btck_ScriptPubkey {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+pub struct btck_ScriptStack {
     _unused: [u8; 0],
 }
 #[repr(C)]
@@ -381,6 +401,17 @@ pub struct btck_NotificationInterfaceCallbacks {
 }
 
 #[repr(C)]
+pub struct btck_TapscriptV2SpendContext {
+    pub tx_to: *const btck_Transaction,
+    pub precomputed_txdata: *const btck_PrecomputedTransactionData,
+    pub amount: i64,
+    pub input_index: c_uint,
+    pub annex: *const c_void,
+    pub annex_len: usize,
+    pub tapleaf_hash: *const c_uchar,
+}
+
+#[repr(C)]
 pub struct btck_ValidationInterfaceCallbacks {
     pub user_data: *mut c_void,
     pub user_data_destroy: btck_DestroyCallback,
@@ -515,6 +546,41 @@ extern "C" {
         input_index: c_uint,
         flags: btck_ScriptVerificationFlags,
         status: *mut btck_ScriptVerifyStatus,
+    ) -> c_int;
+
+    pub fn btck_script_stack_create() -> *mut btck_ScriptStack;
+
+    #[must_use]
+    pub fn btck_script_stack_copy(stack: *const btck_ScriptStack) -> *mut btck_ScriptStack;
+
+    pub fn btck_script_stack_push(
+        stack: *mut btck_ScriptStack,
+        element: *const c_void,
+        element_len: usize,
+    );
+
+    pub fn btck_script_stack_count_items(stack: *const btck_ScriptStack) -> usize;
+
+    #[must_use]
+    pub fn btck_script_stack_item_to_bytes(
+        stack: *const btck_ScriptStack,
+        index: usize,
+        writer: btck_WriteBytes,
+        user_data: *mut c_void,
+    ) -> c_int;
+
+    pub fn btck_script_stack_destroy(stack: *mut btck_ScriptStack);
+
+    #[must_use]
+    pub fn btck_tapscript_v2_eval(
+        script: *const btck_ScriptPubkey,
+        stack: *const btck_ScriptStack,
+        flags: btck_ScriptVerificationFlags,
+        spend_context: *const btck_TapscriptV2SpendContext,
+        varops_budget: u64,
+        varops_remaining: *mut u64,
+        script_error: *mut i32,
+        status: *mut btck_TapscriptV2EvalStatus,
     ) -> c_int;
 
     #[must_use]
