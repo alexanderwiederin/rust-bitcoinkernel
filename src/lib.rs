@@ -184,6 +184,7 @@
 use std::ffi::NulError;
 use std::{fmt, panic};
 
+use crate::core::tapscript::TapscriptV2EvalError;
 use crate::core::{ScriptPubkeyExt, TransactionExt, TxOutExt};
 use ffi::c_helpers;
 
@@ -243,6 +244,7 @@ pub enum KernelError {
     InvalidOptions(String),
     OutOfBounds,
     ScriptVerify(ScriptVerifyError),
+    TapscriptV2Eval(TapscriptV2EvalError),
     SerializationFailed,
     MismatchedOutputsSize,
     InvalidLength { expected: usize, actual: usize },
@@ -264,6 +266,7 @@ impl fmt::Display for KernelError {
             KernelError::InvalidOptions(msg) => write!(f, "Invalid options: {}", msg),
             KernelError::OutOfBounds => write!(f, "Out of bounds"),
             KernelError::ScriptVerify(err) => write!(f, "Script verification error: {}", err),
+            KernelError::TapscriptV2Eval(err) => write!(f, "Tapscript v2 evaluation error: {}", err),
             KernelError::SerializationFailed => write!(f, "Serialization failed"),
             KernelError::MismatchedOutputsSize => write!(f, "Number of outputs size does not correspond to the number of inputs of the transaction."),
             KernelError::InvalidLength { expected, actual } => {

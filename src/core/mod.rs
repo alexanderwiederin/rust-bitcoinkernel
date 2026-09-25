@@ -1,6 +1,7 @@
 pub mod block;
 pub mod block_tree_entry;
 pub mod script;
+pub mod tapscript;
 pub mod transaction;
 pub mod verify;
 
