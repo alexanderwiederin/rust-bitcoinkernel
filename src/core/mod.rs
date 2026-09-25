@@ -1,6 +1,7 @@
 pub mod block;
 pub mod block_tree_entry;
 pub mod script;
+pub mod tapscript;
 pub mod transaction;
 pub mod verify;
 
@@ -21,6 +22,10 @@ pub use block::{
 pub use script::ScriptPubkeyExt;
 pub use transaction::{TransactionExt, TxInExt, TxOutExt, TxOutPointExt, TxidExt, WitnessStackExt};
 
+pub use tapscript::{
+    eval_tapscript_v2, ScriptStack, TapscriptV2EvalError, TapscriptV2Result,
+    TapscriptV2SpendContext,
+};
 pub use verify::{verify, PrecomputedTransactionData, ScriptVerificationFlags, ScriptVerifyError};
 
 pub mod verify_flags {
