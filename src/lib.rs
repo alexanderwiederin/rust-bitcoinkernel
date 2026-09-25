@@ -245,6 +245,7 @@ pub enum KernelError {
     InvalidOptions(String),
     OutOfBounds,
     ScriptVerify(ScriptVerifyError),
+    TapscriptV2Eval(TapscriptV2EvalError),
     SerializationFailed,
     MismatchedOutputsSize,
     InvalidLength { expected: usize, actual: usize },
@@ -266,6 +267,7 @@ impl fmt::Display for KernelError {
             KernelError::InvalidOptions(msg) => write!(f, "Invalid options: {}", msg),
             KernelError::OutOfBounds => write!(f, "Out of bounds"),
             KernelError::ScriptVerify(err) => write!(f, "Script verification error: {}", err),
+            KernelError::TapscriptV2Eval(err) => write!(f, "Tapscript v2 evaluation error: {}", err),
             KernelError::SerializationFailed => write!(f, "Serialization failed"),
             KernelError::MismatchedOutputsSize => write!(f, "Number of outputs size does not correspond to the number of inputs of the transaction."),
             KernelError::InvalidLength { expected, actual } => {
@@ -285,11 +287,13 @@ impl std::error::Error for KernelError {
 }
 
 pub use crate::core::{
-    verify, Block, BlockCheckFlags, BlockCheckResult, BlockHash, BlockHeader, BlockSpentOutputs,
-    BlockSpentOutputsRef, BlockTreeEntry, Coin, CoinRef, PrecomputedTransactionData, ScriptPubkey,
-    ScriptPubkeyRef, ScriptVerificationFlags, ScriptVerifyError, Transaction, TransactionRef,
-    TransactionSpentOutputs, TransactionSpentOutputsRef, TxCheckResult, TxIn, TxInRef, TxOut,
-    TxOutPoint, TxOutPointRef, TxOutRef, Txid, TxidRef, WitnessStack, WitnessStackRef,
+    eval_tapscript_v2, verify, Block, BlockCheckFlags, BlockCheckResult, BlockHash, BlockHeader,
+    BlockSpentOutputs, BlockSpentOutputsRef, BlockTreeEntry, Coin, CoinRef,
+    PrecomputedTransactionData, ScriptPubkey, ScriptPubkeyRef, ScriptStack,
+    ScriptVerificationFlags, ScriptVerifyError, TapscriptV2EvalError, TapscriptV2Result,
+    TapscriptV2SpendContext, Transaction, TransactionRef, TransactionSpentOutputs,
+    TransactionSpentOutputsRef, TxCheckResult, TxIn, TxInRef, TxOut, TxOutPoint, TxOutPointRef,
+    TxOutRef, Txid, TxidRef, WitnessStack, WitnessStackRef,
 };
 
 pub use crate::log::{disable_logging, Log, LogCategory, LogLevel, Logger};
