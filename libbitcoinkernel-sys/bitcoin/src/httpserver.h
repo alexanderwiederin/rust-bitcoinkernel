@@ -77,7 +77,8 @@ inline constexpr size_t MIN_REQUEST_LINE_LENGTH = std::string_view("GET / HTTP/1
 //! And libevent http.c evhttp_parse_headers_()
 inline constexpr size_t MAX_HEADERS_SIZE{8192};
 
-//! Maximum size of an HTTP request body
+//! Maximum size of an HTTP request body received from a client.
+//! Also used to limit data queued for sending back to client.
 inline constexpr uint64_t MAX_BODY_SIZE{32_MiB};
 
 //! Thrown when a request body exceeds MAX_BODY_SIZE (or *will* exceed, in chunked transfer)
@@ -100,7 +101,7 @@ public:
      * @param[in] key The field-name of the header to search for
      * @returns Views into all values matching the provided key (valid while this object is alive)
      */
-    std::vector<std::string_view> FindAll(std::string_view key) const;
+    std::vector<std::string_view> FindAll(std::string_view key) const LIFETIMEBOUND;
     void Write(std::string&& key, std::string&& value);
     /**
      * @param[in] key The field-name of the header to search for and delete
@@ -177,7 +178,7 @@ public:
         WriteReply(status, std::as_bytes(std::span{reply_body_view}));
     }
 
-    const HTTPVersion& GetVersion() const { return m_version; }
+    const HTTPVersion& GetVersion() const LIFETIMEBOUND { return m_version; }
     std::shared_ptr<HTTPRemoteClient> GetClient() const { return m_client.lock(); }
 
     // These methods reimplement the API from http_libevent::HTTPRequest
@@ -498,10 +499,11 @@ public:
     HTTPRemoteClient(const HTTPRemoteClient&) = delete;
     HTTPRemoteClient& operator=(const HTTPRemoteClient&) = delete;
 
-    const std::string& GetOrigin() const { return m_origin; }
-    const CService& GetPeer() const { return m_addr; }
+    const std::string& GetOrigin() const LIFETIMEBOUND { return m_origin; }
+    const CService& GetPeer() const LIFETIMEBOUND { return m_addr; }
     std::shared_ptr<Sock> GetSock() EXCLUSIVE_LOCKS_REQUIRED(!m_sock_mutex) { return WITH_LOCK(m_sock_mutex, return m_sock;); }
     bool ReadyToSend() const EXCLUSIVE_LOCKS_REQUIRED(!m_send_mutex) { return WITH_LOCK(m_send_mutex, return m_send_ready;); }
+    bool ReceiveBufferEmpty() const { return m_recv_buffer.empty(); }
 
     void Send(const HTTPResponse& res, std::span<const std::byte> reply_body, bool keep_alive) EXCLUSIVE_LOCKS_REQUIRED(!m_send_mutex, !m_sock_mutex);
     void Receive() EXCLUSIVE_LOCKS_REQUIRED(!m_sock_mutex);
@@ -514,7 +516,7 @@ public:
      * left in the buffer to wait for more data. Some read errors
      * will mark this client for disconnection.
      */
-    static std::unique_ptr<HTTPRequest> TryReadRequest(const std::shared_ptr<HTTPRemoteClient>& client);
+    static std::unique_ptr<HTTPRequest> TryReadRequest(const std::shared_ptr<HTTPRemoteClient>& client) EXCLUSIVE_LOCKS_REQUIRED(!client->m_send_mutex);
 
     /**
      * Push data (if there is any) from client's m_send_buffer to the connected socket.
@@ -522,11 +524,15 @@ public:
      */
     bool MaybeSendBytesFromBuffer() EXCLUSIVE_LOCKS_REQUIRED(!m_send_mutex, !m_sock_mutex);
 
+    /**
+     * Used to determine if an incomplete request is in progress.
+     * @returns nullptr after a complete request is moved to a worker thread,
+     *          but before reading any new data from m_recv_buffer.
+     */
+    const HTTPRequest* GetRequest() const LIFETIMEBOUND { return m_req.get(); }
+
     //! Used for tests.
-    //! @{
-    const std::string& GetRecvBuffer() const { return m_recv_buffer; }
-    const HTTPRequest* GetRequest() const { return m_req.get(); }
-    //! @}
+    const std::string& GetRecvBuffer() const LIFETIMEBOUND { return m_recv_buffer; }
 
 protected:
     //! Used for tests.
@@ -564,6 +570,7 @@ private:
 
     //! Set to true by the I/O thread when a request is popped off
     //! and passed to a worker thread, reset to false by the worker thread.
+    //! Only one request per connection is ever in flight.
     std::atomic_bool m_req_busy{false};
 
     /**

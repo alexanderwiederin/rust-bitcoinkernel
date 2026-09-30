@@ -77,6 +77,8 @@ add_library(bitcoin_consensus STATIC EXCLUDE_FROM_ALL
   script/interpreter.cpp
   script/script.cpp
   script/script_error.cpp
+  script/valtype_stack.cpp
+  script/val64.cpp
   uint256.cpp
 )
 target_link_libraries(bitcoin_consensus
@@ -102,6 +104,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   coins.cpp
   common/args.cpp
   common/bloom.cpp
+  common/bip352.cpp
   common/config.cpp
   common/init.cpp
   common/interfaces.cpp
@@ -214,6 +217,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   net_processing.cpp
   netgroup.cpp
   node/abort.cpp
+  node/block_template_manager.cpp
   node/blockmanager_args.cpp
   node/blockstorage.cpp
   node/caches.cpp

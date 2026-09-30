@@ -5,10 +5,12 @@
 #include <psbt.h>
 
 #include <common/types.h>
+#include <consensus/validation.h>
 #include <node/types.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <script/signingprovider.h>
+#include <script/varops.h>
 #include <util/check.h>
 #include <util/result.h>
 #include <util/strencodings.h>
@@ -47,14 +49,10 @@ bool PartiallySignedTransaction::Merge(const PartiallySignedTransaction& psbt)
     }
 
     for (unsigned int i = 0; i < inputs.size(); ++i) {
-        if (!inputs[i].Merge(psbt.inputs[i])) {
-            return false;
-        }
+        inputs[i].Merge(psbt.inputs[i]);
     }
     for (unsigned int i = 0; i < outputs.size(); ++i) {
-        if (!outputs[i].Merge(psbt.outputs[i])) {
-            return false;
-        }
+        outputs[i].Merge(psbt.outputs[i]);
     }
     MergeGlobalXPubs(psbt);
     if (fallback_locktime == std::nullopt && psbt.fallback_locktime != std::nullopt) fallback_locktime = psbt.fallback_locktime;
@@ -421,7 +419,7 @@ void PSBTInput::FromSignatureData(const SignatureData& sigdata)
     }
 }
 
-bool PSBTInput::Merge(const PSBTInput& input)
+void PSBTInput::Merge(const PSBTInput& input)
 {
     if (!non_witness_utxo && input.non_witness_utxo) non_witness_utxo = input.non_witness_utxo;
     if (witness_utxo.IsNull() && !input.witness_utxo.IsNull()) {
@@ -464,11 +462,10 @@ bool PSBTInput::Merge(const PSBTInput& input)
     for (const auto& [agg_key_lh, psigs] : input.m_musig2_partial_sigs) {
         m_musig2_partial_sigs[agg_key_lh].insert(psigs.begin(), psigs.end());
     }
+    if (sighash_type == std::nullopt && input.sighash_type != std::nullopt) sighash_type = input.sighash_type;
     if (sequence == std::nullopt && input.sequence != std::nullopt) sequence = input.sequence;
     if (time_locktime == std::nullopt && input.time_locktime != std::nullopt) time_locktime = input.time_locktime;
     if (height_locktime == std::nullopt && input.height_locktime != std::nullopt) height_locktime = input.height_locktime;
-
-    return true;
 }
 
 bool PSBTInput::HasSignatures() const
@@ -535,7 +532,7 @@ void PSBTOutput::FromSignatureData(const SignatureData& sigdata)
     m_musig2_participants.insert(sigdata.musig2_pubkeys.begin(), sigdata.musig2_pubkeys.end());
 }
 
-bool PSBTOutput::Merge(const PSBTOutput& output)
+void PSBTOutput::Merge(const PSBTOutput& output)
 {
     hd_keypaths.insert(output.hd_keypaths.begin(), output.hd_keypaths.end());
     m_proprietary.insert(output.m_proprietary.begin(), output.m_proprietary.end());
@@ -547,13 +544,22 @@ bool PSBTOutput::Merge(const PSBTOutput& output)
     if (m_tap_internal_key.IsNull() && !output.m_tap_internal_key.IsNull()) m_tap_internal_key = output.m_tap_internal_key;
     if (m_tap_tree.empty() && !output.m_tap_tree.empty()) m_tap_tree = output.m_tap_tree;
     m_musig2_participants.insert(output.m_musig2_participants.begin(), output.m_musig2_participants.end());
-
-    return true;
 }
 
 bool PSBTInputSigned(const PSBTInput& input)
 {
     return !input.final_script_sig.empty() || !input.final_script_witness.IsNull();
+}
+
+static int64_t FinalizedTransactionWeight(CMutableTransaction tx, const PartiallySignedTransaction& psbt)
+{
+    assert(tx.vin.size() == psbt.inputs.size());
+    for (unsigned int i = 0; i < tx.vin.size(); ++i) {
+        const PSBTInput& input{psbt.inputs.at(i)};
+        tx.vin[i].scriptSig = input.final_script_sig;
+        tx.vin[i].scriptWitness = input.final_script_witness;
+    }
+    return GetTransactionWeight(CTransaction{tx});
 }
 
 bool PSBTInputSignedAndVerified(const PartiallySignedTransaction& psbt, unsigned int input_index, const PrecomputedTransactionData* txdata)
@@ -583,11 +589,39 @@ bool PSBTInputSignedAndVerified(const PartiallySignedTransaction& psbt, unsigned
         return false;
     }
     const CMutableTransaction& tx = *unsigned_tx;
+    // An incomplete PSBT's finalized weight is a conservative lower bound on its eventual varops budget.
+    varops::Budget varops_budget{varops::TxBudget(FinalizedTransactionWeight(tx, psbt))};
     if (txdata) {
-        return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness, STANDARD_SCRIPT_VERIFY_FLAGS, MutableTransactionSignatureChecker{&tx, input_index, utxo.nValue, *txdata, MissingDataBehavior::FAIL});
+        return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness,
+                            STANDARD_SCRIPT_VERIFY_FLAGS,
+                            MutableTransactionSignatureChecker{&tx, input_index, utxo.nValue, *txdata, MissingDataBehavior::FAIL},
+                            nullptr, varops_budget);
     } else {
-        return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness, STANDARD_SCRIPT_VERIFY_FLAGS, MutableTransactionSignatureChecker{&tx, input_index, utxo.nValue, MissingDataBehavior::FAIL});
+        return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness,
+                            STANDARD_SCRIPT_VERIFY_FLAGS,
+                            MutableTransactionSignatureChecker{&tx, input_index, utxo.nValue, MissingDataBehavior::FAIL},
+                            nullptr, varops_budget);
     }
+}
+
+bool PSBTInputsSignedAndVerified(const PartiallySignedTransaction& psbt, const PrecomputedTransactionData& txdata)
+{
+    const std::optional<CMutableTransaction> unsigned_tx{psbt.GetUnsignedTx()};
+    if (!unsigned_tx) return false;
+
+    const CTransaction tx{*unsigned_tx};
+    varops::Budget varops_budget{varops::TxBudget(FinalizedTransactionWeight(*unsigned_tx, psbt))};
+
+    for (unsigned int i = 0; i < tx.vin.size(); ++i) {
+        CTxOut utxo;
+        if (!psbt.inputs.at(i).GetUTXO(utxo)) return false;
+        const PSBTInput& input{psbt.inputs.at(i)};
+        if (!VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker{&tx, i, utxo.nValue, txdata, MissingDataBehavior::FAIL}, nullptr, varops_budget)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 size_t CountPSBTUnsignedInputs(const PartiallySignedTransaction& psbt) {
@@ -819,7 +853,7 @@ bool FinalizePSBT(PartiallySignedTransaction& psbtx)
         complete &= sign_result.has_value();
     }
 
-    return complete;
+    return complete && PSBTInputsSignedAndVerified(psbtx, txdata);
 }
 
 bool FinalizeAndExtractPSBT(PartiallySignedTransaction& psbtx, CMutableTransaction& result)

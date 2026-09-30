@@ -864,7 +864,7 @@ RPCMethod signrawtransactionwithwallet()
                             },
                         },
                     },
-                    {"sighashtype", RPCArg::Type::STR, RPCArg::Default{"DEFAULT for Taproot, ALL otherwise"}, "The signature hash type. Must be one of\n"
+                    {"sighashtype", RPCArg::Type::STR, RPCArg::DefaultHint{"DEFAULT for Taproot, ALL otherwise"}, "The signature hash type. Must be one of\n"
             "       \"DEFAULT\"\n"
             "       \"ALL\"\n"
             "       \"NONE\"\n"
@@ -1207,7 +1207,7 @@ RPCMethod send()
                     {"change_position", RPCArg::Type::NUM, RPCArg::DefaultHint{"random"}, "The index of the change output"},
                     {"change_type", RPCArg::Type::STR, RPCArg::DefaultHint{"set by -changetype"}, "The output type to use. Only valid if change_address is not specified. Options are " + FormatAllOutputTypes() + "."},
                     {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB.", RPCArgOptions{.also_positional = true}},
-                    {"include_watching", RPCArg::Type::BOOL, RPCArg::Default{"false"}, "(DEPRECATED) No longer used"},
+                    {"include_watching", RPCArg::Type::BOOL, RPCArg::Default{false}, "(DEPRECATED) No longer used"},
                     {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Specify inputs instead of adding them automatically.",
                         {
                           {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "", {
@@ -1517,10 +1517,14 @@ RPCMethod sendall()
             }
             const CAmount fee_from_size{fee_rate.GetFee(tx_size.vsize)};
             const std::optional<CAmount> total_bump_fees{pwallet->chain().calculateCombinedBumpFee(outpoints_spent, fee_rate)};
-            CAmount effective_value = total_input_value - fee_from_size - total_bump_fees.value_or(0);
+            const CAmount actual_fee{fee_from_size + total_bump_fees.value_or(0)};
+            CAmount effective_value = total_input_value - actual_fee;
 
-            if (fee_from_size > pwallet->m_default_max_tx_fee) {
+            if (actual_fee > pwallet->m_max_tx_fee) {
                 throw JSONRPCError(RPC_WALLET_ERROR, TransactionErrorString(TransactionError::MAX_FEE_EXCEEDED).original);
+            }
+            if (actual_fee > pwallet->m_max_tx_fee_rate.GetFee(tx_size.vsize)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, TransactionErrorString(TransactionError::MAX_FEE_RATE_EXCEEDED).original);
             }
 
             if (effective_value <= 0) {
@@ -1597,7 +1601,7 @@ RPCMethod walletprocesspsbt()
                 {
                     {"psbt", RPCArg::Type::STR, RPCArg::Optional::NO, "The transaction base64 string"},
                     {"sign", RPCArg::Type::BOOL, RPCArg::Default{true}, "Also sign the transaction when updating (requires wallet to be unlocked)"},
-                    {"sighashtype", RPCArg::Type::STR, RPCArg::Default{"DEFAULT for Taproot, ALL otherwise"}, "The signature hash type to sign with if not specified by the PSBT. Must be one of\n"
+                    {"sighashtype", RPCArg::Type::STR, RPCArg::DefaultHint{"DEFAULT for Taproot, ALL otherwise"}, "The signature hash type to sign with if not specified by the PSBT. Must be one of\n"
             "       \"DEFAULT\"\n"
             "       \"ALL\"\n"
             "       \"NONE\"\n"

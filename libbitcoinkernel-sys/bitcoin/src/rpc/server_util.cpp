@@ -5,19 +5,22 @@
 #include <rpc/server_util.h>
 
 #include <chain.h>
-#include <common/args.h>
-#include <net_processing.h>
 #include <node/context.h>
 #include <node/miner.h>
-#include <policy/fees/estimator_man.h>
 #include <pow.h>
+#include <primitives/block.h>
 #include <rpc/protocol.h>
 #include <rpc/request.h>
-#include <txmempool.h>
+#include <uint256.h>
 #include <util/any.h>
-#include <validation.h>
 
 #include <any>
+#include <memory>
+#include <string>
+
+namespace Consensus {
+struct Params;
+} // namespace Consensus
 
 using node::NodeContext;
 using node::UpdateTime;
@@ -105,12 +108,12 @@ CConnman& EnsureConnman(const NodeContext& node)
     return *node.connman;
 }
 
-interfaces::Mining& EnsureMining(const NodeContext& node)
+node::BlockTemplateManager& EnsureBlockTemplateManager(const NodeContext& node)
 {
-    if (!node.mining) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Node miner not found");
+    if (!node.block_template_manager) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Block template manager not found");
     }
-    return *node.mining;
+    return *node.block_template_manager;
 }
 
 PeerManager& EnsurePeerman(const NodeContext& node)

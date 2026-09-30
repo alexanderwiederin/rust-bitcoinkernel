@@ -19,6 +19,7 @@ add_executable(test_bitcoin
   bech32_tests.cpp
   bip32_tests.cpp
   bip324_tests.cpp
+  bip352_tests.cpp
   blockchain_tests.cpp
   blockencodings_tests.cpp
   blockfilter_index_tests.cpp
@@ -111,6 +112,8 @@ add_executable(test_bitcoin
   sync_tests.cpp
   system_ram_tests.cpp
   system_tests.cpp
+  tapscript_v2_json_tests.cpp
+  tapscript_v2_tests.cpp
   testnet4_miner_tests.cpp
   threadpool_tests.cpp
   timeoffsets_tests.cpp
@@ -133,12 +136,16 @@ add_executable(test_bitcoin
   util_tests.cpp
   util_threadnames_tests.cpp
   util_trace_tests.cpp
+  val64_internal_tests.cpp
+  val64_semantics_tests.cpp
   validation_block_tests.cpp
   validation_chainstate_tests.cpp
   validation_chainstatemanager_tests.cpp
   validation_flush_tests.cpp
   validation_tests.cpp
   validationinterface_tests.cpp
+  valtype_stack_tests.cpp
+  varops_tests.cpp
   versionbits_tests.cpp
 )
 
@@ -146,14 +153,18 @@ include(TargetDataSources)
 target_json_data_sources(test_bitcoin
   data/base58_encode_decode.json
   data/bip341_wallet_vectors.json
+  data/bip352_send_and_receive_vectors.json
   data/blockfilters.json
   data/key_io_invalid.json
   data/key_io_valid.json
   data/script_tests.json
   data/sighash.json
   data/siphash.json
+  data/tapscript_v2_restored_ops.json
+  data/tapscript_v2_varops.json
   data/tx_invalid.json
   data/tx_valid.json
+  data/val64_conversion.json
 )
 target_raw_data_sources(test_bitcoin NAMESPACE test::data
   data/asmap.raw
@@ -170,6 +181,7 @@ target_link_libraries(test_bitcoin
   minisketch
   secp256k1
   Boost::headers
+  $<TARGET_NAME_IF_EXISTS:Boost::multiprecision>
   $<TARGET_NAME_IF_EXISTS:USDT::headers>
 )
 

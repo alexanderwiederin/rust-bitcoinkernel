@@ -15,7 +15,9 @@
 #include <test/kernel/block_data.h>
 #include <test/util/common.h>
 
+#include <algorithm>
 #include <charconv>
+#include <concepts>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -499,6 +501,84 @@ BOOST_AUTO_TEST_CASE(btck_script_trace_tests)
 #endif
 }
 
+BOOST_AUTO_TEST_CASE(btck_tapscript_v2_eval_tests)
+{
+    constexpr auto FLAGS{VERIFY_ALL_PRE_TAPROOT | ScriptVerificationFlags::TAPROOT | ScriptVerificationFlags::SCRIPT_RESTORATION};
+
+    const auto eval{[&](std::string_view script_hex,
+                        const ScriptStack& stack,
+                        ScriptVerificationFlags flags,
+                        uint64_t budget,
+                        uint64_t* remaining,
+                        int32_t* script_error,
+                        TapscriptV2EvalStatus& status) {
+        return EvalTapscriptV2(ScriptPubkey{hex_string_to_byte_vec(script_hex)}, stack, flags,
+                               /*spend_context=*/nullptr, budget, remaining, script_error, status);
+    }};
+
+    auto status{TapscriptV2EvalStatus::OK};
+    int32_t script_error{-1};
+    uint64_t remaining{0};
+
+    // OP_1 leaves a single true element on the stack.
+    BOOST_CHECK(eval("51", ScriptStack{}, FLAGS, VAROPS_BUDGET_UNMETERED, &remaining, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::OK);
+    BOOST_CHECK_EQUAL(script_error, 0);
+    BOOST_CHECK_EQUAL(remaining, VAROPS_BUDGET_UNMETERED);
+
+    // OP_0 leaves a single false element on the stack.
+    BOOST_CHECK(!eval("00", ScriptStack{}, FLAGS, VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::OK);
+    BOOST_CHECK(script_error != 0);
+
+    // Two elements left on the stack violate cleanstack.
+    BOOST_CHECK(!eval("5151", ScriptStack{}, FLAGS, VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK(script_error != 0);
+
+    // An empty script succeeds if the initial stack already satisfies it.
+    ScriptStack stack;
+    stack.Push(hex_string_to_byte_vec("01"));
+    BOOST_CHECK_EQUAL(stack.CountItems(), 1);
+    BOOST_CHECK(stack.GetItem(0) == hex_string_to_byte_vec("01"));
+    BOOST_CHECK(eval("", stack, FLAGS, VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK_EQUAL(script_error, 0);
+
+    // A copied stack is independent of the original.
+    ScriptStack copied{stack};
+    copied.Push(hex_string_to_byte_vec("02"));
+    BOOST_CHECK_EQUAL(stack.CountItems(), 1);
+    BOOST_CHECK_EQUAL(copied.CountItems(), 2);
+
+    // Varops are metered when a budget is given, and exhausting it fails the script.
+    BOOST_CHECK(eval("51", ScriptStack{}, FLAGS, 1'000'000, &remaining, &script_error, status));
+    BOOST_CHECK_EQUAL(script_error, 0);
+    BOOST_CHECK(remaining < 1'000'000);
+
+    BOOST_CHECK(!eval("51", ScriptStack{}, FLAGS, 0, &remaining, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::OK);
+    BOOST_CHECK(script_error != 0);
+    BOOST_CHECK_EQUAL(remaining, 0);
+
+    // Tapscript v2 cannot be evaluated without the script restoration flag.
+    BOOST_CHECK(!eval("51", ScriptStack{}, VERIFY_ALL_PRE_TAPROOT | ScriptVerificationFlags::TAPROOT,
+                      VAROPS_BUDGET_UNMETERED, nullptr, &script_error, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::ERROR_SCRIPT_RESTORATION_REQUIRED);
+
+    // A spending transaction without precomputed spent outputs is rejected.
+    auto tx{Transaction{hex_string_to_byte_vec("02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700")}};
+    const std::array<unsigned char, 32> tapleaf_hash{};
+    TapscriptV2SpendContext spend_context{.tx_to = &tx, .tapleaf_hash = &tapleaf_hash};
+    BOOST_CHECK(!EvalTapscriptV2(ScriptPubkey{hex_string_to_byte_vec("51")}, ScriptStack{}, FLAGS,
+                                 &spend_context, VAROPS_BUDGET_UNMETERED, nullptr, nullptr, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::ERROR_SPENT_OUTPUTS_REQUIRED);
+
+    // An out of range input index is rejected before anything is evaluated.
+    spend_context.input_index = 99;
+    BOOST_CHECK(!EvalTapscriptV2(ScriptPubkey{hex_string_to_byte_vec("51")}, ScriptStack{}, FLAGS,
+                                 &spend_context, VAROPS_BUDGET_UNMETERED, nullptr, nullptr, status));
+    BOOST_CHECK(status == TapscriptV2EvalStatus::ERROR_INVALID_INPUT_INDEX);
+}
+
 BOOST_AUTO_TEST_CASE(btck_transaction_tests)
 {
     auto tx_data{hex_string_to_byte_vec("02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700")};
@@ -515,6 +595,14 @@ BOOST_AUTO_TEST_CASE(btck_transaction_tests)
     BOOST_CHECK_EQUAL(tx.CountOutputs(), 2);
     BOOST_CHECK_EQUAL(tx.CountInputs(), 1);
     BOOST_CHECK_EQUAL(tx.GetLocktime(), 510826);
+
+    BOOST_CHECK_EQUAL(tx.GetVersion(), 2);
+    for (const auto& [version_hex, version] : {std::pair{"00000000", 0u}, {"ffffffff", 0xffffffffu}}) {
+        auto versioned_tx_data{tx_data};
+        std::ranges::copy(hex_string_to_byte_vec(version_hex), versioned_tx_data.begin());
+        BOOST_CHECK_EQUAL(Transaction{versioned_tx_data}.GetVersion(), version);
+    }
+
     auto broken_tx_data{std::span<std::byte>{tx_data.begin(), tx_data.begin() + 10}};
     BOOST_CHECK_THROW(Transaction{broken_tx_data}, std::runtime_error);
     auto input{tx.GetInput(0)};
@@ -579,6 +667,46 @@ BOOST_AUTO_TEST_CASE(btck_transaction_tests)
 
     ScriptPubkey script_pubkey_roundtrip{script_pubkey.ToBytes()};
     check_equal(script_pubkey_roundtrip.ToBytes(), script_pubkey.ToBytes());
+}
+
+BOOST_AUTO_TEST_CASE(btck_transaction_id_tests)
+{
+    auto legacy_tx{Transaction{hex_string_to_byte_vec("02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700")}};
+    auto witness_tx{Transaction{hex_string_to_byte_vec("02000000000101904f4ee5c87d20090b642f116e458cd6693292ad9ece23e72f15fb6c05b956210500000000fdffffff02e2010000000000002251200839a723933b56560487ec4d67dda58f09bae518ffa7e148313c5696ac837d9f10060000000000002251205826bcdae7abfb1c468204170eab00d887b61ab143464a4a09e1450bdc59a3340140f26e7af574e647355830772946356c27e7bbc773c5293688890f58983499581be84de40be7311a14e6d6422605df086620e75adae84ff06b75ce5894de5e994a00000000")}};
+
+    BOOST_CHECK(!legacy_tx.HasWitness());
+    BOOST_CHECK(witness_tx.HasWitness());
+
+    // Txid and Wtxid are distinct types and cannot be compared with each other.
+    static_assert(!std::equality_comparable_with<TxidView, WtxidView>);
+    static_assert(!std::equality_comparable_with<Txid, Wtxid>);
+
+    // View equality on the same object and across objects.
+    BOOST_CHECK(legacy_tx.Txid() == legacy_tx.Txid());
+    BOOST_CHECK(legacy_tx.Wtxid() == legacy_tx.Wtxid());
+    BOOST_CHECK(legacy_tx.Txid() != witness_tx.Txid());
+    BOOST_CHECK(legacy_tx.Wtxid() != witness_tx.Wtxid());
+
+    // Owned handles created from views compare equal to their copies.
+    Txid owned_txid{legacy_tx.Txid()};
+    Txid owned_txid_copy{owned_txid}; // NOLINT(performance-unnecessary-copy-initialization)
+    BOOST_CHECK(owned_txid == owned_txid_copy);
+    BOOST_CHECK(owned_txid != Txid{witness_tx.Txid()});
+    CheckHandle(owned_txid, Txid{witness_tx.Txid()});
+
+    Wtxid owned_wtxid{legacy_tx.Wtxid()};
+    Wtxid owned_wtxid_copy{owned_wtxid}; // NOLINT(performance-unnecessary-copy-initialization)
+    BOOST_CHECK(owned_wtxid == owned_wtxid_copy);
+    BOOST_CHECK(owned_wtxid != Wtxid{witness_tx.Wtxid()});
+    CheckHandle(owned_wtxid, Wtxid{witness_tx.Wtxid()});
+
+    // Without witness data, the wtxid equals the txid; with witness data, it differs.
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(legacy_tx.Txid().ToBytes()), "aca326a724eda9a461c10a876534ecd5ae7b27f10f26c3862fb996f80ea2d45d");
+    check_equal(legacy_tx.Txid().ToBytes(), legacy_tx.Wtxid().ToBytes());
+
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(witness_tx.Txid().ToBytes()), "9d04c6435f39a114f26b5807e92117b388f15c54c2afe7e62c96757f18cec891");
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(witness_tx.Wtxid().ToBytes()), "c5cd58b8eb3dda755eb99c89c4bcb7409e4074c8942c263e3d6d09011984a210");
+    BOOST_CHECK(!std::ranges::equal(witness_tx.Txid().ToBytes(), witness_tx.Wtxid().ToBytes()));
 }
 
 BOOST_AUTO_TEST_CASE(btck_script_pubkey)
@@ -813,7 +941,9 @@ BOOST_AUTO_TEST_CASE(btck_block_header_tests)
 {
     // Block header format: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4) = 80 bytes
     BlockHeader header_0{hex_string_to_byte_vec("00e07a26beaaeee2e71d7eb19279545edbaf15de0999983626ec00000000000000000000579cf78b65229bfb93f4a11463af2eaa5ad91780f27f5d147a423bea5f7e4cdf2a47e268b4dd01173a9662ee")};
+    auto merkle_root_0{header_0.MerkleRoot()};
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(header_0.Hash().ToBytes()), "00000000000000000000325c7e14a4ee3b4fcb2343089a839287308a0ddbee4f");
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(merkle_root_0), "df4c7e5fea3b427a145d7ff28017d95aaa2eaf6314a1f493fb9b22658bf79c57");
     BlockHeader header_1{hex_string_to_byte_vec("00c00020e7cb7b4de21d26d55bd384017b8bb9333ac3b2b55bed00000000000000000000d91b4484f801b99f03d36b9d26cfa83420b67f81da12d7e6c1e7f364e743c5ba9946e268b4dd011799c8533d")};
     CheckHandle(header_0, header_1);
 
@@ -827,6 +957,8 @@ BOOST_AUTO_TEST_CASE(btck_block_header_tests)
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(header.Hash().ToBytes()), "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048");
     auto prev_hash = header.PrevHash();
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(prev_hash.ToBytes()), "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
+    auto merkle_root = header.MerkleRoot();
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(merkle_root), "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098");
 
     // Test round-trip serialization of block header
     auto header_roundtrip{BlockHeader{header.ToBytes()}};
