@@ -71,6 +71,9 @@ struct Params;
 namespace util {
 class SignalInterrupt;
 } // namespace util
+namespace varops {
+class Budget;
+} // namespace varops
 
 /** Block files containing a block-height within MIN_BLOCKS_TO_KEEP of ActiveChain().Tip() will not be pruned. */
 inline constexpr unsigned int MIN_BLOCKS_TO_KEEP = 288;
@@ -251,10 +254,6 @@ struct PackageMempoolAcceptResult
                                         std::map<Wtxid, MempoolAcceptResult>&& results)
         : m_state{state}, m_tx_results(std::move(results)) {}
 
-    explicit PackageMempoolAcceptResult(PackageValidationState state, CFeeRate feerate,
-                                        std::map<Wtxid, MempoolAcceptResult>&& results)
-        : m_state{state}, m_tx_results(std::move(results)) {}
-
     /** Constructor to create a PackageMempoolAcceptResult from a single MempoolAcceptResult */
     explicit PackageMempoolAcceptResult(const Wtxid& wtxid, const MempoolAcceptResult& result)
         : m_tx_results{ {wtxid, result} } {}
@@ -348,10 +347,16 @@ private:
     bool cacheStore;
     PrecomputedTransactionData *txdata;
     SignatureCache* m_signature_cache;
+    std::shared_ptr<varops::Budget> m_varops_budget;
 
 public:
-    CScriptCheck(const CTxOut& outIn, const CTransaction& txToIn, SignatureCache& signature_cache, unsigned int nInIn, script_verify_flags flags, bool cacheIn, PrecomputedTransactionData* txdataIn) :
-        m_tx_out(outIn), ptxTo(&txToIn), nIn(nInIn), m_flags(flags), cacheStore(cacheIn), txdata(txdataIn), m_signature_cache(&signature_cache) { }
+    CScriptCheck(const CTxOut& outIn, const CTransaction& txToIn, SignatureCache& signature_cache, unsigned int nInIn, script_verify_flags flags,
+                 bool cacheIn, PrecomputedTransactionData* txdataIn, std::shared_ptr<varops::Budget> varops_budget)
+        : m_tx_out(outIn), ptxTo(&txToIn), nIn(nInIn), m_flags(flags), cacheStore(cacheIn), txdata(txdataIn), m_signature_cache(&signature_cache),
+          m_varops_budget(std::move(varops_budget))
+    {
+        Assert(m_varops_budget);
+    }
 
     CScriptCheck(const CScriptCheck&) = delete;
     CScriptCheck& operator=(const CScriptCheck&) = delete;
@@ -570,6 +575,12 @@ protected:
     //! Cached result of LookupBlockIndex(*m_from_snapshot_blockhash)
     mutable const CBlockIndex* m_cached_snapshot_base GUARDED_BY(::cs_main){nullptr};
 
+    //! Target block for this chainstate. If this is not set, chainstate will
+    //! target the most-work, valid block. If this is set, ChainstateManager
+    //! considers this a "historical" chainstate since it will only contain old
+    //! blocks up to the target block, not newer blocks.
+    std::optional<uint256> m_target_blockhash GUARDED_BY(::cs_main);
+
     //! Cached result of LookupBlockIndex(*m_target_blockhash)
     mutable const CBlockIndex* m_cached_target_block GUARDED_BY(::cs_main){nullptr};
 
@@ -639,12 +650,6 @@ public:
      */
     const std::optional<uint256> m_from_snapshot_blockhash;
 
-    //! Target block for this chainstate. If this is not set, chainstate will
-    //! target the most-work, valid block. If this is set, ChainstateManager
-    //! considers this a "historical" chainstate since it will only contain old
-    //! blocks up to the target block, not newer blocks.
-    std::optional<uint256> m_target_blockhash GUARDED_BY(::cs_main);
-
     //! Hash of the UTXO set at the target block, computed when the chainstate
     //! reaches the target block, and null before then.
     std::optional<AssumeutxoHash> m_target_utxohash GUARDED_BY(::cs_main);
@@ -658,8 +663,17 @@ public:
 
     //! Return target block which chainstate tip is expected to reach, if this
     //! is a historic chainstate being used to validate a snapshot, or null if
-    //! chainstate targets the most-work block.
+    //! chainstate targets the most-work block. Requires the block index to be
+    //! loaded, so prefer TargetBlockHash() when the block itself is not needed.
     const CBlockIndex* TargetBlock() const EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+    //! Return hash of the target block, or nullopt if chainstate targets the
+    //! most-work block. Unlike TargetBlock(), does not require the block index
+    //! to be loaded.
+    std::optional<uint256> TargetBlockHash() const EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
+    {
+        AssertLockHeld(::cs_main);
+        return m_target_blockhash;
+    }
     //! Set target block for this chainstate. If null, chainstate will target
     //! the most-work valid block. If non-null chainstate will be a historic
     //! chainstate and target the specified block.
@@ -1127,7 +1141,7 @@ public:
     Chainstate& CurrentChainstate() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex())
     {
         for (auto& cs : m_chainstates) {
-            if (cs && cs->m_assumeutxo != Assumeutxo::INVALID && !cs->m_target_blockhash) return *cs;
+            if (cs && cs->m_assumeutxo != Assumeutxo::INVALID && !cs->TargetBlockHash()) return *cs;
         }
         abort();
     }
@@ -1136,7 +1150,7 @@ public:
     Chainstate* HistoricalChainstate() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex())
     {
         for (auto& cs : m_chainstates) {
-            if (cs && cs->m_assumeutxo != Assumeutxo::INVALID && cs->m_target_blockhash && !cs->m_target_utxohash) return cs.get();
+            if (cs && cs->m_assumeutxo != Assumeutxo::INVALID && cs->TargetBlockHash() && !cs->m_target_utxohash) return cs.get();
         }
         return nullptr;
     }

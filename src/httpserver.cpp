@@ -722,6 +722,17 @@ util::Expected<void, std::string> HTTPServer::BindAndStartListening(const CServi
                                           NetworkErrorString(WSAGetLastError()))};
     }
 
+#ifdef WIN32
+    // Prevent another application from binding to the same address and port and
+    // intercepting RPC credentials.
+    // SO_REUSEADDR on Windows is non-exclusive so another process could bind to
+    // the same port.
+    if (sock->SetSockOpt(SOL_SOCKET, SO_EXCLUSIVEADDRUSE, &SOCKET_OPTION_TRUE, sizeof(SOCKET_OPTION_TRUE)) == SOCKET_ERROR) {
+        return util::Unexpected{strprintf("Cannot set SO_EXCLUSIVEADDRUSE on %s listen socket: %s",
+                                          to.ToStringAddrPort(),
+                                          NetworkErrorString(WSAGetLastError()))};
+    }
+#else
     // Allow binding if the port is still in TIME_WAIT state after
     // the program was closed and restarted.
     if (sock->SetSockOpt(SOL_SOCKET, SO_REUSEADDR, &SOCKET_OPTION_TRUE, sizeof(SOCKET_OPTION_TRUE)) == SOCKET_ERROR) {
@@ -730,6 +741,7 @@ util::Expected<void, std::string> HTTPServer::BindAndStartListening(const CServi
                  to.ToStringAddrPort(),
                  NetworkErrorString(WSAGetLastError()));
     }
+#endif
 
     // some systems don't have IPV6_V6ONLY but are always v6only; others do have the option
     // and enable it by default or not. Try to enable it, if possible.
@@ -997,13 +1009,35 @@ HTTPServer::IOReadiness HTTPServer::GenerateWaitSockets() const
         // Safely copy the shared pointer to the socket
         std::shared_ptr<Sock> sock{http_client->GetSock()};
 
-        // Check if client is ready to send data. Don't try to receive again
-        // until the send buffer is cleared (all data sent to client).
-        // Keep this as a separate critical section from the m_sock_mutex one above:
-        // never hold m_sock_mutex and m_send_mutex at the same time here.
-        // MaybeSendBytesFromBuffer() locks m_send_mutex then m_sock_mutex, so nesting
-        // them in the opposite order here would risk a lock-order inversion deadlock.
-        Sock::Event event = (http_client->ReadyToSend() ? Sock::SendEvent : Sock::RecvEvent);
+        // Event choice:
+        //   1. ReadyToSend() (m_send_ready set) -> Send
+        //      m_send_ready stays set while the send buffer still has data to
+        //      drain, so we keep sending and do not Recv. This is also how the
+        //      send-throttle applies backpressure: while the send buffer is
+        //      full, TryReadRequest() holds a completed request back from a
+        //      worker, so nothing new is read until send has drained.
+        //   2. Else, m_req is incomplete and needs more data, or there is no
+        //      m_req at all and the recv buffer is empty -> Recv
+        //   3. Else (no parse in progress, leftover bytes in m_recv_buffer) -> 0
+        //      Stay in the I/O map so TryReadRequest() drains the buffer first.
+        //      Extra pipelined data waits in the kernel socket buffer
+        //      (TCP backpressure), not in m_recv_buffer.
+        //
+        // Lock-order safety: the convention established by
+        // MaybeSendBytesFromBuffer() is to take m_send_mutex before m_sock_mutex.
+        // In this loop GetSock() (above) takes m_sock_mutex and ReadyToSend()
+        // (below) takes m_send_mutex; both are scoped, so each lock is released
+        // before the next is taken and they stay separate critical sections.
+        // Holding m_sock_mutex while acquiring m_send_mutex would invert that
+        // order and risk a lock-order-inversion deadlock.
+        Sock::Event event{0};
+        if (http_client->ReadyToSend()) {
+            event = Sock::SendEvent;
+        } else if (http_client->GetRequest() != nullptr || http_client->ReceiveBufferEmpty()) {
+            // Mid-parse (need more bytes) or buffer empty.
+            event = Sock::RecvEvent;
+        }
+
         io_readiness.events_per_sock.emplace(sock, Sock::Events{event});
         io_readiness.httpclients_per_sock.emplace(sock, http_client);
     }
@@ -1079,6 +1113,15 @@ std::unique_ptr<HTTPRequest> HTTPRemoteClient::TryReadRequest(const std::shared_
 
     // If the request is ready, hand it to a worker.
     if (client->m_req->GetState() == HTTPRequest::State::Complete) {
+        // Unless this client's send buffer is full: in that case hold the
+        // parsed request here instead of moving it to a worker. This prevents
+        // the server from reading any more data from this client until they
+        // drain their end of the socket, and prevents the server from packing
+        // more responses into the send buffer.
+        const size_t buffer_used{WITH_LOCK(
+            client->m_send_mutex,
+            return client->m_send_buffer.size();)};
+        if (buffer_used > MAX_BODY_SIZE) return nullptr;
         LogDebug(
             BCLog::HTTP,
             "Received a %s request for %s from %s (id=%llu)",

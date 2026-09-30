@@ -33,7 +33,6 @@
 #include <interfaces/chain.h>
 #include <interfaces/init.h>
 #include <interfaces/ipc.h>
-#include <interfaces/mining.h>
 #include <interfaces/node.h>
 #include <ipc/exception.h>
 #include <kernel/blockmanager_opts.h>
@@ -51,6 +50,7 @@
 #include <netaddress.h>
 #include <netbase.h>
 #include <netgroup.h>
+#include <node/block_template_manager.h>
 #include <node/blockmanager_args.h>
 #include <node/blockstorage.h>
 #include <node/caches.h>
@@ -63,13 +63,11 @@
 #include <node/mempool_persist.h>
 #include <node/mempool_persist_args.h>
 #include <node/mining_args.h>
-#include <node/mining_types.h>
 #include <node/peerman_args.h>
 #include <policy/feerate.h>
 #include <policy/fees/block_policy_estimator.h>
 #include <policy/fees/estimator_args.h>
 #include <policy/fees/estimator_man.h>
-#include <policy/fees/mempool_estimator.h>
 #include <policy/policy.h>
 #include <policy/settings.h>
 #include <protocol.h>
@@ -88,11 +86,13 @@
 #include <util/asmap.h>
 #include <util/batchpriority.h>
 #include <util/btcsignals.h>
+#include <util/byte_units.h>
 #include <util/chaintype.h>
 #include <util/check.h>
 #include <util/fs.h>
 #include <util/fs_helpers.h>
 #include <util/moneystr.h>
+#include <util/overflow.h>
 #include <util/result.h>
 #include <util/signalinterrupt.h>
 #include <util/strencodings.h>
@@ -115,7 +115,6 @@
 #include <exception>
 #include <fstream>
 #include <functional>
-#include <initializer_list>
 #include <limits>
 #include <list>
 #include <memory>
@@ -128,7 +127,6 @@
 #include <thread>
 #include <tuple>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #ifndef WIN32
@@ -365,15 +363,6 @@ void Shutdown(NodeContext& node)
         DumpMempool(*node.mempool, MempoolPath(*node.args));
     }
 
-    // Drop transactions we were still watching, record fee estimations and unregister
-    // fee estimator from validation interface.
-    if (node.fee_estimator_man) {
-        node.fee_estimator_man->ShutdownFlush();
-        if (node.validation_signals) {
-            node.validation_signals->UnregisterValidationInterface(node.fee_estimator_man.get());
-        }
-    }
-
     // FlushStateToDisk generates a ChainStateFlushed callback, which we should avoid missing
     if (node.chainman) {
         LOCK(cs_main);
@@ -388,6 +377,14 @@ void Shutdown(NodeContext& node)
     // CValidationInterface callbacks, flush them...
     if (node.validation_signals) node.validation_signals->FlushBackgroundCallbacks();
 
+    // Once callbacks drain, drop tracked transactions, save estimates, and unregister the estimator
+    if (node.fee_estimator_man) {
+        node.fee_estimator_man->ShutdownFlush();
+        if (node.validation_signals) {
+            node.validation_signals->UnregisterValidationInterface(node.fee_estimator_man.get());
+        }
+    }
+
     // Stop and delete all indexes only after flushing background callbacks.
     for (auto* index : node.indexes) index->Stop();
     if (g_txindex) g_txindex.reset();
@@ -396,12 +393,7 @@ void Shutdown(NodeContext& node)
     DestroyAllBlockFilterIndexes();
     node.indexes.clear(); // all instances are nullptr now
 
-    // Any future callbacks will be dropped. This should absolutely be safe - if
-    // missing a callback results in an unrecoverable situation, unclean shutdown
-    // would too. The only reason to do the above flushes is to let the wallet catch
-    // up with our current chain to avoid any strange pruning edge cases and make
-    // next startup faster by avoiding rescan.
-
+    // Callbacks queued by this final chainstate flush will not run during shutdown
     if (node.chainman) {
         LOCK(cs_main);
         for (const auto& chainstate : node.chainman->m_chainstates) {
@@ -430,6 +422,7 @@ void Shutdown(NodeContext& node)
         node.validation_signals->UnregisterAllValidationInterfaces();
     }
     node.fee_estimator_man.reset();
+    node.block_template_manager.reset();
     node.mempool.reset();
     node.chainman.reset();
     node.validation_signals.reset();
@@ -489,11 +482,11 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
 
     init::AddLoggingArgs(argsman);
 
-    const auto defaultBaseParams = CreateBaseChainParams(ChainType::MAIN);
-    const auto testnetBaseParams = CreateBaseChainParams(ChainType::TESTNET);
-    const auto testnet4BaseParams = CreateBaseChainParams(ChainType::TESTNET4);
-    const auto signetBaseParams = CreateBaseChainParams(ChainType::SIGNET);
-    const auto regtestBaseParams = CreateBaseChainParams(ChainType::REGTEST);
+    const auto defaultBaseParams = CreateBaseChainParams(argsman, ChainType::MAIN);
+    const auto testnetBaseParams = CreateBaseChainParams(argsman, ChainType::TESTNET);
+    const auto testnet4BaseParams = CreateBaseChainParams(argsman, ChainType::TESTNET4);
+    const auto signetBaseParams = CreateBaseChainParams(argsman, ChainType::SIGNET);
+    const auto regtestBaseParams = CreateBaseChainParams(argsman, ChainType::REGTEST);
     const auto defaultChainParams = CreateChainParams(argsman, ChainType::MAIN);
     const auto testnetChainParams = CreateChainParams(argsman, ChainType::TESTNET);
     const auto testnet4ChainParams = CreateChainParams(argsman, ChainType::TESTNET4);
@@ -722,8 +715,9 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-privatebroadcast",
                    strprintf(
-                       "Broadcast transactions submitted via sendrawtransaction RPC using short-lived "
+                       "EXPERIMENTAL: Broadcast transactions submitted via sendrawtransaction RPC using short-lived "
                        "connections through the Tor or I2P networks, without putting them in the mempool first. "
+                       "This provides best-effort concealment of the transaction's origin. "
                        "Transactions submitted through the wallet are not affected by this option "
                        "(default: %u)",
                    DEFAULT_PRIVATE_BROADCAST),
@@ -1280,9 +1274,6 @@ bool AppInitLockDirectories()
 bool AppInitInterfaces(NodeContext& node)
 {
     node.chain = interfaces::MakeChain(node);
-    // Specify wait_loaded=false so internal mining interface can be initialized
-    // on early startup and does not need to be tied to chainstate loading.
-    node.mining = interfaces::MakeMining(node, /*wait_loaded=*/false);
     return true;
 }
 
@@ -1380,6 +1371,7 @@ static ChainstateLoadResult InitAndLoadChainstate(
 {
     // This function may be called twice, so any dirty state must be reset.
     node.notifications->setChainstateLoaded(false); // Drop state, such as a cached tip block
+    node.block_template_manager.reset();
     node.mempool.reset();
     node.chainman.reset(); // Drop state, such as an initialized m_block_tree_db
 
@@ -1396,9 +1388,6 @@ static ChainstateLoadResult InitAndLoadChainstate(
     if (!mempool_error.empty()) {
         return {ChainstateLoadStatus::FAILURE_FATAL, mempool_error};
     }
-    auto mining_args{node::ReadMiningArgs(args)};
-    Assert(mining_args); // no error can happen, already checked in AppInitParameterInteraction
-    node.mining_args = std::move(*mining_args);
     LogInfo("* Using %.1f MiB for in-memory UTXO set (plus up to %.1f MiB of unused mempool space)",
             cache_sizes.coins / double(1_MiB),
             mempool_opts.max_size_bytes / double(1_MiB));
@@ -1488,6 +1477,10 @@ static ChainstateLoadResult InitAndLoadChainstate(
         std::tie(status, error) = catch_exceptions([&] { return VerifyLoadedChainstate(chainman, options); });
         if (status == node::ChainstateLoadStatus::SUCCESS) {
             LogInfo("Block index and chainstate loaded");
+            auto mining_args{node::ReadMiningArgs(args)};
+            Assert(mining_args); // no error can happen, already checked in AppInitParameterInteraction
+            // Must be set before setChainstateLoaded(true), which unblocks MakeMining waiters that assume it is non-null.
+            node.block_template_manager = std::make_unique<node::BlockTemplateManager>(*node.mempool, chainman, *node.notifications, std::move(*mining_args));
             node.notifications->setChainstateLoaded(true);
         }
     }
@@ -1661,7 +1654,6 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         // Netgroupman with or without it
         assert(!node.netgroupman);
         if (args.IsArgSet("-asmap") && !args.IsArgNegated("-asmap")) {
-            uint256 asmap_version{};
             if (!args.GetBoolArg("-asmap", false)) {
                 fs::path asmap_path = args.GetPathArg("-asmap");
                 if (!asmap_path.is_absolute()) {
@@ -1681,7 +1673,6 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
                     InitError(strprintf(_("Could not parse asmap file %s"), fs::quoted(fs::PathToString(asmap_path))));
                     return false;
                 }
-                asmap_version = AsmapVersion(asmap);
                 node.netgroupman = std::make_unique<NetGroupManager>(NetGroupManager::WithLoadedAsmap(std::move(asmap)));
             } else {
                 #ifdef ENABLE_EMBEDDED_ASMAP
@@ -1692,7 +1683,6 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
                         return false;
                     }
                     node.netgroupman = std::make_unique<NetGroupManager>(NetGroupManager::WithEmbeddedAsmap(asmap));
-                    asmap_version = AsmapVersion(asmap);
                     LogInfo("Opened asmap data (%zu bytes) from embedded byte array\n", asmap.size());
                 #else
                     // If there is no embedded data, fail and report it since
@@ -1701,7 +1691,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
                     return false;
                 #endif
             }
-            LogInfo("Using asmap version %s for IP bucketing", asmap_version.ToString());
+            LogInfo("Using asmap version %s for IP bucketing", HexStr(node.netgroupman->GetAsmapVersion()));
         } else {
             node.netgroupman = std::make_unique<NetGroupManager>(NetGroupManager::NoAsmap());
             LogInfo("Using /16 prefix for IP bucketing");
@@ -1906,6 +1896,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     assert(!node.mempool);
     assert(!node.chainman);
+    assert(!node.block_template_manager);
 
     bool do_reindex{args.GetBoolArg("-reindex", false)};
     const bool do_reindex_chainstate{args.GetBoolArg("-reindex-chainstate", false)};
@@ -1922,7 +1913,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         bool do_retry{HasTestOption(args, "reindex_after_failure_noninteractive_yes") ||
             uiInterface.ThreadSafeQuestion(
             error + Untranslated(".\n\n") + _("Do you want to rebuild the databases now?"),
-            error.original + ".\nPlease restart with -reindex or -reindex-chainstate to recover.",
+            error.original + (args.GetIntArg("-prune", 0) ? ".\nPlease restart with -reindex to recover." : ".\nPlease restart with -reindex or -reindex-chainstate to recover."),
             CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT)};
         if (!do_retry) {
             return false;
@@ -2055,10 +2046,10 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         if (!CheckDiskSpace(args.GetBlocksDirPath(), additional_bytes_needed)) {
             InitWarning(strprintf(_(
                     "Disk space for %s may not accommodate the block files. " \
-                    "Approximately %u GB of data will be stored in this directory."
+                    "Approximately %u GiB of data will be stored in this directory."
                 ),
                 fs::quoted(fs::PathToString(args.GetBlocksDirPath())),
-                chainparams.AssumedBlockchainSize()
+                CeilDiv(additional_bytes_needed, 1_GiB)
             ));
         }
     }
@@ -2388,7 +2379,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         if (!proxyRandomize && (g_reachable_nets.Contains(NET_ONION) || onion_may_become_reachable)) {
             InitWarning(_("Private broadcast of own transactions requested (-privatebroadcast) and "
                           "-proxyrandomize is disabled. Tor circuits for private broadcast connections "
-                          "may be correlated to other connections over Tor. For maximum privacy set "
+                          "may be correlated to other connections over Tor. To reduce this risk, set "
                           "-proxyrandomize=1."));
         }
     }
