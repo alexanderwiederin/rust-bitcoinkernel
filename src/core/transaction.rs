@@ -2600,6 +2600,21 @@ mod tests {
         ));
     }
 
+    // A minimal segwit transaction whose witness carries an empty element, as a
+    // P2WSH multisig spend does for the OP_CHECKMULTISIG dummy.
+    const TX_WITH_EMPTY_WITNESS_ITEM: &str = "0200000000010100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff01e80300000000000001510200015100000000";
+
+    #[test]
+    fn test_witness_stack_item_can_be_empty() {
+        let tx = Transaction::new(&hex::decode(TX_WITH_EMPTY_WITNESS_ITEM).unwrap()).unwrap();
+        let input = tx.input(0).unwrap();
+        let stack = input.witness_stack();
+
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack.item(0).unwrap(), Vec::<u8>::new());
+        assert_eq!(stack.item(1).unwrap(), vec![0x51]);
+    }
+
     #[test]
     fn test_witness_stack_iterator() {
         let (tx, _) = get_test_transactions();
