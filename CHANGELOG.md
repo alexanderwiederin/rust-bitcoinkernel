@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `WitnessStackExt::items()` returning a `WitnessStackIter` that yields each witness stack item as an owned `Vec<u8>` in order. Implements `Iterator` and `ExactSizeIterator`.
 - Added `TxIn::script_sig()` (via `TxInExt`) to retrieve an input's scriptSig as a serialized `Vec<u8>`. Returns `Err(KernelError::SerializationFailed)` if serialization fails
 
+### Fixed
+- `c_serialize` no longer builds a slice from a null pointer when the kernel reports a zero-length buffer. `std::vector::data()` may return null for an empty vector, and `slice::from_raw_parts` requires a non-null pointer even at length zero, so reading an empty witness stack item aborted.
+
 ### Changed
 - The `verify` function's `flags` parameter now uses `ScriptVerificationFlags` instead of `u32`, making the type explicit in the public API.
 - `BlockHeader::new` now returns `Err(KernelError::InvalidLength)` when passed a buffer that is not exactly 80 bytes, rather than delegating the check to the underlying library.

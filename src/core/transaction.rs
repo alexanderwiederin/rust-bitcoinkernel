@@ -2600,6 +2600,37 @@ mod tests {
         ));
     }
 
+    // A minimal segwit transaction whose witness carries an empty element, as a
+    // P2WSH multisig spend does for the OP_CHECKMULTISIG dummy.
+    #[rustfmt::skip]
+    const TX_WITH_EMPTY_WITNESS_ITEM: &str = concat!(
+        "02000000",                                                         // version
+        "0001",                                                             // marker and flag
+        "01",                                                               // one input
+        "0000000000000000000000000000000000000000000000000000000000000000", // prevout txid
+        "00000000",                                                         // prevout index
+        "00",                                                               // empty scriptSig
+        "ffffffff",                                                         // sequence
+        "01",                                                               // one output
+        "e803000000000000",                                                 // 1000 sats
+        "0151",                                                             // scriptPubKey: OP_1
+        "02",                                                               // two witness items
+        "00",                                                               //   empty
+        "0151",                                                             //   one byte, OP_1
+        "00000000",                                                         // locktime
+    );
+
+    #[test]
+    fn test_witness_stack_item_can_be_empty() {
+        let tx = Transaction::new(&hex::decode(TX_WITH_EMPTY_WITNESS_ITEM).unwrap()).unwrap();
+        let input = tx.input(0).unwrap();
+        let stack = input.witness_stack();
+
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack.item(0).unwrap(), Vec::<u8>::new());
+        assert_eq!(stack.item(1).unwrap(), vec![0x51]);
+    }
+
     #[test]
     fn test_witness_stack_iterator() {
         let (tx, _) = get_test_transactions();
