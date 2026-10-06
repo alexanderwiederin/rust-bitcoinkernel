@@ -214,8 +214,10 @@ where
     ) -> i32 {
         panic::catch_unwind(|| {
             let buffer = &mut *(user_data as *mut Vec<u8>);
-            let slice = std::slice::from_raw_parts(data as *const u8, len);
-            buffer.extend_from_slice(slice);
+            if len > 0 {
+                let slice = std::slice::from_raw_parts(data as *const u8, len);
+                buffer.extend_from_slice(slice);
+            }
             c_helpers::to_c_result(true)
         })
         .unwrap_or_else(|_| c_helpers::to_c_result(false))
