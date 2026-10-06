@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] 2026-10-06
+
 ### Fixed
 - `c_serialize` no longer builds a slice from a null pointer when the kernel reports a zero-length buffer. `std::vector::data()` may return null for an empty vector, and `slice::from_raw_parts` requires a non-null pointer even at length zero, so reading an empty witness stack item aborted.
 
