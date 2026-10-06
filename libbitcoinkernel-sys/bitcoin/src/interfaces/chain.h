@@ -198,12 +198,14 @@ public:
     //! @param[in] tx Transaction to process.
     //! @param[in] max_tx_fee Don't add the transaction to the mempool or
     //! broadcast it if its fee is higher than this.
+    //! @param[in] max_tx_fee_rate reject txs with fee rate higher than this (if CFeeRate(0), the fee rate is not checked)
     //! @param[in] broadcast_method Whether to add the transaction to the
     //! mempool and how/whether to broadcast it.
     //! @param[out] err_string Set if an error occurs.
     //! @return False if the transaction could not be added due to the fee or for another reason.
     virtual bool broadcastTransaction(const CTransactionRef& tx,
                                       const CAmount& max_tx_fee,
+                                      const CFeeRate& max_tx_fee_rate,
                                       node::TxBroadcast broadcast_method,
                                       std::string& err_string) = 0;
 
@@ -358,6 +360,9 @@ public:
     //! support for writing null values to settings.json.
     //! Depending on the action returned by the update function, this will either
     //! update the setting in memory or write the updated settings to disk.
+    //! Returns false if the update function returned no action, or if the
+    //! settings could not be written to disk, including when settings are
+    //! disabled with -nosettings. In-memory changes are kept either way.
     virtual bool updateRwSetting(const std::string& name, const SettingsUpdate& update_function) = 0;
 
     //! Replace a setting in <datadir>/settings.json with a new value.

@@ -7,8 +7,6 @@
 
 #include <any>
 
-#include <consensus/params.h>
-
 class AddrMan;
 class ArgsManager;
 class CBlockIndex;
@@ -18,12 +16,14 @@ class CTxMemPool;
 class ChainstateManager;
 class PeerManager;
 class BanMan;
+namespace Consensus {
+struct Params;
+} // namespace Consensus
+
 namespace node {
 struct NodeContext;
+class BlockTemplateManager;
 } // namespace node
-namespace interfaces {
-class Mining;
-} // namespace interfaces
 
 node::NodeContext& EnsureAnyNodeContext(const std::any& context);
 CTxMemPool& EnsureMemPool(const node::NodeContext& node);
@@ -37,7 +37,7 @@ ChainstateManager& EnsureAnyChainman(const std::any& context);
 FeeRateEstimatorManager& EnsureFeeEstimatorMan(const node::NodeContext& node);
 FeeRateEstimatorManager& EnsureAnyFeeEstimatorMan(const std::any& context);
 CConnman& EnsureConnman(const node::NodeContext& node);
-interfaces::Mining& EnsureMining(const node::NodeContext& node);
+node::BlockTemplateManager& EnsureBlockTemplateManager(const node::NodeContext& node);
 PeerManager& EnsurePeerman(const node::NodeContext& node);
 AddrMan& EnsureAddrman(const node::NodeContext& node);
 AddrMan& EnsureAnyAddrman(const std::any& context);

@@ -324,7 +324,7 @@ public:
 
     void FillSignatureData(SignatureData& sigdata) const;
     void FromSignatureData(const SignatureData& sigdata);
-    [[nodiscard]] bool Merge(const PSBTInput& input);
+    void Merge(const PSBTInput& input);
     uint32_t GetVersion() const { return m_psbt_version; }
     COutPoint GetOutPoint() const;
     /**
@@ -958,7 +958,7 @@ public:
 
     void FillSignatureData(SignatureData& sigdata) const;
     void FromSignatureData(const SignatureData& sigdata);
-    [[nodiscard]] bool Merge(const PSBTOutput& output);
+    void Merge(const PSBTOutput& output);
     uint32_t GetVersion() const { return m_psbt_version; }
 
     explicit PSBTOutput(uint32_t psbt_version, CAmount amount, const CScript& script)
@@ -1285,11 +1285,9 @@ public:
         // Write xpubs
         for (const auto& xpub_pair : m_xpubs) {
             for (const auto& xpub : xpub_pair.second) {
-                unsigned char ser_xpub[BIP32_EXTKEY_WITH_VERSION_SIZE];
-                xpub.EncodeWithVersion(ser_xpub);
                 // Note that the serialization swaps the key and value
                 // The xpub is the key (for uniqueness) while the path is the value
-                SerializeToVector(s, PSBT_GLOBAL_XPUB, ser_xpub);
+                SerializeToVector(s, PSBT_GLOBAL_XPUB, xpub.version, xpub);
                 SerializeHDKeypath(s, xpub_pair.first);
             }
         }
@@ -1456,7 +1454,7 @@ public:
                     ExpectedKeySize("Global XPUB", key, BIP32_EXTKEY_WITH_VERSION_SIZE + 1);
                     // Read in the xpub from key
                     CExtPubKey xpub;
-                    xpub.DecodeWithVersion(&key.data()[1]);
+                    SpanReader{std::span{key}.subspan(1)} >> xpub.version >> xpub;
                     if (!xpub.pubkey.IsFullyValid()) {
                        throw std::ios_base::failure("Invalid pubkey");
                     }
@@ -1637,6 +1635,9 @@ bool PSBTInputSigned(const PSBTInput& input);
 
 /** Checks whether a PSBTInput is already signed by doing script verification using final fields. */
 bool PSBTInputSignedAndVerified(const PartiallySignedTransaction& psbt, unsigned int input_index, const PrecomputedTransactionData* txdata);
+
+/** Checks whether all PSBT inputs are signed under one transaction-wide varops budget. */
+bool PSBTInputsSignedAndVerified(const PartiallySignedTransaction& psbt, const PrecomputedTransactionData& txdata);
 
 /** Signs a PSBTInput, verifying that all provided data matches what is being signed.
  *
