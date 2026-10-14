@@ -258,7 +258,10 @@ impl ChainstateManager {
             btck_chainstate_manager_process_block(self.inner, block.as_ptr(), &mut new_block)
         };
 
-        let is_accepted = c_helpers::success(accepted);
+        // `btck_chainstate_manager_process_block` returns a non-zero value when
+        // the block was accepted, and sets `new_block` to non-zero if the block
+        // had not been processed before.
+        let is_accepted = c_helpers::enabled(accepted);
         let is_new = c_helpers::enabled(new_block);
 
         match (is_accepted, is_new) {
