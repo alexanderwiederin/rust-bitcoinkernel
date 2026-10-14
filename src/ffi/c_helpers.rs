@@ -52,3 +52,35 @@ pub unsafe fn to_string(c_str: *const c_char, len: usize) -> String {
         "".to_string()
     }
 }
+
+/// Converts a C bool representation to a Rust bool.
+#[inline]
+pub fn from_c_bool(value: i32) -> bool {
+    value == 1
+}
+
+/// Copies a C byte buffer into an owned Vec<u8>.
+///
+/// # Safety
+/// `ptr` must point to at least `lent` readable bytes.
+pub unsafe fn to_bytes(ptr: *const u8, len: usize) -> Vec<u8> {
+    std::slice::from_raw_parts(ptr, len).to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_c_bool_roundtrip() {
+        assert!(from_c_bool(to_c_bool(true)));
+        assert!(!from_c_bool(to_c_bool(false)));
+    }
+
+    #[test]
+    fn test_to_bytes() {
+        let data = [0xde, 0xad, 0xbe, 0xef];
+        let bytes = unsafe { to_bytes(data.as_ptr(), data.len()) };
+        assert_eq!(bytes, data.to_vec());
+    }
+}
