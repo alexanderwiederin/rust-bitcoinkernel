@@ -183,7 +183,10 @@ jobs:
         components: rustfmt
 
     - name: Cache dependencies
-      uses: Swatinem/rust-cache@v2
+      uses: namespacelabs/nscloud-cache-action@v1
+      with:
+        cache: rust
+        path: target
 
     - name: Install Boost library
       run: |
