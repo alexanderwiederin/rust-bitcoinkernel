@@ -157,6 +157,68 @@ jobs:
       run: |
         find target/debug/deps -type f -executable -name "test-*" -not -name "*.so" -not -name "*.d" | xargs -I {} valgrind --leak-check=full --show-leak-kinds=all  --errors-for-leak-kinds=definite --suppressions=valgrind.supp --error-exitcode=1 {}
 
+  build-namespace:
+    name: Build and Test (Namespace)
+    runs-on: namespace-profile-rbk-linux
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Install Boost library
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libboost-all-dev
+
+    - name: Build
+      run: cargo build -vv
+
+    - name: Build example binary
+      run: |
+        cd examples
+        cargo build --verbose
+
+    - name: Check formatting
+      run: cargo fmt -- --check
+
+    - name: Check documentation
+      env:
+        RUSTDOCFLAGS: "-D warnings"
+      run: cargo doc --no-deps --all-features --document-private-items
+
+    - name: Install llvm-tools for coverage
+      run: rustup component add llvm-tools-preview
+
+    - name: Install cargo-llvm-cov
+      run: cargo install cargo-llvm-cov --locked --version 0.6.19
+
+    - name: Run tests with coverage
+      run: cargo llvm-cov --all-features --workspace --html --verbose
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-namespace
+        path: target/llvm-cov/html/
+
+    - name: Install Valgrind
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y valgrind
+
+    - name: Run tests with Valgrind
+      run: |
+        find target/debug/deps -type f -executable -name "test-*" -not -name "*.so" -not -name "*.d" | xargs -I {} valgrind --leak-check=full --show-leak-kinds=all  --errors-for-leak-kinds=definite --suppressions=valgrind.supp --error-exitcode=1 {}
+
   windows-build:
     name: Build and Test on Windows
     runs-on: windows-2025-vs2026
