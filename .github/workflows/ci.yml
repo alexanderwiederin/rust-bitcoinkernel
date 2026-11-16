@@ -137,7 +137,7 @@ jobs:
       run: rustup component add llvm-tools-preview
 
     - name: Install cargo-llvm-cov
-      run: cargo install cargo-llvm-cov --locked --version 0.6.19
+      run: cargo install cargo-llvm-cov --locked --version 0.9.1
 
     - name: Run tests with coverage
       run: cargo llvm-cov --all-features --workspace --html --verbose
@@ -151,11 +151,22 @@ jobs:
     - name: Install Valgrind
       run: |
         sudo apt-get update
-        sudo apt-get install -y valgrind
+        sudo apt-get install -y valgrind jq
 
     - name: Run tests with Valgrind
       run: |
-        find target/debug/deps -type f -executable -name "test-*" -not -name "*.so" -not -name "*.d" | xargs -I {} valgrind --leak-check=full --show-leak-kinds=all  --errors-for-leak-kinds=definite --suppressions=valgrind.supp --error-exitcode=1 {}
+        # Ask cargo for the test binary paths instead of hard-coding
+        # target/debug/deps, which moved with Cargo's new build-dir layout.
+        cargo test --no-run --message-format=json \
+          | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "test" and .executable != null) | .executable' \
+          > test-binaries.txt
+        test -s test-binaries.txt || { echo "No test binaries found"; exit 1; }
+        while read -r bin; do
+          echo "::group::valgrind $bin"
+          valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=definite \
+            --suppressions=valgrind.supp --error-exitcode=1 "$bin"
+          echo "::endgroup::"
+        done < test-binaries.txt
 
   build-namespace:
     name: Build and Test (Namespace)
@@ -199,7 +210,7 @@ jobs:
       run: rustup component add llvm-tools-preview
 
     - name: Install cargo-llvm-cov
-      run: cargo install cargo-llvm-cov --locked --version 0.6.19
+      run: cargo install cargo-llvm-cov --locked --version 0.9.1
 
     - name: Run tests with coverage
       run: cargo llvm-cov --all-features --workspace --html --verbose
@@ -213,11 +224,22 @@ jobs:
     - name: Install Valgrind
       run: |
         sudo apt-get update
-        sudo apt-get install -y valgrind
+        sudo apt-get install -y valgrind jq
 
     - name: Run tests with Valgrind
       run: |
-        find target/debug/deps -type f -executable -name "test-*" -not -name "*.so" -not -name "*.d" | xargs -I {} valgrind --leak-check=full --show-leak-kinds=all  --errors-for-leak-kinds=definite --suppressions=valgrind.supp --error-exitcode=1 {}
+        # Ask cargo for the test binary paths instead of hard-coding
+        # target/debug/deps, which moved with Cargo's new build-dir layout.
+        cargo test --no-run --message-format=json \
+          | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "test" and .executable != null) | .executable' \
+          > test-binaries.txt
+        test -s test-binaries.txt || { echo "No test binaries found"; exit 1; }
+        while read -r bin; do
+          echo "::group::valgrind $bin"
+          valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=definite \
+            --suppressions=valgrind.supp --error-exitcode=1 "$bin"
+          echo "::endgroup::"
+        done < test-binaries.txt
 
   windows-build:
     name: Build and Test on Windows
