@@ -171,6 +171,9 @@ jobs:
   build-namespace:
     name: Build and Test (Namespace)
     runs-on: namespace-profile-rbk-linux
+    env:
+      CCACHE_DIR: /home/runner/.cache/ccache
+      CCACHE_MAXSIZE: 2G
 
     steps:
     - uses: actions/checkout@v4
@@ -186,12 +189,14 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@v1
       with:
         cache: rust
-        path: target
+        path: |
+          target
+          /home/runner/.cache/ccache
 
     - name: Install Boost library
       run: |
         sudo apt-get update
-        sudo apt-get install -y libboost-all-dev
+        sudo apt-get install -y libboost-all-dev ccache
 
     - name: Build
       run: cargo build -vv
@@ -243,6 +248,10 @@ jobs:
             --suppressions=valgrind.supp --error-exitcode=1 "$bin"
           echo "::endgroup::"
         done < test-binaries.txt
+
+    - name: ccache stats
+      if: always()
+      run: ccache --show-stats
 
   windows-build:
     name: Build and Test on Windows
